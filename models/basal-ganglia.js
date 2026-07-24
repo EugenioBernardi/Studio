@@ -373,11 +373,13 @@ if (typeof require !== "undefined" && require.main === module) {
 
   console.log("\n[4] β hypersynchrony in STN grows when dopamine is low");
   {
-    const H = M.create({ DA: 0.6 }); M.setSalience(H, [0.9,0.6,0.5,0.4]); M.run(H, 1.2);
-    const Plo = M.create({ DA: 0.05 }); M.setSalience(Plo, [0.9,0.6,0.5,0.4]); M.run(Plo, 1.2);
+    // let selection settle first, THEN average β (a healthy transient during bootstrap
+    // is not the steady state)
+    const H = M.create({ DA: 0.6 }); M.setSalience(H, [0.9,0.6,0.5,0.4]); M.run(H, 1.8);
+    const Plo = M.create({ DA: 0.05 }); M.setSalience(Plo, [0.9,0.6,0.5,0.4]); M.run(Plo, 1.8);
     const bH = M.betaCoh(H), bP = M.betaCoh(Plo);
     console.log("      STN coherence: healthy=" + fmt(bH) + "  parkinsonian=" + fmt(bP));
-    check("STN β coherence higher when DA low", bP > bH + 0.2, "Δ=" + fmt(bP - bH));
+    check("STN β coherence higher when DA low", bP > bH + 0.25, "Δ=" + fmt(bP - bH));
   }
 
   console.log("\n[5] STN-DBS desynchronises the loop and rescues selection");
