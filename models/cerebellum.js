@@ -18,8 +18,9 @@
        → PURKINJE cell: simple-spike rate = tonic + Σ w_k·PF_k − MLI inhibition;
          the sole cortical output, GABAergic onto the deep nuclei. The weights
          w_k are the site of learning.
-       → DEEP CEREBELLAR NUCLEUS (DCN): tonic − Purkinje inhibition = the output
-         that modulates the brain-stem VOR and drives the eyes.
+       → DEEP / VESTIBULAR NUCLEUS (the flocculus target): tonic − Purkinje inhibition = the
+         cerebellar output. It does NOT reach muscle directly — it modulates the brain-stem VOR
+         via oculomotor MOTONEURONS → extraocular muscle → eye (the relay the app draws).
      INFERIOR OLIVE (IO): gap-junction-coupled oscillators (subthreshold ~6 Hz).
        Retinal slip depolarises them; a complex spike fires when the drive meets
        the depolarising phase. DCN inhibits IO (NUCLEO-OLIVARY feedback) — the
@@ -66,12 +67,12 @@
       demand: 1.0,        // required gain G* (1 normal; >1 magnifying, <1 minifying goggles)
 
       // ---- population sizes ----
-      nGr: 24,            // granule cells (parallel-fibre basis)
+      nGr: 60,            // granule cells (parallel-fibre basis) — a large, richer basis
       nIO: 12,            // inferior-olive oscillators
 
       // ---- granule / Purkinje / DCN ----
-      grThresh: 0.10,     // granule firing threshold (with Golgi → sparse code)
-      golgi: 0.55,        // Golgi feedback-inhibition strength (divisive sparsification)
+      grThresh: 0.20,     // granule firing threshold (with Golgi → sparse code)
+      golgi: 0.70,        // Golgi feedback-inhibition strength (divisive sparsification)
       pcTonic: 0.60,      // Purkinje tonic simple-spike level
       mli: 0.35,          // molecular-layer interneuron feedforward inhibition (∝ pooled PF)
       wInit: 0.0,         // initial PF→PC weights (learn from zero residual)

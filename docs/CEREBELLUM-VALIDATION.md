@@ -41,25 +41,28 @@ sample.
 ## 2. Circuit (complete)
 
     mossy fibres (vestibular head velocity + its quadrature)
-      → GRANULE cells (24): rectified, phase-tiled temporal basis; GOLGI feedback inhibition
-        sparsifies it (divisive) → parallel fibres
+      → GRANULE cells (60): rectified, phase-tiled temporal basis; GOLGI feedback inhibition
+        sparsifies it (divisive, ~40% active) → parallel fibres
       → PURKINJE cell: SS = tonic + Σ w_k·PF_k − MLI feedforward inhibition; sole cortical
-        output, GABAergic onto the deep nucleus. The weights w_k are the learning site.
-      → DEEP CEREBELLAR NUCLEUS: tonic − Purkinje inhibition = the output that modulates the
-        brain-stem VOR and drives the eyes.
+        output, GABAergic onto the deep/vestibular nucleus. The weights w_k are the learning site.
+      → DEEP / VESTIBULAR NUCLEUS (flocculus target): tonic − Purkinje inhibition = the cerebellar
+        output. It does NOT reach muscle directly — it modulates the brain-stem VOR via the
+        oculomotor MOTONEURONS → extraocular muscle → eye (the relay the app draws).
     INFERIOR OLIVE (12): gap-junction-coupled oscillators. Retinal slip depolarises them; a
-      complex spike fires when the drive meets the depolarising phase. DCN inhibits IO
+      complex spike fires when the drive meets the depolarising phase. The nucleus inhibits IO
       (NUCLEO-OLIVARY feedback) — the loop that regulates the teaching signal.
 
-Eye velocity `= −(g0·head) − kEye·(DCN − DCN0)`; retinal slip `= eye + demand·head`. The
+Eye velocity `= −(g0·head) − kEye·(nucleus − nucleus0)`; retinal slip `= eye + demand·head`. The
 brain-stem supplies the fixed reflex `g0 = 1`; the cerebellum learns the residual gain the visual
-world demands (magnifying goggles `demand > 1`, minifying `< 1`).
+world demands (magnifying goggles `demand > 1`, minifying `< 1`). A larger granule basis (60)
+gives a steadier residual — the retinal slip is an *oscillating* error at the head frequency whose
+*amplitude* shrinks as the gain adapts (it does not converge to a flat line).
 
 ## 3. Validated results — `10/10` headless, robust `12/12` seeds
 
 | # | check | result |
 |---|-------|--------|
-| 1 | baseline (demand 1) | gain ≈ 1.0; granule code sparse (~46% active, thresholded) |
+| 1 | baseline (demand 1) | gain ≈ 1.0; granule code sparse (~40% active) |
 | 2 | **VOR gain-UP** (demand 1.6) | gain 1.0 → ~1.45–1.5; residual slip halved (0.44 → ~0.15) |
 | 3 | **VOR gain-DOWN** (demand 0.5) | gain 1.0 → ~0.6 |
 | 4 | **climbing fibre necessary** | inferior-olive lesion → no adaptation (Δgain ≈ 0) |

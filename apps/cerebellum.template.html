@@ -172,115 +172,185 @@
   const S = M.create({});
   const St={ speed:1.0, t:0 };
   // scrolling history of head velocity & retinal slip (for the gaze trace and learning curve)
-  const HIST=600, headH=new Float32Array(HIST), slipH=new Float32Array(HIST), gainH=new Float32Array(HIST);
-  let hp=0, gcount=0;
+  const HIST=600, headH=new Float32Array(HIST), slipH=new Float32Array(HIST), gainH=new Float32Array(HIST), envH=new Float32Array(HIST);
+  let hp=0, slipEnv=0;
 
   let W=0,H=0,DPR=1;
   function resize(){ const r=cv.getBoundingClientRect(); DPR=Math.min(window.devicePixelRatio||1,2);
     W=r.width;H=r.height; cv.width=Math.max(1,W*DPR);cv.height=Math.max(1,H*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
 
-  // draw a small cluster of clocks (phase discs) with a coherence halo
-  function drawClocks(cx,cy,arr,col,rr,opts){
-    opts=opts||{};
-    const n=arr.length, base=opts.base||4.2;
-    // halo (coherence)
-    if(opts.R!=null && opts.R>0.12){ ctx.beginPath();ctx.arc(cx,cy,rr+6+opts.R*10,0,TAU);
-      ctx.strokeStyle=rgba(col,0.12+opts.R*0.5);ctx.lineWidth=1.3;ctx.stroke(); }
-    for(let i=0;i<n;i++){
-      const th=arr[i].th!=null?arr[i].th:arr[i];
-      const a=arr[i].a!=null?arr[i].a:1;
-      const ang=-TAU/4 + i*TAU/n;
-      const x=cx+Math.cos(ang)*rr, y=cy+Math.sin(ang)*rr;
-      const s=.5+.5*Math.sin(th), on=a>0.06;
-      const cr=base*(0.5+0.45*s)*(0.55+0.6*Math.min(1,a));
-      const flash=opts.flash&&arr[i].cs;
-      if(on||flash){ctx.shadowColor=flash?C.cf:col;ctx.shadowBlur=flash?12:(2+s*7);}
-      ctx.beginPath();ctx.arc(x,y,Math.max(0.7,cr),0,TAU);
-      ctx.fillStyle=flash?rgba(C.cf,.95):(on?rgba(col,.2+s*.6):rgba(C.idle,.06+s*.08));
-      ctx.fill();ctx.shadowBlur=0;
-      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(th)*cr*1.5,y+Math.sin(th)*cr*1.5);
-      ctx.strokeStyle=rgba(C.ink,on?.5:.12);ctx.lineWidth=.7;ctx.stroke();
-    }
-  }
-  function conn(ax,ay,bx,by,col,w){ ctx.beginPath();ctx.moveTo(ax,ay);
-    ctx.quadraticCurveTo((ax+bx)/2,(ay+by)/2,bx,by);
+  function conn(ax,ay,bx,by,col,w,curve){ ctx.beginPath();ctx.moveTo(ax,ay);
+    const mx=(ax+bx)/2+(curve||0), my=(ay+by)/2;
+    ctx.quadraticCurveTo(mx,my,bx,by);
     ctx.strokeStyle=rgba(col,0.05+w*0.4);ctx.lineWidth=0.6+w*1.8;ctx.stroke(); }
-  function label(x,y,t,col,al){ ctx.textAlign=al||'center';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(col,.8);ctx.fillText(t,x,y); }
+  function label(x,y,t,col,al,sz){ ctx.textAlign=al||'center';ctx.font='600 '+(sz||9)+'px '+FM;ctx.fillStyle=rgba(col,.8);ctx.fillText(t,x,y); }
+  // a soma drawn as a phase-clock disc (size ∝ activity, hand at phase θ)
+  function clockDisc(x,y,th,a,col,base,flash){
+    const s=.5+.5*Math.sin(th), on=a>0.05;
+    const cr=base*(0.55+0.4*s)*(0.55+0.55*Math.min(1,a));
+    if(on||flash){ctx.shadowColor=flash?C.cf:col;ctx.shadowBlur=flash?13:(2+s*6);}
+    ctx.beginPath();ctx.arc(x,y,Math.max(0.8,cr),0,TAU);
+    ctx.fillStyle=flash?rgba(C.cf,.95):(on?rgba(col,.22+s*.6):rgba(C.idle,.08)); ctx.fill();ctx.shadowBlur=0;
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(th)*cr*1.5,y+Math.sin(th)*cr*1.5);
+    ctx.strokeStyle=rgba(C.ink,on?.5:.14);ctx.lineWidth=.7;ctx.stroke();
+    return cr;
+  }
+  // a Purkinje cell: flat fan dendritic tree rising into the molecular layer + soma below
+  function purkinjeFan(px,pyB,fw,fh,act,flash){
+    const top=pyB-fh, hw=fw/2;
+    // short trunk, then a fan of dendrites spreading to the top edge
+    ctx.beginPath();ctx.moveTo(px,pyB-2);ctx.lineTo(px,pyB-fh*0.28);
+    ctx.strokeStyle=rgba(C.pc,0.28+0.4*act);ctx.lineWidth=1.6;ctx.stroke();
+    const nb=7;
+    for(let b=0;b<nb;b++){ const fx=px+(b-(nb-1)/2)*hw*2/(nb-1);
+      ctx.beginPath();ctx.moveTo(px,pyB-fh*0.28);
+      ctx.quadraticCurveTo((px*0.35+fx*0.65), top+fh*0.30, fx, top);
+      ctx.strokeStyle=rgba(C.pc,0.12+0.26*act);ctx.lineWidth=0.9;ctx.stroke();
+    }
+    if(flash){ ctx.beginPath();ctx.moveTo(px,pyB-2);ctx.lineTo(px,top+fh*0.1);
+      ctx.strokeStyle=rgba(C.cf,0.85);ctx.lineWidth=1.6;ctx.stroke();
+      ctx.shadowColor=C.cf;ctx.shadowBlur=8;
+      ctx.beginPath();ctx.arc(px,top+fh*0.3,2.4,0,TAU);ctx.fillStyle=rgba(C.cf,0.95);ctx.fill();ctx.shadowBlur=0; }
+  }
 
   function draw(){
     ctx.clearRect(0,0,W,H);
-    const cxCircuit = W*0.30;
-    // ---- gaze / retinal-slip trace (top strip) ----
-    const tx=W*0.06, tw=W*0.88, ty=H*0.17, th=H*0.15;
-    ctx.strokeStyle=rgba(C.faint,.25);ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(tx,ty+th/2);ctx.lineTo(tx+tw,ty+th/2);ctx.stroke();   // zero line
-    // head velocity (faint) and retinal slip (red, shaded) scrolling
-    for(let s=0;s<2;s++){
-      ctx.beginPath();
-      for(let i=0;i<HIST;i++){ const idx=(hp+i)%HIST; const x=tx+tw*i/(HIST-1);
-        const v=(s===0?headH[idx]:slipH[idx]); const y=ty+th/2 - v*th*0.42;
-        if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y); }
-      ctx.strokeStyle=s===0?rgba(C.eye,.35):rgba(C.io,.9);ctx.lineWidth=s===0?1:1.6;ctx.stroke();
-    }
-    label(tx,ty-6,'HEAD VELOCITY',C.eye,'left');
-    label(tx+tw,ty-6,'RETINAL SLIP (error) — shrinks as it learns',C.io,'right');
+    drawSlipTrace();
+    drawCortex();
+    drawOutput();
+  }
 
-    // ---- circuit (clocks), dorsoventral ----
-    const gy=H*0.42;                     // granule row
-    const pcY=H*0.60, dcnY=H*0.80, ioX=W*0.55, ioY=H*0.58;
-    // mossy fibre input
-    const mfX=W*0.10, mfY=H*0.42;
-    drawClocks(mfX,mfY,[{th:S.t*8,a:0.6+0.4*Math.abs(S.head)}],C.mf,7,{base:5});
-    label(mfX,mfY-16,'MOSSY FIBRE',C.mf); label(mfX,mfY+20,'(vestibular)',C.faint);
-    // granule layer — a horizontal row of the basis
-    const ng=S.gr.length, gx0=W*0.17, gx1=W*0.44;
-    for(let k=0;k<ng;k++){ const x=gx0+(gx1-gx0)*k/(ng-1);
-      const g=S.gr[k], a=Math.min(1,g.act*2.2), s=.5+.5*Math.sin(S.t*10+k);
-      const on=a>0.05;
-      if(on){ctx.shadowColor=C.gr;ctx.shadowBlur=2+a*7;}
-      ctx.beginPath();ctx.arc(x,gy,Math.max(0.8,1.6+a*2.6),0,TAU);
-      ctx.fillStyle=on?rgba(C.gr,.25+a*.6):rgba(C.idle,.10);ctx.fill();ctx.shadowBlur=0;
-      conn(x,gy,cxCircuit+ (k-ng/2)*1.5, pcY-14, C.pf, a*0.5);   // parallel fibres up to PC
-      conn(mfX+8,mfY,x,gy,C.mf,0.05+a*0.2);
+  /* ---- gaze / retinal-slip trace with a shrinking amplitude envelope ---- */
+  function drawSlipTrace(){
+    const tx=W*0.055, tw=W*0.90, ty=H*0.155, th=H*0.145, mid=ty+th/2;
+    ctx.strokeStyle=rgba(C.faint,.22);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(tx,mid);ctx.lineTo(tx+tw,mid);ctx.stroke();
+    // slip amplitude envelope (filled band) — THIS is what shrinks as it learns
+    ctx.beginPath();
+    for(let i=0;i<HIST;i++){ const idx=(hp+i)%HIST; const x=tx+tw*i/(HIST-1); ctx.lineTo(x,mid-envH[idx]*th*0.42); }
+    for(let i=HIST-1;i>=0;i--){ const idx=(hp+i)%HIST; const x=tx+tw*i/(HIST-1); ctx.lineTo(x,mid+envH[idx]*th*0.42); }
+    ctx.closePath();ctx.fillStyle=rgba(C.io,.13);ctx.fill();
+    // head velocity (faint) + raw retinal slip (red)
+    for(let s=0;s<2;s++){ ctx.beginPath();
+      for(let i=0;i<HIST;i++){ const idx=(hp+i)%HIST; const x=tx+tw*i/(HIST-1);
+        const v=(s===0?headH[idx]:slipH[idx]); const y=mid - v*th*0.42; if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y); }
+      ctx.strokeStyle=s===0?rgba(C.eye,.30):rgba(C.io,.92);ctx.lineWidth=s===0?1:1.5;ctx.stroke(); }
+    label(tx,ty-7,'HEAD VELOCITY',C.eye,'left');
+    label(tx+tw,ty-7,'RETINAL SLIP — oscillating error; its amplitude (band) shrinks as it learns',C.io,'right');
+  }
+
+  /* ---- cerebellar cortex cross-section: PF ⇢ Purkinje fans, granular layer, olive ---- */
+  const NPC=7;                                  // Purkinje cells shown (a microzone)
+  function drawCortex(){
+    const molTop=H*0.31, molBot=H*0.485, pcY=H*0.52;       // molecular layer / Purkinje soma row
+    const grTop=H*0.56, grBot=H*0.68;                       // granular layer
+    const x0=W*0.13, x1=W*0.50, span=x1-x0;
+    const fw=span/NPC*1.15, fh=molBot-molTop;
+    const grAvg=Math.min(1,(S.grActive*1.6));
+    // layer guide band
+    ctx.fillStyle=rgba(C.pf,0.02);ctx.fillRect(x0-W*0.03,molTop,span+W*0.07,fh);
+    label(x0-W*0.025, molTop-6, 'MOLECULAR LAYER', C.faint, 'left', 8);
+    // Purkinje fans FIRST (so the parallel fibres draw over them, threading through)
+    const pcAct=clamp((S.pc)/1.1,0,1.3);
+    for(let i=0;i<NPC;i++){ const px=x0+span*(i+0.5)/NPC;
+      const o=S.io[i % S.io.length]; const flash=!!o.cs && S.csRate>0.15;
+      purkinjeFan(px,pcY-6,fw,fh,pcAct,flash); }
+    // parallel fibres — long transverse lines threading every Purkinje fan (horizontal)
+    const NPF=12;
+    for(let f=0;f<NPF;f++){ const y=molTop+ (f+0.5)/NPF*fh;
+      const pulse=0.05+0.42*grAvg*(0.5+0.5*Math.sin(S.t*9 - f*0.7));
+      ctx.beginPath();ctx.moveTo(x0-W*0.03,y);ctx.lineTo(x1+W*0.035,y);
+      ctx.strokeStyle=rgba(C.pf,pulse);ctx.lineWidth=0.8;ctx.stroke(); }
+    label(x1+W*0.04, molTop+9, 'parallel', C.pf, 'left', 8);
+    label(x1+W*0.04, molTop+20, 'fibres', C.pf, 'left', 8);
+    // Purkinje somata (row) + one climbing fibre each (fans already drawn under the PFs)
+    for(let i=0;i<NPC;i++){ const px=x0+span*(i+0.5)/NPC;
+      const o=S.io[i % S.io.length]; const flash=!!o.cs && S.csRate>0.15;
+      // climbing fibre rising from the olive to this Purkinje (behind the soma)
+      conn(ioX(),ioY(),px,pcY+5,C.cf,flash?0.85:0.14+Math.min(0.4,S.csRate), (px-ioX())*0.12);
+      clockDisc(px,pcY,S.t*7+i*0.7,pcAct,C.pc,6.5,flash);
     }
-    label((gx0+gx1)/2,gy-16,'GRANULE CELLS · parallel-fibre basis',C.gr);
-    // Golgi (feedback inhibition)
-    drawClocks((gx0+gx1)/2,gy+22,[{th:S.t*9,a:0.5}],C.go,6,{base:4});
-    label((gx0+gx1)/2,gy+40,'GOLGI',C.go);
-    // Purkinje cell (the star output) — big clock, size ∝ simple-spike rate
-    const pcAct=clamp(S.pc/1.2,0,1.4);
-    drawClocks(cxCircuit,pcY,[{th:S.t*7,a:pcAct}],C.pc,10,{base:11});
-    // climbing fibre wrap indicator + complex-spike flash
-    if(S.csRate>0.25){ ctx.beginPath();ctx.arc(cxCircuit,pcY,17,0,TAU);
-      ctx.strokeStyle=rgba(C.cf,Math.min(1,S.csRate));ctx.lineWidth=2.4;ctx.stroke(); }
-    label(cxCircuit,pcY-24,'PURKINJE',C.pc);
-    label(cxCircuit-24,pcY+2,'SS',C.faint,'right');
-    // MLI
-    drawClocks(cxCircuit+34,pcY-16,[{th:S.t*11,a:0.5}],C.mli,5,{base:3.6});
-    label(cxCircuit+34,pcY-30,'MLI',C.mli);
-    // DCN (output)
-    const dcnAct=clamp(S.dcn/1.4,0,1.3);
-    drawClocks(cxCircuit,dcnY,[{th:S.t*6,a:dcnAct}],C.dcn,8,{base:7});
-    conn(cxCircuit,pcY+12,cxCircuit,dcnY-10,C.pc,pcAct*0.7);   // PC ⊣ DCN
-    label(cxCircuit,dcnY+20,'DEEP NUCLEUS → eye',C.dcn);
-    // inferior olive — coupled oscillator cluster with synchrony halo
-    drawClocks(ioX,ioY,S.io,C.io,15,{base:5.2,R:S.ioR,flash:true});
-    label(ioX,ioY-24,'INFERIOR OLIVE',C.io); label(ioX,ioY+30,'gap-junction R='+S.ioR.toFixed(2),C.faint);
-    // climbing fibre IO → PC ; retinal slip → IO ; nucleo-olivary DCN ⊣ IO
-    conn(ioX-12,ioY,cxCircuit+14,pcY,C.cf,0.3+Math.min(0.7,S.csRate));
-    label((ioX+cxCircuit)/2+6,(ioY+pcY)/2-6,'climbing fibre (error)',C.cf);
-    conn(tx+tw*0.5,ty+th, ioX+8,ioY-14, C.io, 0.2+Math.min(0.6,Math.abs(S.slip)));  // slip → IO
-    conn(cxCircuit+6,dcnY-6, ioX-6,ioY+12, C.dcn, 0.15+S.P.nucleoOlive*0.3);         // nucleo-olivary
-    // eye (driven by DCN) — rotating gaze indicator
-    const eyeX=W*0.13, eyeY=H*0.80, er=W*0.035;
-    ctx.beginPath();ctx.arc(eyeX,eyeY,er,0,TAU);ctx.strokeStyle=rgba(C.eye,.5);ctx.lineWidth=1.5;ctx.stroke();
-    const eyeAng=Math.PI/2 - S.eye*0.9;    // eye velocity → gaze rotation
-    ctx.beginPath();ctx.moveTo(eyeX,eyeY);ctx.lineTo(eyeX+Math.cos(eyeAng)*er*0.9,eyeY-Math.sin(eyeAng)*er*0.9);
-    ctx.strokeStyle=rgba(C.eye,.95);ctx.lineWidth=2.4;ctx.stroke();
-    // pupil
-    ctx.beginPath();ctx.arc(eyeX,eyeY,er*0.28,0,TAU);ctx.fillStyle=rgba(C.eye,.85);ctx.fill();
-    label(eyeX,eyeY+er+14,'EYE',C.eye);
-    conn(cxCircuit,dcnY+6,eyeX+er,eyeY,C.dcn,0.3+dcnAct*0.4);
+    label((x0+x1)/2, pcY+20, 'PURKINJE CELLS · sole cortical output (GABA ⊣ nucleus)', C.pc, 'center', 8.5);
+    // molecular-layer interneurons (basket/stellate) among the parallel fibres
+    for(let m=0;m<3;m++){ const mx=x0+span*(0.2+0.3*m); clockDisc(mx,molTop+fh*0.28+m*6,S.t*11+m,0.45,C.mli,3.4); }
+    label(x1-4,molBot-2,'MLI',C.mli,'right',8);
+    // granular layer: a dense field of granule cells + ascending axons that bifurcate into PFs
+    const NG=Math.min(54,S.gr.length);
+    for(let k=0;k<NG;k++){ const gx=x0+span*(k+0.5)/NG + ((k*37)%13-6)*1.1;
+      const gy=grTop+((k*29)%100)/100*(grBot-grTop);
+      const a=Math.min(1,S.gr[k].act*2.2), on=a>0.06;
+      if(on){ctx.shadowColor=C.gr;ctx.shadowBlur=2+a*6;}
+      ctx.beginPath();ctx.arc(gx,gy,Math.max(0.7,1.3+a*2.2),0,TAU);
+      ctx.fillStyle=on?rgba(C.gr,.3+a*.55):rgba(C.idle,.12);ctx.fill();ctx.shadowBlur=0; }
+    // a few representative ascending axons with T-bifurcation into the molecular layer
+    for(let k=0;k<7;k++){ const gx=x0+span*(k+0.5)/7;
+      ctx.beginPath();ctx.moveTo(gx,grTop);ctx.lineTo(gx,molBot-2);
+      ctx.strokeStyle=rgba(C.gr,0.10+0.28*grAvg);ctx.lineWidth=0.8;ctx.stroke(); }
+    label(x0-6,grBot+14,'GRANULE CELLS  (×'+S.gr.length+')',C.gr,'left',8.5);
+    // Golgi cells (feedback inhibition of the granule layer)
+    for(let g=0;g<2;g++){ const gx=x0+span*(0.35+0.35*g); clockDisc(gx,grTop+6,S.t*8+g,0.5,C.go,4); }
+    label(x1-4,grTop+2,'GOLGI',C.go,'right',8);
+    // mossy fibre input into the granular layer
+    const mfx=W*0.055, mfy=(grTop+grBot)/2;
+    clockDisc(mfx,mfy,S.t*8,0.55+0.4*Math.abs(S.head),C.mf,5);
+    conn(mfx+6,mfy,x0,mfy,C.mf,0.3+0.3*Math.abs(S.head));
+    label(mfx,mfy-14,'MOSSY',C.mf,'center',8);label(mfx,mfy+16,'FIBRE',C.mf,'center',8);
+    // inferior olive: coupled-oscillator cluster with synchrony halo + complex-spike flashes
+    const ox=ioX(), oy=ioY(), rr=W*0.028;
+    if(S.ioR>0.12){ ctx.beginPath();ctx.arc(ox,oy,rr+7+S.ioR*12,0,TAU);
+      ctx.strokeStyle=rgba(C.io,0.12+S.ioR*0.5);ctx.lineWidth=1.4;ctx.stroke(); }
+    for(let i=0;i<S.io.length;i++){ const ang=-TAU/4+i*TAU/S.io.length;
+      clockDisc(ox+Math.cos(ang)*rr,oy+Math.sin(ang)*rr,S.io[i].th,0.7,C.io,3.4,!!S.io[i].cs); }
+    label(ox,oy+rr+16,'INFERIOR OLIVE',C.io,'center',9);
+    label(ox,oy+rr+28,'gap-junction R='+S.ioR.toFixed(2),C.faint,'center',8);
+    label(ox,oy-rr-10,'climbing fibres (error)',C.cf,'center',8);
+    // retinal slip drives the olive
+    conn(W*0.50,H*0.30, ox+rr*0.6,oy-rr, C.io, 0.2+Math.min(0.6,Math.abs(S.slip)), -30);
+  }
+  function ioX(){ return W*0.30; }
+  function ioY(){ return H*0.855; }
+
+  /* ---- output pathway: Purkinje → vestibular nucleus → motoneurons → muscle → eye ---- */
+  function drawOutput(){
+    const dcnAct=clamp(S.dcn/1.3,0,1.3), pcAct=clamp(S.pc/1.1,0,1.3);
+    const vnX=W*0.66, vnY=H*0.40;                 // vestibular / deep nucleus (flocculus target)
+    const mnX=W*0.79, mnY=H*0.55;                 // oculomotor motoneurons
+    const muX=W*0.865, muY=H*0.70;                // extraocular muscle
+    const eyeX=W*0.88, eyeY=H*0.855, er=W*0.036;  // eye
+    // Purkinje axons converge onto the nucleus (inhibitory)
+    for(let i=0;i<NPC;i++){ const px=W*0.13+ (W*0.52-W*0.13)*(i+0.5)/NPC;
+      conn(px,H*0.535+6, vnX-14, vnY, C.pc, 0.10+pcAct*0.35, 20); }
+    // vestibular / deep nucleus population
+    const rr=W*0.02;
+    for(let i=0;i<6;i++){ const ang=-TAU/4+i*TAU/6; clockDisc(vnX+Math.cos(ang)*rr,vnY+Math.sin(ang)*rr,S.t*6+i,dcnAct,C.dcn,3.8); }
+    label(vnX,vnY-rr-9,'VESTIBULAR NUCLEUS',C.dcn,'center',9);
+    label(vnX,vnY-rr-20,'(flocculus target)',C.faint,'center',7.5);
+    // nucleo-olivary feedback: nucleus ⊣ inferior olive (long-range inhibition)
+    conn(vnX-rr, vnY+rr, ioX()+W*0.02, ioY()-8, C.dcn, 0.12+S.P.nucleoOlive*0.30, -60);
+    label((vnX+ioX())/2, (vnY+ioY())/2+40, 'nucleo-olivary ⊣', C.faint, 'center', 7.5);
+    // → oculomotor motoneurons
+    conn(vnX+rr,vnY+rr, mnX,mnY-8, C.dcn, 0.3+dcnAct*0.4, 10);
+    for(let i=0;i<5;i++){ const ang=-TAU/4+i*TAU/5; clockDisc(mnX+Math.cos(ang)*rr*0.8,mnY+Math.sin(ang)*rr*0.8,S.t*9+i,0.5+dcnAct*0.5,C.eye,3.4); }
+    label(mnX,mnY-rr-8,'OCULOMOTOR',C.eye,'center',8.5); label(mnX,mnY+rr+10,'MOTONEURONS',C.eye,'center',8.5);
+    // → extraocular muscle (a little contractile bundle)
+    conn(mnX+rr*0.6,mnY+rr*0.6, muX-8,muY-6, C.eye, 0.3+dcnAct*0.4, 6);
+    const mus=0.5+0.5*Math.sin(S.t*TAU*S.P.fHead);   // muscle length modulates with the eye command
+    ctx.strokeStyle=rgba(C.warn,.7);ctx.lineWidth=2;
+    for(let b=-1;b<=1;b++){ ctx.beginPath();ctx.moveTo(muX-10,muY-8+b*4);
+      ctx.quadraticCurveTo(muX,muY-8+b*4 + (S.eye)*5, muX+10,muY+8+b*4);ctx.stroke(); }
+    label(muX,muY+20,'EXTRAOCULAR',C.warn,'center',8);label(muX,muY+30,'MUSCLE',C.warn,'center',8);
+    // → eye (gaze indicator, counter-rotating the head)
+    conn(muX+8,muY+6, eyeX-er, eyeY-er*0.4, C.warn, 0.4);
+    ctx.beginPath();ctx.arc(eyeX,eyeY,er,0,TAU);ctx.strokeStyle=rgba(C.eye,.55);ctx.lineWidth=1.6;ctx.stroke();
+    const eyeAng=Math.PI/2 - S.eye*0.9;
+    ctx.save();ctx.beginPath();ctx.arc(eyeX,eyeY,er,0,TAU);ctx.clip();
+    ctx.beginPath();ctx.arc(eyeX+Math.cos(eyeAng-Math.PI/2)*er*0.5, eyeY-Math.sin(eyeAng-Math.PI/2)*er*0.5, er*0.42,0,TAU);
+    ctx.fillStyle=rgba(C.eye,.9);ctx.fill();ctx.restore();
+    label(eyeX,eyeY+er+13,'EYE',C.eye,'center',9);
+    // head-velocity arrow (what the eye must counter)
+    const hv=S.head; ctx.strokeStyle=rgba(C.io,.5);ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(eyeX-hv*er*0.9,eyeY-er-12);ctx.lineTo(eyeX+hv*er*0.9,eyeY-er-12);ctx.stroke();
+    label(eyeX,eyeY-er-18,'head',C.faint,'center',7.5);
   }
 
   /* ---------------- learning curve + weight profile (panel canvases) ---------------- */
@@ -368,7 +438,8 @@
     carry+=dt*St.speed;
     let steps=Math.min(120,Math.round(carry/S.P.dt)); carry-=steps*S.P.dt;
     for(let s=0;s<steps;s++){ M.step(S); St.t+=S.P.dt;
-      hAcc+=S.P.dt; if(hAcc>=0.02){ hAcc=0; headH[hp]=S.head; slipH[hp]=S.slip; gainH[hp]=S.gainEst; hp=(hp+1)%HIST; } }
+      slipEnv += (S.P.dt/0.5)*(Math.abs(S.slip)*1.35 - slipEnv);      // smoothed slip amplitude
+      hAcc+=S.P.dt; if(hAcc>=0.02){ hAcc=0; headH[hp]=S.head; slipH[hp]=S.slip; gainH[hp]=S.gainEst; envH[hp]=slipEnv; hp=(hp+1)%HIST; } }
     draw();
     ui+=dt; if(ui>0.08){ui=0;updateUI();}
     requestAnimationFrame(frame);
