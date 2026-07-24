@@ -153,8 +153,14 @@ are display-only); **auto-calibrate cf0** (the drive-free baseline the error is 
 **olive membrane centred at 0** so slip is a *signed* teaching signal (one microzone learns both
 directions); **CF-lesion removes the whole olive** (slip drive *and* nucleo-olivary, else the loop
 learns on noise); **nucleo-olivary gates, doesn't sharpen** (a population-level effect, small per
-seed — don't claim it lowers slip). Open: a true **temporal** granule basis (latency spread) would
-give *timed* responses (eyeblink, timed saccades) — the bridge to metastable-chronotaxis timing.
+seed — don't claim it lowers slip in VOR). **Second task — TIMED SACCADES** (`createTiming`,
+validated **7/7 headless + 12/12 seeds**): granule **time cells** tile the interval after a cue; a
+climbing-fibre teaching pulse at `T*` carves a **timed Purkinje pause → nucleus burst → saccade**
+whose peak locks to `T*` (0.435–0.458 for T*=0.45), re-times when `T*` moves, and needs the CF;
+here the **nucleo-olivary loop finally stars** — the learned response cancels the teaching pulse so
+the CS returns to baseline and timing self-stabilises (Medina & Mauk). Output pathway corrected:
+nucleus → **oculomotor motoneurons → extraocular muscle → eye** (never nucleus→muscle). This
+temporal basis is the bridge to metastable-chronotaxis timing.
 
 **Metastable Chronotaxis** (`metastable-chronotaxis.html`) — 15-clock cortical pool;
 assemblies are *dynamic coalitions* drawn from it, not fixed boxes. Kuramoto coupling

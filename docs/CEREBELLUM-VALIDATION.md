@@ -58,7 +58,26 @@ world demands (magnifying goggles `demand > 1`, minifying `< 1`). A larger granu
 gives a steadier residual — the retinal slip is an *oscillating* error at the head frequency whose
 *amplitude* shrinks as the gain adapts (it does not converge to a flat line).
 
-## 3. Validated results — `10/10` headless, robust `12/12` seeds
+## 2b. Second task — TIMED SACCADES (cerebellar timing via a temporal basis)
+
+Same circuit, a different granule code. After a **cue** (t = 0 of each trial), granule **time
+cells** fire Gaussian bumps at a spread of **latencies**, tiling the interval — the temporal basis
+the eyeblink/timed-response literature posits. A climbing-fibre **teaching pulse** marks the
+target time `T*`; LTD at the granule cells active then carves a well-timed **Purkinje pause**, so
+the nucleus **bursts** and triggers a **saccade** at `T*`. Crucially, the learned response — via
+**nucleo-olivary feedback** — *cancels* the teaching pulse, so the complex spike returns to
+baseline and the timing self-stabilises (Medina & Mauk). This is the functional role the
+nucleo-olivary loop lacked in the VOR task, and the bridge to the metastable-chronotaxis timing
+thread. API: `createTiming / stepTiming / trainTiming / measureTiming`.
+
+Validated **7/7 headless, robust 12/12 seeds**: no CR before training; a timed response develops
+with its **peak locked to `T*`** (12/12, peaks 0.435–0.458 for T* = 0.45); **re-timing** when `T*`
+moves (0.30 → 0.65); **no teaching pulse → no CR**; and **nucleo-olivary feedback self-limits**
+learning (with it, CS returns to baseline 0.16 as the CR cancels the US; without it, CS stays
+elevated ~0.25 and the CR saturates). The saccade fires slightly *before* `T*` — the conditioned
+response anticipates the teaching signal, as it should.
+
+## 3. Validated results (VOR) — `10/10` headless, robust `12/12` seeds
 
 | # | check | result |
 |---|-------|--------|
@@ -98,11 +117,9 @@ effect is a *population-level* regulation (small per seed) and is reported as a 
 
 ## 5. Open threads
 
-- **Cerebellar timing.** The granule layer here is a *phase* basis for a periodic stimulus. A
-  proper **temporal** basis (granule cells with a spread of response latencies) would let the same
-  circuit learn *timed* responses (eyeblink conditioning, timed saccades) — the structural bridge
-  to the metastable-chronotaxis timing thread.
-- **Saccade adaptation** (discrete dysmetria → intrasaccadic error) as a second task on the same
-  circuit.
+- **Cerebellar timing — DONE** (§2b). The temporal-basis timed-saccade task is implemented and
+  validated; the granule *time cells* and the self-limiting nucleo-olivary loop are the bridge to
+  the metastable-chronotaxis timing thread. Next: wire a learned *sequence* of timed saccades.
+- **Saccade-amplitude adaptation** (dysmetria → intrasaccadic error) as a third task.
 - Single Purkinje microzone; no basket/stellate temporal detail, no multiple zones with distinct
   climbing-fibre error fields.

@@ -253,7 +253,113 @@
 
   const gain = S => measure(S, 4 / S.P.fHead).gain;
 
-  return { create, defaults, step, run, train, measure, setDemand, gain, mulberry32, TAU };
+  /* =====================================================================
+     SECOND TASK — TIMED SACCADES (cerebellar timing via a temporal basis).
+
+     Same circuit, different granule code: after a CUE, granule "time cells" fire
+     bumps at a spread of LATENCIES, tiling the interval (the temporal basis that
+     eyeblink/timed-response models posit). A climbing-fibre TEACHING pulse marks
+     the target time T*; LTD at the granule cells active then carves a well-timed
+     PAURKINJE PAUSE → the deep nucleus bursts → a saccade at T*. The learned
+     response, via nucleo-olivary feedback, CANCELS the teaching pulse — so the
+     complex spike returns to baseline and the timing self-stabilises (Medina &
+     Mauk). This is why the nucleo-olivary loop matters, and the bridge to the
+     metastable-chronotaxis timing thread.
+     ===================================================================== */
+  function timingDefaults() {
+    return {
+      dt: 0.001, seed: 7,
+      Tperiod: 1.2,       // trial length (s); the cue is at t = 0 of each trial
+      Tstar: 0.45,        // target time of the saccade (s after cue)
+      nGrT: 40,           // granule "time cells"
+      tauWin: 0.95,       // basis latencies tile [0.03, tauWin]
+      sigmaGr: 0.045,     // time-cell width (s)
+      pcTonic: 0.75, wPcDcn: 1.5, dcnTonic: 0.30,
+      fIO: 6.0, nIO: 12, gGap: 0.9, ioSpread: 0.03, ioNoise: 0.015,
+      oscAmp: 0.5, csThresh: 0.42, csMargin: 0.18, cfTau: 0.04,
+      usAmp: 1.15, sigmaUs: 0.05,   // teaching (US) pulse at T*
+      nucleoOlive: 1.35,            // learned response cancels the US → stable timing
+      lr: 0.035, wDecay: 0.0002, wMax: 3.0,
+      sacThresh: 0.20,              // nucleus burst that triggers a saccade
+    };
+  }
+  function createTiming(opts) {
+    const P = Object.assign(timingDefaults(), opts || {});
+    const rnd = mulberry32(P.seed);
+    const gauss = () => { let u = 0, v = 0; while (!u) u = rnd(); while (!v) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); };
+    const gr = [];
+    for (let k = 0; k < P.nGrT; k++) gr.push({ tau: 0.03 + (P.tauWin - 0.03) * k / (P.nGrT - 1), act: 0 });
+    const w = new Float64Array(P.nGrT);
+    const io = [];
+    for (let i = 0; i < P.nIO; i++) io.push({ th: rnd() * TAU, w: TAU * P.fIO * (1 + P.ioSpread * gauss()), cs: 0, v: 0 });
+    const cf0 = calibrateCf0(P, io.map(o => ({ th: o.th, w: o.w })), gauss);
+    return {
+      P, rnd, gauss, timing: true, t: 0, tcue: 0, gr, w, io, cf0,
+      pc: P.pcTonic, dcn: P.dcnTonic, burst: 0, cf: cf0, ioR: 0, csRate: 0, us: 0,
+      sacFired: false, sacTime: -1, lastSacTime: -1, peakBurst: 0, peakTime: -1, eyePos: 0, sacTarget: 0,
+    };
+  }
+  function stepTiming(S) {
+    const P = S.P, dt = P.dt;
+    // trial clock: cue at tcue = 0
+    S.tcue += dt;
+    if (S.tcue >= P.Tperiod) {
+      S.tcue = 0; S.lastSacTime = S.sacTime; S.sacFired = false; S.sacTime = -1;
+      S.peakBurst = 0; S.peakTime = -1;
+    }
+    // granule time cells: Gaussian bumps at their latencies
+    let pf = 0;
+    for (let k = 0; k < P.nGrT; k++) { const a = Math.exp(-(((S.tcue - S.gr[k].tau) / P.sigmaGr) ** 2)); S.gr[k].act = a; pf += S.w[k] * a; }
+    // Purkinje simple-spike (tonic + learned PF); a well-timed dip = the pause
+    const ss = clamp(P.pcTonic + pf, 0, 3); S.pc = ss;
+    // deep nucleus: tonic − Purkinje; a Purkinje pause releases a burst
+    const dcn = clamp(P.dcnTonic - P.wPcDcn * (ss - P.pcTonic), 0, 3); S.dcn = dcn;
+    const burst = Math.max(0, dcn - P.dcnTonic); S.burst = burst;
+    if (burst > S.peakBurst) { S.peakBurst = burst; S.peakTime = S.tcue; }
+    // saccade trigger (first threshold crossing in the trial)
+    if (!S.sacFired && burst > P.sacThresh) { S.sacFired = true; S.sacTime = S.tcue; S.sacTarget = 1; }
+    S.eyePos += (dt / 0.04) * (S.sacTarget - S.eyePos);              // eye jumps to target when triggered
+    if (S.tcue < dt) S.sacTarget = 0;                                // reset gaze at the new cue
+    // teaching pulse (US) at T*, minus nucleo-olivary cancellation by the learned response
+    const us = P.usAmp * Math.exp(-(((S.tcue - P.Tstar) / P.sigmaUs) ** 2)); S.us = us;
+    const drive = us - P.nucleoOlive * burst;
+    // inferior olive (same oscillator/graded-CS machinery)
+    let sx = 0, sy = 0; for (const o of S.io) { sx += Math.cos(o.th); sy += Math.sin(o.th); }
+    sx /= P.nIO; sy /= P.nIO; const psi = Math.atan2(sy, sx), R = Math.hypot(sx, sy); S.ioR = R;
+    let cs = 0, csProb = 0;
+    for (const o of S.io) {
+      o.th = (o.th + dt * (o.w + P.gGap * R * Math.sin(psi - o.th)) + Math.sqrt(dt) * P.ioNoise * S.gauss() + TAU) % TAU;
+      o.v = P.oscAmp * Math.cos(o.th) + drive; o.cs = o.v > P.csThresh ? 1 : 0; cs += o.cs;
+      csProb += clamp((o.v - P.csThresh + P.csMargin) / (2 * P.csMargin), 0, 1);
+    }
+    S.csRate = cs / P.nIO;
+    S.cf += (dt / P.cfTau) * (csProb / P.nIO - S.cf);
+    const err = S.cf - S.cf0;
+    for (let k = 0; k < P.nGrT; k++) S.w[k] = clamp(S.w[k] - P.lr * err * S.gr[k].act - P.wDecay * S.w[k], -P.wMax, P.wMax);
+    S.t += dt;
+  }
+  function runTiming(S, seconds) { const n = Math.round(seconds / S.P.dt); for (let k = 0; k < n; k++) stepTiming(S); }
+  function trainTiming(S, trials) { runTiming(S, trials * S.P.Tperiod); }
+  // probe one trial WITHOUT learning: return the saccade time, response (burst) peak time & amplitude
+  function measureTiming(S) {
+    const P = S.P, dt = P.dt, savedLr = P.lr; P.lr = 0;
+    // advance to the next cue, then run exactly one trial
+    while (S.tcue > dt) stepTiming(S);
+    let peak = 0, ptime = -1, sac = -1, csAcc = 0, n = 0;
+    const start = S.t;
+    while (S.t - start < P.Tperiod - dt) {
+      stepTiming(S);
+      if (S.burst > peak) { peak = S.burst; ptime = S.tcue; }
+      if (sac < 0 && S.sacFired) sac = S.sacTime;
+      csAcc += S.csRate; n++;
+    }
+    P.lr = savedLr;
+    return { sacTime: sac, peakTime: ptime, crAmp: peak, csRate: csAcc / n };
+  }
+
+  return { create, defaults, step, run, train, measure, setDemand, gain,
+           timingDefaults, createTiming, stepTiming, runTiming, trainTiming, measureTiming,
+           mulberry32, TAU };
 });
 
 /* ============================ headless tests ============================ */
@@ -342,6 +448,44 @@ if (typeof require !== "undefined" && require.main === module) {
     console.log("      learned=" + fmt(learned) + "  washed=" + fmt(washed) + "  relearn(30cyc)=" + fmt(relearn));
     check("washes out toward baseline", washed < learned - 0.2, "washed=" + fmt(washed));
     check("re-adapts quickly (savings)", relearn > washed + 0.2, "Δ=" + fmt(relearn - washed));
+  }
+
+  // ---------------- TIMED SACCADES (temporal basis) ----------------
+  console.log("\n[T1] Timed saccade — no conditioned response before training");
+  {
+    const S = M.createTiming({ Tstar: 0.45 }); const m = M.measureTiming(S);
+    check("no CR before learning", m.crAmp < 0.1 && m.sacTime < 0, "CR=" + fmt(m.crAmp, 2) + " sac=" + fmt(m.sacTime, 2));
+  }
+
+  console.log("\n[T2] Timed saccade — learns a response timed to T*");
+  {
+    const S = M.createTiming({ Tstar: 0.45 }); M.trainTiming(S, 150); const m = M.measureTiming(S);
+    console.log("      peak time=" + fmt(m.peakTime, 3) + "  saccade=" + fmt(m.sacTime, 3) + "  CR amp=" + fmt(m.crAmp, 2));
+    check("a timed response develops", m.crAmp > 0.25, "CR=" + fmt(m.crAmp, 2));
+    check("its peak is timed to T* (0.45)", Math.abs(m.peakTime - 0.45) < 0.06, "peak=" + fmt(m.peakTime, 3));
+    check("the saccade anticipates (fires ≤ T*)", m.sacTime > 0 && m.sacTime <= 0.47, "sac=" + fmt(m.sacTime, 3));
+  }
+
+  console.log("\n[T3] Re-timing — change T* and the response re-times");
+  {
+    const S = M.createTiming({ Tstar: 0.30 }); M.trainTiming(S, 120); const a = M.measureTiming(S);
+    S.P.Tstar = 0.65; M.trainTiming(S, 160); const b = M.measureTiming(S);
+    console.log("      T*0.30→peak " + fmt(a.peakTime, 3) + "   then T*0.65→peak " + fmt(b.peakTime, 3));
+    check("response re-times to the new target", Math.abs(b.peakTime - 0.65) < 0.08 && b.peakTime > a.peakTime + 0.2, "peak=" + fmt(b.peakTime, 3));
+  }
+
+  console.log("\n[T4] Climbing fibre necessary (no teaching pulse → no CR)");
+  {
+    const S = M.createTiming({ Tstar: 0.45, usAmp: 0 }); M.trainTiming(S, 150); const m = M.measureTiming(S);
+    check("no CR without the teaching signal", m.crAmp < 0.1, "CR=" + fmt(m.crAmp, 2));
+  }
+
+  console.log("\n[T5] Nucleo-olivary feedback self-limits (the CR cancels its own teaching signal)");
+  {
+    const wf = M.createTiming({ Tstar: 0.45, nucleoOlive: 1.35 }); const cf0 = wf.cf0; M.trainTiming(wf, 180); const a = M.measureTiming(wf);
+    const nf = M.createTiming({ Tstar: 0.45, nucleoOlive: 0.0 }); M.trainTiming(nf, 180); const b = M.measureTiming(nf);
+    console.log("      CS after training: with feedback=" + fmt(a.csRate, 3) + " (baseline " + fmt(cf0, 3) + ")  without=" + fmt(b.csRate, 3));
+    check("feedback returns the complex-spike rate toward baseline", Math.abs(a.csRate - cf0) < Math.abs(b.csRate - cf0) - 0.02, "with=" + fmt(a.csRate, 3) + " no=" + fmt(b.csRate, 3));
   }
 
   console.log("\n==== " + pass + " passed, " + fail + " failed ====\n");
