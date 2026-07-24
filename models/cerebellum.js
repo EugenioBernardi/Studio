@@ -91,6 +91,9 @@
       csMargin: 0.18,     // soft-threshold width for the GRADED complex-spike probability
       nucleoOlive: 0.55,  // DCN → IO inhibition (nucleo-olivary feedback)
 
+      // ---- display ----
+      gainTau: 2.0,       // EWMA time constant (s) for the live VOR-gain estimate
+
       // ---- plasticity ----
       lrLTD: 0.055,       // climbing-fibre-gated LTD/LTP rate (adaptive-filter β)
       wDecay: 0.00004,    // slow weight decay (homeostatic, small)
@@ -130,6 +133,8 @@
       head: 0, headDot: 0, eye: 0, slip: 0,
       pc: P.pcTonic, dcn: P.dcnTonic, cf: cf0, ioR: 0, csRate: 0,
       grActive: 0,
+      // live (EWMA) VOR gain / slip estimators for display — do not perturb state like measure()
+      ehAvg: 0, hhAvg: 0, ssAvg: 0, gainEst: P.g0, slipEst: 0,
     };
     return S;
   }
@@ -185,6 +190,12 @@
     S.eye = eye;
     const slip = eye + P.demand * head;                  // residual image velocity (error)
     S.slip = slip;
+    // live VOR-gain / slip estimate (EWMA regression of eye on head) for the display
+    const ga = dt / P.gainTau;
+    S.ehAvg += ga * (eye * head - S.ehAvg);
+    S.hhAvg += ga * (head * head - S.hhAvg);
+    S.ssAvg += ga * (slip * slip - S.ssAvg);
+    if (S.hhAvg > 1e-6) { S.gainEst = -S.ehAvg / S.hhAvg; S.slipEst = Math.sqrt(Math.max(0, S.ssAvg) / S.hhAvg); }
 
     // ---- inferior olive: coupled oscillators, slip depolarises, DCN inhibits ----
     // mean field for gap-junction coupling

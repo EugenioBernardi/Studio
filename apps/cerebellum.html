@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cerebellum — VOR Adaptation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#060911; --panel:rgba(13,19,33,.74); --line:rgba(120,150,200,.14);
+    --ink:#e4ebf7; --muted:#8a99b6; --faint:#4a5670; --idle:#3f4d68;
+    --mf:#4ce0c0; --gr:#56d4ff; --go:#c07bff; --pf:#6fe0ff; --pc:#ffc861;
+    --mli:#9d8bff; --io:#ff4d7d; --cf:#ff6b8a; --dcn:#ff9d4d; --eye:#56a8ff;
+    --good:#3ee6b0; --warn:#ff9d4d; --bad:#ff4d7d;
+    --display:'Space Grotesk',system-ui,-apple-system,Segoe UI,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:var(--display);color:var(--ink);overflow:hidden;transition:background .7s;
+    background:radial-gradient(1200px 700px at 25% -10%,#101a2e 0%,transparent 60%),
+      radial-gradient(900px 600px at 100% 110%,#0c1424 0%,transparent 55%),var(--bg)}
+  body.lesion{background:radial-gradient(1200px 800px at 45% 25%,#2a1030 0%,transparent 62%),#0a0612}
+  .app{display:grid;grid-template-columns:1fr 392px;height:100vh;width:100vw}
+  .stage{position:relative;min-width:0;overflow:hidden}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .title{position:absolute;top:15px;left:22px;z-index:3;pointer-events:none;max-width:60%}
+  .title h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+  .title .sub{margin-top:5px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.6}
+  .title em{font-style:normal;color:var(--pc)} .title b.g{color:var(--good);font-weight:600} .title b.e{color:var(--io)}
+  .read{position:absolute;left:22px;bottom:14px;z-index:3;pointer-events:none;font-family:var(--mono);
+    font-size:10px;color:var(--muted);display:flex;gap:15px;flex-wrap:wrap;max-width:94%}
+  .read b{color:var(--ink);font-weight:600}
+  .read b.ok{color:var(--good)} .read b.hot{color:var(--warn)} .read b.bad{color:var(--bad)}
+  .pill{position:absolute;top:14px;right:14px;z-index:3;font-family:var(--mono);font-size:10px;
+    letter-spacing:.14em;padding:7px 13px;border-radius:20px;opacity:0;transition:.25s}
+  .pill.on{opacity:1} .pill.lz{color:#fff;border:1px solid var(--io);background:rgba(255,77,125,.3)}
+  .panel{background:linear-gradient(180deg,rgba(10,15,28,.93),rgba(8,12,22,.97));
+    border-left:1px solid var(--line);padding:15px 14px;overflow-y:auto;z-index:4;
+    display:flex;flex-direction:column;gap:12px}
+  .panel::-webkit-scrollbar{width:8px}
+  .panel::-webkit-scrollbar-thumb{background:rgba(120,150,200,.18);border-radius:4px}
+  .blk{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px}
+  .blk h2{margin:0 0 9px;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;display:flex;align-items:center;gap:7px}
+  .blk h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--pc));
+    box-shadow:0 0 8px var(--dot,var(--pc))}
+  .blk h2 .hint{margin-left:auto;letter-spacing:.04em;text-transform:none;color:var(--faint);font-weight:500}
+  .pre{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+  .pre button{border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);
+    font-family:var(--mono);font-size:10px;cursor:pointer;padding:8px 3px;border-radius:8px;transition:.15s}
+  .pre button:hover{color:var(--ink);border-color:rgba(86,212,255,.45)}
+  .pre button.on{background:rgba(86,212,255,.15);color:var(--ink);border-color:rgba(86,212,255,.5)}
+  .pre button.lzp{border-color:rgba(255,77,125,.35)}
+  .pre button.lzp:hover,.pre button.lzp.on{border-color:var(--bad);background:rgba(255,77,125,.15);color:#ffd0dc}
+  .sl{display:flex;align-items:center;gap:9px;margin-top:8px;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  .sl .nm{width:118px;flex:none} .sl input{flex:1;accent-color:var(--c2,var(--pc));min-width:0}
+  .sl .vl{width:52px;text-align:right;color:var(--ink);flex:none}
+  .btn{width:100%;margin-top:9px;border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);
+    font-family:var(--mono);font-size:10px;cursor:pointer;padding:9px 4px;border-radius:8px;transition:.15s}
+  .btn:hover{color:var(--ink);border-color:rgba(120,150,200,.4)}
+  .note{font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--muted);min-height:44px;margin-top:9px}
+  .note b{color:var(--ink)} .note em{font-style:normal;color:var(--pc)} .note .w{color:var(--warn)} .note .g{color:var(--good)} .note .e{color:var(--io)}
+  .rd{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .rd .c{background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  .rd .c .k{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .rd .c .v{font-family:var(--mono);font-size:17px;font-weight:600;color:var(--ink);margin-top:2px}
+  .rd .c .v small{font-size:9px;color:var(--muted);font-weight:400}
+  canvas.mini{width:100%;display:block;border-radius:8px;background:rgba(255,255,255,.015);margin-top:4px}
+  @media (max-width:1060px){.app{grid-template-columns:1fr;grid-template-rows:1fr auto}
+    .panel{border-left:0;border-top:1px solid var(--line);max-height:54vh}
+    .title{max-width:70%}.read{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <canvas id="cv"></canvas>
+    <div class="title">
+      <h1>Cerebellum · VOR Adaptation</h1>
+      <div class="sub">
+        Head rotates → eyes counter-rotate to hold gaze. <b class="e">Retinal slip</b> is the error;
+        the <b class="e">inferior olive</b> reports it as climbing-fibre complex spikes driving
+        <em>parallel-fibre → Purkinje</em> LTD until the <b class="g">VOR gain</b> matches the goggles.
+      </div>
+    </div>
+    <div class="pill lz" id="pill-lz">INFERIOR OLIVE LESIONED · NO LEARNING</div>
+    <div class="read">
+      <span>demand G* <b id="r-dem">1.00</b></span>
+      <span>VOR gain <b id="r-gain" class="ok">1.00</b></span>
+      <span>retinal slip <b id="r-slip">0.00</b></span>
+      <span>complex-spike <b id="r-cs">0.00</b></span>
+      <span>olive sync R <b id="r-ior">0.00</b></span>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <div class="blk" style="--dot:var(--eye)">
+      <h2>Visual world <span class="hint">goggles set the demanded gain</span></h2>
+      <div class="pre" id="pre"></div>
+      <label class="sl" style="--c2:var(--eye)"><span class="nm">Demanded gain G*</span>
+        <input id="s-dem" type="range" min="0.3" max="2.0" step="0.05" value="1.0"><span class="vl" id="v-dem">1.00×</span></label>
+      <button class="btn" id="btn-reset">↺ Reset the learned gain (naïve cerebellum)</button>
+      <div class="note" id="note"></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--good)">
+      <h2>Adaptation <span class="hint">VOR gain → demand</span></h2>
+      <div class="rd">
+        <div class="c"><div class="k">VOR gain</div><div class="v" id="rd-gain">1.00<small>×</small></div></div>
+        <div class="c"><div class="k">Retinal slip</div><div class="v" id="rd-slip">0.00</div></div>
+      </div>
+      <canvas class="mini" id="curve" height="90"></canvas>
+    </div>
+
+    <div class="blk" style="--dot:var(--io)">
+      <h2>Inferior olive <span class="hint">gap-junction oscillators</span></h2>
+      <label class="sl" style="--c2:var(--io)"><span class="nm">Gap-junction coupling</span>
+        <input id="s-gap" type="range" min="0" max="2.6" step="0.05" value="0.9"><span class="vl" id="v-gap">0.90</span></label>
+      <label class="sl" style="--c2:var(--dcn)"><span class="nm">Nucleo-olivary DCN⊣IO</span>
+        <input id="s-no" type="range" min="0" max="1.2" step="0.05" value="0.55"><span class="vl" id="v-no">0.55</span></label>
+      <div class="note" id="ionote" style="min-height:0"></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--pf)">
+      <h2>PF → Purkinje weights <span class="hint">the learned filter</span></h2>
+      <canvas class="mini" id="weights" height="54"></canvas>
+    </div>
+
+    <div class="blk" style="--dot:var(--pc)">
+      <h2>Playback</h2>
+      <label class="sl" style="--c2:var(--pc)"><span class="nm">Speed</span>
+        <input id="s-spd" type="range" min="0.1" max="3" step="0.1" value="1.0"><span class="vl" id="v-spd">1.0×</span></label>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.7;margin-top:9px">
+        <span style="color:var(--mf)">■</span> mossy fibre
+        <span style="color:var(--gr)">■</span> granule
+        <span style="color:var(--go)">■</span> Golgi
+        <span style="color:var(--pc)">■</span> Purkinje
+        <span style="color:var(--mli)">■</span> MLI
+        <span style="color:var(--dcn)">■</span> deep nucleus
+        <span style="color:var(--io)">■</span> inferior olive / climbing fibre<br>
+        The olive's <b style="color:var(--ink)">synchrony</b> (halo) organises complex-spike timing —
+        the one place synchrony does work; the cortex is rate + plastic weights.
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ===================== MODEL (inlined, single source of truth) ===================== */
+"use strict";
+/* =====================================================================
+   Cerebellum — supervised motor learning as an ADAPTIVE FILTER, with the
+   inferior olive as a gap-junction-coupled OSCILLATOR population.
+
+   Task: vestibulo-ocular reflex (VOR) gain adaptation — the canonical
+   cerebellar oculomotor learning paradigm. The head rotates; the eyes must
+   counter-rotate to hold gaze. RETINAL SLIP (residual image motion) is the
+   error. The inferior olive reports it as CLIMBING-FIBRE complex spikes, which
+   drive LTD at coincident parallel-fibre→Purkinje synapses (Marr–Albus–Ito).
+   Over trials the Purkinje output learns to cancel the slip → the VOR gain
+   adapts toward whatever the visual world demands (e.g. magnifying goggles).
+
+   Circuit (complete):
+     mossy fibres (vestibular head velocity + its quadrature)
+       → GRANULE cells: expansion recoding into a temporal/phase BASIS,
+         sparsified by GOLGI feedback inhibition; their axons are PARALLEL FIBRES
+       → PURKINJE cell: simple-spike rate = tonic + Σ w_k·PF_k − MLI inhibition;
+         the sole cortical output, GABAergic onto the deep nuclei. The weights
+         w_k are the site of learning.
+       → DEEP CEREBELLAR NUCLEUS (DCN): tonic − Purkinje inhibition = the output
+         that modulates the brain-stem VOR and drives the eyes.
+     INFERIOR OLIVE (IO): gap-junction-coupled oscillators (subthreshold ~6 Hz).
+       Retinal slip depolarises them; a complex spike fires when the drive meets
+       the depolarising phase. DCN inhibits IO (NUCLEO-OLIVARY feedback) — the
+       loop that regulates the teaching signal and stops runaway learning.
+
+   DUAL CODE (as in the basal-ganglia model): the IO is a genuine oscillator
+   population — gap-junction SYNCHRONY organises complex-spike timing, so synchrony
+   does real work there. The cortical microcircuit (granule/Purkinje/DCN) is rate +
+   plastic weights. Every unit is still a clock for the visualisation.
+
+   Learning rule (adaptive-filter decorrelation / covariance):
+     Δw_k ∝ −(CF − CF0)·PF_k   — LTD when the error (complex-spike excess) coincides
+   with parallel-fibre activity, LTP when it is below baseline. This drives the
+   error into decorrelation with the granule basis, i.e. minimises retinal slip
+   within the span of the basis. `node models/cerebellum.js test`.
+   ===================================================================== */
+
+(function (root, factory) {
+  if (typeof module !== "undefined" && module.exports) module.exports = factory();
+  else root.Cerebellum = factory();
+})(typeof self !== "undefined" ? self : this, function () {
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const relu = v => (v > 0 ? v : 0);
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function defaults() {
+    return {
+      dt: 0.001,          // s (1 ms)
+      seed: 7,
+
+      // ---- task: sinusoidal head rotation (VOR) ----
+      fHead: 0.5,         // head rotation frequency (Hz)
+      headAmp: 1.0,       // head velocity amplitude (normalised)
+      g0: 1.0,            // brain-stem (direct) VOR gain — cerebellum learns the residual
+      demand: 1.0,        // required gain G* (1 normal; >1 magnifying, <1 minifying goggles)
+
+      // ---- population sizes ----
+      nGr: 24,            // granule cells (parallel-fibre basis)
+      nIO: 12,            // inferior-olive oscillators
+
+      // ---- granule / Purkinje / DCN ----
+      grThresh: 0.10,     // granule firing threshold (with Golgi → sparse code)
+      golgi: 0.55,        // Golgi feedback-inhibition strength (divisive sparsification)
+      pcTonic: 0.60,      // Purkinje tonic simple-spike level
+      mli: 0.35,          // molecular-layer interneuron feedforward inhibition (∝ pooled PF)
+      wInit: 0.0,         // initial PF→PC weights (learn from zero residual)
+      wPcDcn: 1.30,       // Purkinje → DCN inhibition
+      dcnTonic: 1.00,     // DCN tonic drive
+      kEye: 1.00,         // DCN modulation → eye-velocity gain
+
+      // ---- inferior olive (oscillator) ----
+      fIO: 6.0,           // subthreshold oscillation frequency (Hz)
+      ioSpread: 0.03,     // olivary intrinsic-frequency heterogeneity (uncoupled → desynchronised)
+      gGap: 0.90,         // gap-junction coupling (→ synchrony)
+      ioNoise: 0.015,     // phase noise
+      cfTau: 0.12,        // climbing-fibre smoothing (s) — long enough to reject baseline CS noise
+      oscAmp: 0.5,        // subthreshold oscillation amplitude
+      csGain: 2.4,        // slip → olivary depolarisation gain
+      csThresh: 0.42,     // complex-spike threshold (on oscAmp·cosθ + drive); baseline ~1 Hz
+      csMargin: 0.18,     // soft-threshold width for the GRADED complex-spike probability
+      nucleoOlive: 0.55,  // DCN → IO inhibition (nucleo-olivary feedback)
+
+      // ---- display ----
+      gainTau: 2.0,       // EWMA time constant (s) for the live VOR-gain estimate
+
+      // ---- plasticity ----
+      lrLTD: 0.055,       // climbing-fibre-gated LTD/LTP rate (adaptive-filter β)
+      wDecay: 0.00004,    // slow weight decay (homeostatic, small)
+      wMax: 3.0,
+    };
+  }
+
+  function create(opts) {
+    const P = Object.assign(defaults(), opts || {});
+    const rnd = mulberry32(P.seed);
+    const gauss = () => { let u = 0, v = 0; while (!u) u = rnd(); while (!v) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); };
+
+    // granule basis: each granule mixes head velocity + its quadrature with a random
+    // gain/phase, is rectified and thresholded → a sparse phase-tiled temporal basis.
+    const gr = [];
+    for (let k = 0; k < P.nGr; k++) {
+      const ph = TAU * (k + 0.5) / P.nGr + 0.15 * gauss();   // tile the phase circle
+      gr.push({ a: Math.cos(ph), b: Math.sin(ph), act: 0 });
+    }
+    // one Purkinje microzone: PF→PC weights (the learned filter)
+    const w = new Float64Array(P.nGr);
+    for (let k = 0; k < P.nGr; k++) w[k] = P.wInit;
+
+    // inferior olive: coupled oscillators
+    const io = [];
+    for (let i = 0; i < P.nIO; i++)
+      io.push({ th: rnd() * TAU, w: TAU * P.fIO * (1 + P.ioSpread * gauss()), cs: 0, v: 0 });
+
+    // calibrate the SPONTANEOUS complex-spike rate (drive = 0): this is the reference the
+    // teaching signal is signed against, so err = 0 when there is no retinal slip.
+    const cf0 = calibrateCf0(P, io.map(o => ({ th: o.th, w: o.w })), gauss);
+
+    const S = {
+      P, rnd, gauss, t: 0,
+      gr, w, io, cf0,
+      // observ / running state
+      head: 0, headDot: 0, eye: 0, slip: 0,
+      pc: P.pcTonic, dcn: P.dcnTonic, cf: cf0, ioR: 0, csRate: 0,
+      grActive: 0,
+      // live (EWMA) VOR gain / slip estimators for display — do not perturb state like measure()
+      ehAvg: 0, hhAvg: 0, ssAvg: 0, gainEst: P.g0, slipEst: 0,
+    };
+    return S;
+  }
+
+  // baseline complex-spike rate with no slip drive — the signed-error reference
+  function calibrateCf0(P, io, gauss) {
+    const dt = P.dt, n = Math.round(3.0 / dt); let acc = 0, cnt = 0;
+    for (let k = 0; k < n; k++) {
+      let sx = 0, sy = 0; for (const o of io) { sx += Math.cos(o.th); sy += Math.sin(o.th); }
+      sx /= io.length; sy /= io.length; const psi = Math.atan2(sy, sx), R = Math.hypot(sx, sy);
+      let csProb = 0;
+      for (const o of io) {
+        o.th = (o.th + dt * (o.w + P.gGap * R * Math.sin(psi - o.th)) + Math.sqrt(dt) * P.ioNoise * gauss() + TAU) % TAU;
+        csProb += clamp((P.oscAmp * Math.cos(o.th) - P.csThresh + P.csMargin) / (2 * P.csMargin), 0, 1);
+      }
+      if (k > n * 0.2) { acc += csProb / io.length; cnt++; }
+    }
+    return acc / cnt;
+  }
+
+  function setDemand(S, g) { S.P.demand = g; }
+
+  // one integration step
+  function step(S) {
+    const P = S.P, dt = P.dt;
+    const w = TAU * P.fHead;
+    // head velocity (vestibular) and its quadrature (acceleration/efference copy)
+    const head = P.headAmp * Math.sin(w * S.t);
+    const headDot = P.headAmp * Math.cos(w * S.t);      // quadrature (∝ derivative / ω)
+    S.head = head; S.headDot = headDot;
+
+    // ---- granule layer: rectified phase-tiled basis, Golgi divisive sparsification ----
+    let rawSum = 0;
+    for (const g of S.gr) { g.raw = relu(g.a * head + g.b * headDot - P.grThresh); rawSum += g.raw; }
+    const golgi = 1 + P.golgi * (rawSum / P.nGr);        // feedback inhibition ∝ mean activity
+    let nAct = 0, pfPool = 0;
+    for (const g of S.gr) { g.act = g.raw / golgi; if (g.act > 0.02) nAct++; pfPool += g.act; }
+    S.grActive = nAct / P.nGr;
+
+    // ---- Purkinje cell: tonic + Σ w·PF − MLI feedforward inhibition ----
+    let pfDrive = 0;
+    for (let k = 0; k < P.nGr; k++) pfDrive += S.w[k] * S.gr[k].act;
+    const pc = clamp(P.pcTonic + pfDrive - P.mli * pfPool / P.nGr, 0, 3);
+    S.pc = pc;
+
+    // ---- DCN: tonic − Purkinje inhibition = cerebellar output ----
+    const dcn = P.dcnTonic - P.wPcDcn * (pc - P.pcTonic);
+    S.dcn = dcn;
+
+    // ---- eye velocity: brain-stem reflex + cerebellar modulation ----
+    // eye = −(g0·head) − kEye·(dcn−dcnTonic).  Retinal slip = eye + demand·head.
+    const eye = -(P.g0 * head) - P.kEye * (dcn - P.dcnTonic);
+    S.eye = eye;
+    const slip = eye + P.demand * head;                  // residual image velocity (error)
+    S.slip = slip;
+    // live VOR-gain / slip estimate (EWMA regression of eye on head) for the display
+    const ga = dt / P.gainTau;
+    S.ehAvg += ga * (eye * head - S.ehAvg);
+    S.hhAvg += ga * (head * head - S.hhAvg);
+    S.ssAvg += ga * (slip * slip - S.ssAvg);
+    if (S.hhAvg > 1e-6) { S.gainEst = -S.ehAvg / S.hhAvg; S.slipEst = Math.sqrt(Math.max(0, S.ssAvg) / S.hhAvg); }
+
+    // ---- inferior olive: coupled oscillators, slip depolarises, DCN inhibits ----
+    // mean field for gap-junction coupling
+    let sx = 0, sy = 0;
+    for (const o of S.io) { sx += Math.cos(o.th); sy += Math.sin(o.th); }
+    sx /= P.nIO; sy /= P.nIO;
+    const psi = Math.atan2(sy, sx), R = Math.hypot(sx, sy);
+    S.ioR = R;
+    const drive = P.csGain * slip - P.nucleoOlive * (dcn - P.dcnTonic);   // signed error − nucleo-olivary
+    let cs = 0, csProb = 0;
+    for (const o of S.io) {
+      o.th = (o.th + dt * (o.w + P.gGap * R * Math.sin(psi - o.th)) + Math.sqrt(dt) * P.ioNoise * S.gauss() + TAU) % TAU;
+      // membrane = subthreshold oscillation (peaks at phase 0) + slip drive; centred at 0 so
+      // positive slip ADDS complex spikes and negative slip removes them → a signed teaching signal
+      o.v = P.oscAmp * Math.cos(o.th) + drive;
+      o.cs = o.v > P.csThresh ? 1 : 0;                   // sampled complex spike (for display)
+      cs += o.cs;
+      csProb += clamp((o.v - P.csThresh + P.csMargin) / (2 * P.csMargin), 0, 1);  // graded probability
+    }
+    S.csRate = cs / P.nIO;                                // sampled fraction (bursty — for the viz)
+    // climbing-fibre TEACHING signal reads the GRADED complex-spike probability (the effective
+    // rate integrated over trials), not the noisy all-or-none sample — so no error ⇒ no drift.
+    S.cf += (dt / P.cfTau) * (csProb / P.nIO - S.cf);
+
+    // ---- plasticity: CF-gated LTD/LTP at PF→PC (adaptive-filter decorrelation) ----
+    const err = S.cf - S.cf0;                            // signed error (probability excess over baseline)
+    for (let k = 0; k < P.nGr; k++) {
+      let dw = -P.lrLTD * err * S.gr[k].act - P.wDecay * S.w[k];
+      S.w[k] = clamp(S.w[k] + dw, -P.wMax, P.wMax);
+    }
+
+    S.t += dt;
+  }
+
+  function run(S, seconds) { const n = Math.round(seconds / S.P.dt); for (let k = 0; k < n; k++) step(S); }
+
+  // ---- observables: measure VOR gain and slip over a probe window (no learning) ----
+  // gain = −⟨eye·head⟩/⟨head²⟩ ; slipRMS = √⟨slip²⟩ / √⟨head²⟩
+  function measure(S, seconds) {
+    const P = S.P, dt = P.dt, n = Math.round(seconds / dt);
+    const savedLR = P.lrLTD; P.lrLTD = 0;                 // freeze weights while probing
+    let eh = 0, hh = 0, ss = 0, cs = 0;
+    for (let k = 0; k < n; k++) {
+      step(S);
+      eh += S.eye * S.head; hh += S.head * S.head; ss += S.slip * S.slip; cs += S.csRate;
+    }
+    P.lrLTD = savedLR;
+    return { gain: hh > 1e-9 ? -eh / hh : 0, slipRMS: Math.sqrt(ss / n) / (Math.sqrt(hh / n) || 1),
+             csRate: cs / n };
+  }
+
+  // train for a number of head cycles at the current demand
+  function train(S, cycles) { run(S, cycles / S.P.fHead); }
+
+  const gain = S => measure(S, 4 / S.P.fHead).gain;
+
+  return { create, defaults, step, run, train, measure, setDemand, gain, mulberry32, TAU };
+});
+
+/* ============================ headless tests ============================ */
+if (typeof require !== "undefined" && require.main === module) {
+  const M = module.exports;
+  const fmt = (x, d = 3) => (x >= 0 ? " " : "") + x.toFixed(d);
+  let pass = 0, fail = 0;
+  const check = (n, c, d) => (c ? (pass++, console.log("  PASS  " + n + "   " + (d || "")))
+                                : (fail++, console.log("  FAIL  " + n + "   " + (d || ""))));
+
+  console.log("\n[1] Baseline: gain ≈ g0, low complex-spike rate, sparse granule code");
+  {
+    const S = M.create({ demand: 1.0 });
+    M.train(S, 4);
+    const m = M.measure(S, 8);
+    console.log("      gain=" + fmt(m.gain) + "  slipRMS=" + fmt(m.slipRMS) + "  CS=" + fmt(m.csRate) + "  grActive=" + fmt(S.grActive));
+    check("baseline gain ≈ 1.0", Math.abs(m.gain - 1.0) < 0.12, "gain=" + fmt(m.gain));
+    check("granule code is sparse (<50% active)", S.grActive < 0.5, "act=" + fmt(S.grActive));
+  }
+
+  console.log("\n[2] VOR gain-UP adaptation (magnifying goggles, demand 1.6)");
+  {
+    const S = M.create({ demand: 1.6 });
+    const before = M.measure(S, 4).gain;
+    M.train(S, 120);
+    const after = M.measure(S, 4);
+    console.log("      gain " + fmt(before) + " → " + fmt(after.gain) + "   slipRMS " + fmt(after.slipRMS));
+    check("gain increases toward the demand", after.gain > before + 0.25, "Δ=" + fmt(after.gain - before));
+    check("residual slip is reduced", after.slipRMS < 0.35, "slip=" + fmt(after.slipRMS));
+  }
+
+  console.log("\n[3] VOR gain-DOWN adaptation (minifying goggles, demand 0.5)");
+  {
+    const S = M.create({ demand: 0.5 });
+    const before = M.measure(S, 4).gain;
+    M.train(S, 120);
+    const after = M.measure(S, 4).gain;
+    console.log("      gain " + fmt(before) + " → " + fmt(after));
+    check("gain decreases toward the demand", after < before - 0.20, "Δ=" + fmt(after - before));
+  }
+
+  console.log("\n[4] Climbing fibre is necessary (lesion IO → no learning)");
+  {
+    // lesion the whole inferior olive: no slip drive AND no nucleo-olivary loop → no teaching signal
+    const S = M.create({ demand: 1.6, csGain: 0, nucleoOlive: 0 });
+    const before = M.measure(S, 4).gain;
+    M.train(S, 120);
+    const after = M.measure(S, 4).gain;
+    console.log("      gain " + fmt(before) + " → " + fmt(after) + " (IO lesioned)");
+    check("no adaptation without the climbing fibre", Math.abs(after - before) < 0.08, "Δ=" + fmt(after - before));
+  }
+
+  console.log("\n[5] Inferior-olive gap-junction synchrony");
+  {
+    const uncoupled = M.create({ gGap: 0.0 }); let ru = 0, n = 0;
+    const coupled = M.create({ gGap: 2.6 }); let rc = 0;
+    for (let k = 0; k < 10000; k++) { M.step(uncoupled); M.step(coupled); if (k > 2000) { ru += uncoupled.ioR; rc += coupled.ioR; n++; } }
+    ru /= n; rc /= n;
+    console.log("      olivary coherence R: uncoupled=" + fmt(ru) + "  gap-coupled=" + fmt(rc));
+    check("gap junctions synchronise the olive", rc > ru + 0.25, "Δ=" + fmt(rc - ru));
+  }
+
+  console.log("\n[6] Nucleo-olivary feedback GATES learning (regulates the teaching signal)");
+  {
+    // DCN → IO is INHIBITORY negative feedback: as the nuclei build their response, it drives
+    // the olivary error signal back toward baseline, gating plasticity BEFORE the slip is fully
+    // nulled (Bengtsson & Hesslow). The effect is a population-level regulation — small per seed,
+    // so we test it as a mean over seeds: without the loop, gain-up runs further.
+    let sumWith = 0, sumNo = 0, ns = 8;
+    for (let s = 1; s <= ns; s++) {
+      const withFb = M.create({ seed: s, demand: 1.6, nucleoOlive: 0.55 }); M.train(withFb, 120);
+      const noFb   = M.create({ seed: s, demand: 1.6, nucleoOlive: 0.0 });  M.train(noFb, 120);
+      sumWith += M.measure(withFb, 4).gain; sumNo += M.measure(noFb, 4).gain;
+    }
+    const mWith = sumWith / ns, mNo = sumNo / ns;
+    console.log("      mean learned gain (demand 1.6):  with feedback=" + fmt(mWith) + "  without=" + fmt(mNo));
+    check("nucleo-olivary feedback gates learning (less complete)", mNo > mWith + 0.03, "Δ=" + fmt(mNo - mWith));
+  }
+
+  console.log("\n[7] Savings: re-adaptation after washout is faster");
+  {
+    const S = M.create({ demand: 1.6 });
+    M.train(S, 120); const learned = M.measure(S, 4).gain;
+    M.setDemand(S, 1.0); M.train(S, 120); const washed = M.measure(S, 4).gain;   // washout
+    M.setDemand(S, 1.6); M.train(S, 30);  const relearn = M.measure(S, 4).gain;  // brief re-train
+    console.log("      learned=" + fmt(learned) + "  washed=" + fmt(washed) + "  relearn(30cyc)=" + fmt(relearn));
+    check("washes out toward baseline", washed < learned - 0.2, "washed=" + fmt(washed));
+    check("re-adapts quickly (savings)", relearn > washed + 0.2, "Δ=" + fmt(relearn - washed));
+  }
+
+  console.log("\n==== " + pass + " passed, " + fail + " failed ====\n");
+  process.exit(fail ? 1 : 0);
+}
+
+</script>
+
+<script>
+"use strict";
+(function(){
+  const M = window.Cerebellum;
+  const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  const $=id=>document.getElementById(id);
+  const CSv=getComputedStyle(document.documentElement), cvar=n=>CSv.getPropertyValue(n).trim();
+  const C={mf:cvar('--mf'),gr:cvar('--gr'),go:cvar('--go'),pf:cvar('--pf'),pc:cvar('--pc'),
+    mli:cvar('--mli'),io:cvar('--io'),cf:cvar('--cf'),dcn:cvar('--dcn'),eye:cvar('--eye'),
+    ink:cvar('--ink'),faint:cvar('--faint'),idle:cvar('--idle'),muted:cvar('--muted'),
+    good:cvar('--good'),warn:cvar('--warn'),bad:cvar('--bad')};
+  const FM="'IBM Plex Mono',monospace";
+  const TAU=Math.PI*2, clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function rgba(hex,a){hex=hex.replace('#','');
+    if(hex.length===3)hex=hex.split('').map(x=>x+x).join('');
+    return `rgba(${parseInt(hex.slice(0,2),16)},${parseInt(hex.slice(2,4),16)},${parseInt(hex.slice(4,6),16)},${a})`;}
+
+  const S = M.create({});
+  const St={ speed:1.0, t:0 };
+  // scrolling history of head velocity & retinal slip (for the gaze trace and learning curve)
+  const HIST=600, headH=new Float32Array(HIST), slipH=new Float32Array(HIST), gainH=new Float32Array(HIST);
+  let hp=0, gcount=0;
+
+  let W=0,H=0,DPR=1;
+  function resize(){ const r=cv.getBoundingClientRect(); DPR=Math.min(window.devicePixelRatio||1,2);
+    W=r.width;H=r.height; cv.width=Math.max(1,W*DPR);cv.height=Math.max(1,H*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
+
+  // draw a small cluster of clocks (phase discs) with a coherence halo
+  function drawClocks(cx,cy,arr,col,rr,opts){
+    opts=opts||{};
+    const n=arr.length, base=opts.base||4.2;
+    // halo (coherence)
+    if(opts.R!=null && opts.R>0.12){ ctx.beginPath();ctx.arc(cx,cy,rr+6+opts.R*10,0,TAU);
+      ctx.strokeStyle=rgba(col,0.12+opts.R*0.5);ctx.lineWidth=1.3;ctx.stroke(); }
+    for(let i=0;i<n;i++){
+      const th=arr[i].th!=null?arr[i].th:arr[i];
+      const a=arr[i].a!=null?arr[i].a:1;
+      const ang=-TAU/4 + i*TAU/n;
+      const x=cx+Math.cos(ang)*rr, y=cy+Math.sin(ang)*rr;
+      const s=.5+.5*Math.sin(th), on=a>0.06;
+      const cr=base*(0.5+0.45*s)*(0.55+0.6*Math.min(1,a));
+      const flash=opts.flash&&arr[i].cs;
+      if(on||flash){ctx.shadowColor=flash?C.cf:col;ctx.shadowBlur=flash?12:(2+s*7);}
+      ctx.beginPath();ctx.arc(x,y,Math.max(0.7,cr),0,TAU);
+      ctx.fillStyle=flash?rgba(C.cf,.95):(on?rgba(col,.2+s*.6):rgba(C.idle,.06+s*.08));
+      ctx.fill();ctx.shadowBlur=0;
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(th)*cr*1.5,y+Math.sin(th)*cr*1.5);
+      ctx.strokeStyle=rgba(C.ink,on?.5:.12);ctx.lineWidth=.7;ctx.stroke();
+    }
+  }
+  function conn(ax,ay,bx,by,col,w){ ctx.beginPath();ctx.moveTo(ax,ay);
+    ctx.quadraticCurveTo((ax+bx)/2,(ay+by)/2,bx,by);
+    ctx.strokeStyle=rgba(col,0.05+w*0.4);ctx.lineWidth=0.6+w*1.8;ctx.stroke(); }
+  function label(x,y,t,col,al){ ctx.textAlign=al||'center';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(col,.8);ctx.fillText(t,x,y); }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    const cxCircuit = W*0.30;
+    // ---- gaze / retinal-slip trace (top strip) ----
+    const tx=W*0.06, tw=W*0.88, ty=H*0.17, th=H*0.15;
+    ctx.strokeStyle=rgba(C.faint,.25);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(tx,ty+th/2);ctx.lineTo(tx+tw,ty+th/2);ctx.stroke();   // zero line
+    // head velocity (faint) and retinal slip (red, shaded) scrolling
+    for(let s=0;s<2;s++){
+      ctx.beginPath();
+      for(let i=0;i<HIST;i++){ const idx=(hp+i)%HIST; const x=tx+tw*i/(HIST-1);
+        const v=(s===0?headH[idx]:slipH[idx]); const y=ty+th/2 - v*th*0.42;
+        if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y); }
+      ctx.strokeStyle=s===0?rgba(C.eye,.35):rgba(C.io,.9);ctx.lineWidth=s===0?1:1.6;ctx.stroke();
+    }
+    label(tx,ty-6,'HEAD VELOCITY',C.eye,'left');
+    label(tx+tw,ty-6,'RETINAL SLIP (error) — shrinks as it learns',C.io,'right');
+
+    // ---- circuit (clocks), dorsoventral ----
+    const gy=H*0.42;                     // granule row
+    const pcY=H*0.60, dcnY=H*0.80, ioX=W*0.55, ioY=H*0.58;
+    // mossy fibre input
+    const mfX=W*0.10, mfY=H*0.42;
+    drawClocks(mfX,mfY,[{th:S.t*8,a:0.6+0.4*Math.abs(S.head)}],C.mf,7,{base:5});
+    label(mfX,mfY-16,'MOSSY FIBRE',C.mf); label(mfX,mfY+20,'(vestibular)',C.faint);
+    // granule layer — a horizontal row of the basis
+    const ng=S.gr.length, gx0=W*0.17, gx1=W*0.44;
+    for(let k=0;k<ng;k++){ const x=gx0+(gx1-gx0)*k/(ng-1);
+      const g=S.gr[k], a=Math.min(1,g.act*2.2), s=.5+.5*Math.sin(S.t*10+k);
+      const on=a>0.05;
+      if(on){ctx.shadowColor=C.gr;ctx.shadowBlur=2+a*7;}
+      ctx.beginPath();ctx.arc(x,gy,Math.max(0.8,1.6+a*2.6),0,TAU);
+      ctx.fillStyle=on?rgba(C.gr,.25+a*.6):rgba(C.idle,.10);ctx.fill();ctx.shadowBlur=0;
+      conn(x,gy,cxCircuit+ (k-ng/2)*1.5, pcY-14, C.pf, a*0.5);   // parallel fibres up to PC
+      conn(mfX+8,mfY,x,gy,C.mf,0.05+a*0.2);
+    }
+    label((gx0+gx1)/2,gy-16,'GRANULE CELLS · parallel-fibre basis',C.gr);
+    // Golgi (feedback inhibition)
+    drawClocks((gx0+gx1)/2,gy+22,[{th:S.t*9,a:0.5}],C.go,6,{base:4});
+    label((gx0+gx1)/2,gy+40,'GOLGI',C.go);
+    // Purkinje cell (the star output) — big clock, size ∝ simple-spike rate
+    const pcAct=clamp(S.pc/1.2,0,1.4);
+    drawClocks(cxCircuit,pcY,[{th:S.t*7,a:pcAct}],C.pc,10,{base:11});
+    // climbing fibre wrap indicator + complex-spike flash
+    if(S.csRate>0.25){ ctx.beginPath();ctx.arc(cxCircuit,pcY,17,0,TAU);
+      ctx.strokeStyle=rgba(C.cf,Math.min(1,S.csRate));ctx.lineWidth=2.4;ctx.stroke(); }
+    label(cxCircuit,pcY-24,'PURKINJE',C.pc);
+    label(cxCircuit-24,pcY+2,'SS',C.faint,'right');
+    // MLI
+    drawClocks(cxCircuit+34,pcY-16,[{th:S.t*11,a:0.5}],C.mli,5,{base:3.6});
+    label(cxCircuit+34,pcY-30,'MLI',C.mli);
+    // DCN (output)
+    const dcnAct=clamp(S.dcn/1.4,0,1.3);
+    drawClocks(cxCircuit,dcnY,[{th:S.t*6,a:dcnAct}],C.dcn,8,{base:7});
+    conn(cxCircuit,pcY+12,cxCircuit,dcnY-10,C.pc,pcAct*0.7);   // PC ⊣ DCN
+    label(cxCircuit,dcnY+20,'DEEP NUCLEUS → eye',C.dcn);
+    // inferior olive — coupled oscillator cluster with synchrony halo
+    drawClocks(ioX,ioY,S.io,C.io,15,{base:5.2,R:S.ioR,flash:true});
+    label(ioX,ioY-24,'INFERIOR OLIVE',C.io); label(ioX,ioY+30,'gap-junction R='+S.ioR.toFixed(2),C.faint);
+    // climbing fibre IO → PC ; retinal slip → IO ; nucleo-olivary DCN ⊣ IO
+    conn(ioX-12,ioY,cxCircuit+14,pcY,C.cf,0.3+Math.min(0.7,S.csRate));
+    label((ioX+cxCircuit)/2+6,(ioY+pcY)/2-6,'climbing fibre (error)',C.cf);
+    conn(tx+tw*0.5,ty+th, ioX+8,ioY-14, C.io, 0.2+Math.min(0.6,Math.abs(S.slip)));  // slip → IO
+    conn(cxCircuit+6,dcnY-6, ioX-6,ioY+12, C.dcn, 0.15+S.P.nucleoOlive*0.3);         // nucleo-olivary
+    // eye (driven by DCN) — rotating gaze indicator
+    const eyeX=W*0.13, eyeY=H*0.80, er=W*0.035;
+    ctx.beginPath();ctx.arc(eyeX,eyeY,er,0,TAU);ctx.strokeStyle=rgba(C.eye,.5);ctx.lineWidth=1.5;ctx.stroke();
+    const eyeAng=Math.PI/2 - S.eye*0.9;    // eye velocity → gaze rotation
+    ctx.beginPath();ctx.moveTo(eyeX,eyeY);ctx.lineTo(eyeX+Math.cos(eyeAng)*er*0.9,eyeY-Math.sin(eyeAng)*er*0.9);
+    ctx.strokeStyle=rgba(C.eye,.95);ctx.lineWidth=2.4;ctx.stroke();
+    // pupil
+    ctx.beginPath();ctx.arc(eyeX,eyeY,er*0.28,0,TAU);ctx.fillStyle=rgba(C.eye,.85);ctx.fill();
+    label(eyeX,eyeY+er+14,'EYE',C.eye);
+    conn(cxCircuit,dcnY+6,eyeX+er,eyeY,C.dcn,0.3+dcnAct*0.4);
+  }
+
+  /* ---------------- learning curve + weight profile (panel canvases) ---------------- */
+  const curve=$('curve'), cctx=curve.getContext('2d');
+  const wcv=$('weights'), wctx=wcv.getContext('2d');
+  function sizeMini(cn){ const r=cn.getBoundingClientRect(); const d=Math.min(window.devicePixelRatio||1,2);
+    cn.width=r.width*d; cn.height=cn.height*d; cn.getContext('2d').setTransform(d,0,0,d,0,0); return {w:r.width,h:cn.height/d}; }
+  let CW,WW;
+  function drawCurve(){
+    const {w,h}=CW; cctx.clearRect(0,0,w,h);
+    // demand line + gain history
+    const g2y=g=>h-6-(g/2.2)*(h-12);
+    cctx.strokeStyle=rgba(C.eye,.5);cctx.setLineDash([3,3]);cctx.lineWidth=1;
+    cctx.beginPath();cctx.moveTo(0,g2y(S.P.demand));cctx.lineTo(w,g2y(S.P.demand));cctx.stroke();cctx.setLineDash([]);
+    cctx.fillStyle=rgba(C.eye,.6);cctx.font='8px '+FM;cctx.textAlign='left';cctx.fillText('demand '+S.P.demand.toFixed(2),4,g2y(S.P.demand)-3);
+    cctx.beginPath();
+    for(let i=0;i<HIST;i++){ const idx=(hp+i)%HIST; const x=w*i/(HIST-1); const y=g2y(gainH[idx]);
+      if(i===0)cctx.moveTo(x,y);else cctx.lineTo(x,y); }
+    cctx.strokeStyle=rgba(C.good,.95);cctx.lineWidth=1.6;cctx.stroke();
+    cctx.fillStyle=rgba(C.good,.9);cctx.textAlign='right';cctx.fillText('gain '+S.gainEst.toFixed(2),w-4,12);
+  }
+  function drawWeights(){
+    const {w,h}=WW; wctx.clearRect(0,0,w,h); const n=S.w.length, bw=w/n;
+    for(let k=0;k<n;k++){ const v=S.w[k], y0=h/2, bh=-(v/S.P.wMax)*(h/2-2);
+      wctx.fillStyle=v>=0?rgba(C.pf,.8):rgba(C.io,.8);
+      wctx.fillRect(k*bw+0.6, y0, bw-1.2, bh); }
+    wctx.strokeStyle=rgba(C.faint,.4);wctx.beginPath();wctx.moveTo(0,h/2);wctx.lineTo(w,h/2);wctx.stroke();
+  }
+
+  /* ---------------- UI ---------------- */
+  const PRE=[
+    {k:'normal',n:'Normal (1.0×)',m:{demand:1.0}},
+    {k:'mag',n:'Magnifying 1.6×',m:{demand:1.6}},
+    {k:'min',n:'Minifying 0.5×',m:{demand:0.5}},
+    {k:'lesion',n:'Olive lesion',lz:1,m:{}},
+  ];
+  const pw=$('pre');
+  PRE.forEach(p=>{const b=document.createElement('button');b.textContent=p.n;b.dataset.k=p.k;
+    if(p.lz)b.className='lzp'; b.onclick=()=>applyPre(p); pw.appendChild(b);});
+  let lesioned=false;
+  function applyPre(p){
+    if(p.k==='lesion'){ lesioned=true; S.P.csGain=0; S.P.nucleoOlive=0; }
+    else { lesioned=false; S.P.csGain=M.defaults().csGain; S.P.nucleoOlive=parseFloat($('s-no').value); S.P.demand=p.m.demand;
+      $('s-dem').value=p.m.demand; $('v-dem').textContent=p.m.demand.toFixed(2)+'×'; }
+    [...pw.children].forEach(b=>b.classList.toggle('on',b.dataset.k===p.k));
+    updateNote();
+  }
+  function clearPre(){ [...pw.children].forEach(b=>b.classList.remove('on')); }
+  const bind=(id,vid,fmt,set,clr)=>{const el=$(id),vl=$(vid);
+    const f=()=>{const v=parseFloat(el.value);set(v);vl.textContent=fmt(v);};
+    el.oninput=()=>{f();if(clr){clearPre();updateNote();}};f();};
+  bind('s-dem','v-dem',v=>v.toFixed(2)+'×',v=>S.P.demand=v,true);
+  bind('s-gap','v-gap',v=>v.toFixed(2),v=>S.P.gGap=v,false);
+  bind('s-no','v-no',v=>v.toFixed(2),v=>{ if(!lesioned) S.P.nucleoOlive=v; },false);
+  bind('s-spd','v-spd',v=>v.toFixed(1)+'×',v=>St.speed=v,false);
+  $('btn-reset').onclick=()=>{ for(let k=0;k<S.w.length;k++) S.w[k]=0; S.ehAvg=S.hhAvg=S.ssAvg=0; S.gainEst=S.P.g0; };
+
+  function updateNote(){
+    document.body.classList.toggle('lesion',lesioned);
+    $('pill-lz').classList.toggle('on',lesioned);
+    let t;
+    if(lesioned) t='<b>Inferior olive lesioned.</b> No climbing fibre → no teaching signal. The Purkinje weights are frozen; whatever the current gain, it <span class="w">cannot adapt</span> to the goggles. This is the classic cerebellar-learning lesion.';
+    else if(S.P.demand>1.15) t='<b>Magnifying goggles.</b> The world moves faster than the head, so the eyes must rotate <em>more</em> — the gain must rise. Retinal slip drives complex spikes → LTD → the <b class="g">gain climbs</b> toward the demand.';
+    else if(S.P.demand<0.85) t='<b>Minifying goggles.</b> The eyes must rotate <em>less</em>; the gain must fall. The opposite-phase slip drives the olive the other way → the <b class="g">gain drops</b>.';
+    else t='<b>Normal vision.</b> Brain-stem gain ≈ 1 already nulls the slip, so the olive sits near its spontaneous rate and the gain holds at 1.0.';
+    $('note').innerHTML=t;
+    $('ionote').innerHTML='Coupling <b style="color:var(--ink)">synchronises</b> the olive → coherent complex-spike timing. Nucleo-olivary feedback (DCN⊣IO) <b style="color:var(--ink)">gates</b> the error signal.';
+  }
+
+  function updateUI(){
+    $('r-dem').textContent=S.P.demand.toFixed(2);
+    const rg=$('r-gain'); rg.textContent=S.gainEst.toFixed(2); rg.className=Math.abs(S.gainEst-S.P.demand)<0.15?'ok':'hot';
+    $('r-slip').textContent=S.slipEst.toFixed(2);
+    $('r-cs').textContent=S.csRate.toFixed(2);
+    $('r-ior').textContent=S.ioR.toFixed(2);
+    $('rd-gain').innerHTML=S.gainEst.toFixed(2)+'<small>×</small>';
+    $('rd-slip').textContent=S.slipEst.toFixed(2);
+    drawCurve(); drawWeights();
+  }
+
+  /* ---------------- main loop ---------------- */
+  let last=performance.now(), carry=0, ui=0, hAcc=0;
+  function frame(now){
+    let dt=(now-last)/1000; last=now; dt=Math.min(dt,0.05);
+    carry+=dt*St.speed;
+    let steps=Math.min(120,Math.round(carry/S.P.dt)); carry-=steps*S.P.dt;
+    for(let s=0;s<steps;s++){ M.step(S); St.t+=S.P.dt;
+      hAcc+=S.P.dt; if(hAcc>=0.02){ hAcc=0; headH[hp]=S.head; slipH[hp]=S.slip; gainH[hp]=S.gainEst; hp=(hp+1)%HIST; } }
+    draw();
+    ui+=dt; if(ui>0.08){ui=0;updateUI();}
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize',()=>{resize();CW=sizeMini(curve);WW=sizeMini(wcv);});
+  resize(); CW=sizeMini(curve); WW=sizeMini(wcv); applyPre(PRE[0]); updateUI();
+  requestAnimationFrame(frame);
+
+  /* ---------- in-app verification (reproduces the headless numbers) ---------- */
+  (function verify(){
+    try{
+      const B=M.create({demand:1.0}); M.train(B,4); const gb=M.measure(B,6).gain;
+      const U=M.create({demand:1.6}); const u0=M.measure(U,4).gain; M.train(U,120); const u1=M.measure(U,4).gain;
+      const L=M.create({demand:1.6,csGain:0,nucleoOlive:0}); const l0=M.measure(L,4).gain; M.train(L,120); const l1=M.measure(L,4).gain;
+      const ok = Math.abs(gb-1)<0.12 && u1>u0+0.25 && Math.abs(l1-l0)<0.08;
+      console.log(`[verify] baseline=${gb.toFixed(3)} | gainUp ${u0.toFixed(2)}→${u1.toFixed(2)} | lesion Δ=${(l1-l0).toFixed(3)} → ${ok?'PASS':'FAIL'}`);
+    }catch(e){ console.error('[verify] error', e); }
+  })();
+})();
+</script>
+</body>
+</html>
