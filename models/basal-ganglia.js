@@ -78,16 +78,18 @@
       D: 0.025,          // phase noise
       betaCoup: 16.0,     // STN⟷GPe reciprocal coupling (β synchrony generator)
       loopDelay: 0.010,  // STN⟷GPe conduction delay (s)
+      betaFloor: 0.30,   // healthy STN coherence floor — only β ABOVE this enslaves the thalamus
+      betaThal: 6.0,     // strength of β capture of the thalamocortical loop (antikinetic)
 
       // projection weights (mean-field transmission)
-      wCtxMsn: 1.35,     // cortex → striatum (D1/D2)
+      wCtxD2: 1.10,      // cortex → striatal D2 (NoGo); D1 is goal-driven, not cortex-driven
       wCtxStn: 1.10,     // cortex → STN (hyperdirect)
       wCtxTh: 0.55,      // cortex → thalamus
       wThCtx: 2.60,      // thalamus → cortex (closes loop)
       wD1Gpi: 1.90,      // D1 ⊣ GPi (focused Go)
-      wD2Gpe: 1.55,      // D2 ⊣ GPe
+      wD2Gpe: 1.00,      // D2 ⊣ GPe
       wGpeStn: 1.30,     // GPe ⊣ STN
-      wGpeGpi: 0.65,     // GPe ⊣ GPi
+      wGpeGpi: 0.95,     // GPe ⊣ GPi
       wStnGpi: 1.30,     // STN → GPi diffuse (on-surround)
       wStnGpe: 1.20,     // STN → GPe
       wGpiTh: 1.70,      // GPi ⊣ thalamus (the clamp)
@@ -99,14 +101,28 @@
       wThTrn: 1.00,      // thalamus → TRN
 
       // tonic external drive (sets baseline firing)
-      extCtx: 0.05, extGpe: 0.62, extGpi: 0.30, extStn: 0.30, extThal: 0.45,
-      extFsi: 0.10, extTrn: 0.20, extMsn: 0.0,
+      extCtx: 0.05, extGpe: 0.58, extGpi: 0.60, extStn: 0.30, extThal: 0.26,
+      extFsi: 0.10, extTrn: 0.20, extMsn: 0.0, extD2: 0.58,
 
       // dopamine gain on striatum (Go ∝ DA, NoGo ∝ 1−DA)
       daD1: 1.55, daD2base: 0.45, daD2: 1.05,
 
-      // corticostriatal plasticity (actor)
-      wStr: null,        // per-channel learned gain (filled at create)
+      // ---- goals / stimuli and corticostriatal learning (the actor) ----
+      nGoal: 4,          // external stimuli/goals
+      restFluct: 0.22,   // resting cortical fluctuation (plans idle & compete, none escapes)
+      goalCtx: 0.16,     // a set goal drives ALL plans as candidates (nonspecific "prepare")
+      goalSpec: 0.72,    // learned goal→plan drive to CORTEX (steers which plan wins the WTA)
+      goalStr: 2.70,     // goal → striatal-D1 drive, gated by the LEARNED weight W[plan][goal]
+      Wmax: 1.6, Winit: 0.20,   // corticostriatal weight range / init (near-uniform ⇒ exploration)
+      lr: 0.38,          // dopamine-gated learning rate
+      explore: 0.24,     // exploration drive on D1 (lets an unlearned goal try different plans)
+      tauExpl: 0.6,      // exploration offsets drift on this timescale (s)
+      adaptGain: 0.60,    // cortical spike-frequency adaptation — lets a selection RELEASE / switch
+      tauAdapt: 0.6,     // adaptation timescale (s): a plan can hold ~1 s then yields
+      degen: 0.0,        // striatal (D2 / indirect-pathway MSN) degeneration → chorea
+      choreaDisinh: 0.45, // degen collapses the surround → cortical WTA is overwhelmed (overflow)
+      choreaKick: 3.2,    // degen makes a HELD (escaped) plan self-terminate on fatigue → switching
+      choreaHold: 0.35,   // fatigue only bites above this adaptation (a plan must ESCAPE first)
     };
   }
 
@@ -124,7 +140,13 @@
       // coherent when coupling beats the spread; without it, it desynchronises
       for (let i = 0; i < n; i++) cl.push({ th: rnd() * TAU, a: type === "tonic" ? 0.5 : 0.05,
                                             w: TAU * fHz * (1 + (fast ? P.sigmaFfast : P.sigmaF) * gauss()) });
-      pops[name] = { name, ch, n, cl, type,
+      // ASSEMBLY pops (cortex, thalamus) carry the selection as SYNCHRONY — their transmission
+      // and the loop that closes on them scale with coherence. RELAY pops (D1/D2/GPe/STN/GPi/
+      // FSI/TRN) are RATE coders: pallidal gating is a firing-rate/disinhibition code, not a
+      // synchrony code (the healthy striatum is decorrelated). The one place relay SYNCHRONY is
+      // functional is pathological — the STN⟷GPe β loop — and it is handled explicitly there.
+      const assembly = name.startsWith("ctx") || name.startsWith("thal");
+      pops[name] = { name, ch, n, cl, type, assembly,
                      Zx: 0, Zy: 0, out: 0, act: 0, R: 0, psi: 0, fast: !!fast };
     }
     const perCh = [
@@ -141,15 +163,25 @@
     // FSI: one shared striatal interneuron pool per channel (gap-junction coupled → coherent)
     for (let c = 0; c < nCh; c++) addPop("fsi" + c, c, P.nFsi, P.fFsi, "tonic", true);
 
-    if (!P.wStr) P.wStr = new Float64Array(nCh).fill(1);
+    // learned corticostriatal weights W[plan][goal] — near-uniform at birth (⇒ exploration),
+    // shaped by dopamine reward into a one goal → one plan mapping.
+    const W = [];
+    for (let p = 0; p < nCh; p++) { W[p] = new Float64Array(P.nGoal);
+      for (let g = 0; g < P.nGoal; g++) W[p][g] = P.Winit + 0.03 * (rnd() - 0.5); }
 
     const S = {
       P, nCh, rnd, gauss, t: 0, pops,
-      sal: new Float64Array(nCh),
+      sal: new Float64Array(nCh),          // optional manual bias (0 by default)
+      goal: new Float64Array(P.nGoal),     // active goal(s)
+      W,                                    // corticostriatal associative weights
+      adapt: new Float64Array(nCh),        // per-plan spike-frequency adaptation
+      expl: new Float64Array(nCh),         // slowly-drifting exploration offsets
+      explClock: 0,
       // STN/GPe delay ring buffers (store mean-field out+psi per pop)
       hist: {}, DLEN: Math.max(1, Math.round(P.loopDelay / P.dt)), hp: 0,
       surrSm: 0, betaSm: 0,
     };
+    for (let p = 0; p < nCh; p++) S.expl[p] = rnd();
     for (let c = 0; c < nCh; c++) {
       S.hist["stn" + c] = { x: new Float64Array(S.DLEN), y: new Float64Array(S.DLEN) };
       S.hist["gpe" + c] = { x: new Float64Array(S.DLEN), y: new Float64Array(S.DLEN) };
@@ -160,6 +192,16 @@
 
   function setSalience(S, arr) { for (let c = 0; c < S.nCh; c++) S.sal[c] = arr[c] || 0; }
 
+  // set the active goal (stimulus). One-hot by default; pass on=false to clear.
+  // A fresh goal presentation re-rolls the exploration offsets (a new attempt).
+  function setGoal(S, g, on) {
+    on = on == null ? true : on;
+    for (let k = 0; k < S.P.nGoal; k++) S.goal[k] = 0;
+    if (on && g != null && g >= 0) S.goal[g] = 1;
+    for (let p = 0; p < S.nCh; p++) S.expl[p] = S.rnd();
+  }
+  function clearGoals(S) { for (let k = 0; k < S.P.nGoal; k++) S.goal[k] = 0; }
+
   // compute mean field Z_P = (1/n)Σ a e^{iθ} for every population
   function meanFields(S) {
     for (const k in S.pops) {
@@ -169,9 +211,12 @@
       p.mf = Math.hypot(x, y);                   // coherent mean field |Z|
       p.psi = Math.atan2(y, x);
       p.R = p.act > 1e-3 ? p.mf / p.act : 0;     // coherence among active clocks
-      // transmission: activity carries it, synchrony amplifies (so a locked assembly
-      // drives its targets harder → commitment), but sync is not REQUIRED to bootstrap
-      p.out = p.act * (0.5 + 0.5 * p.R);
+      // TRANSMISSION IS DUAL-CODED. Assembly pops (cortex/thalamus): activity carries the
+      // signal and synchrony AMPLIFIES it — a locked assembly drives its targets harder
+      // (commitment), and the thalamocortical loop only closes when coherence is high, so
+      // SELECTION IS SYNCHRONY. Relay pops: PURE RATE — pallidal disinhibition is a firing-rate
+      // code, and forcing synchrony into it would misrepresent the biology.
+      p.out = p.assembly ? p.act * (0.5 + 0.5 * p.R) : p.act;
     }
   }
 
@@ -182,7 +227,7 @@
     const P = S.P, nCh = S.nCh, dt = P.dt, pops = S.pops;
     meanFields(S);
     const DA = P.DA;
-    const mD1 = P.daD1 * DA;                         // Go gain (through origin)
+    const mD1 = Math.max(0, 1.6 * (DA - 0.12));      // Go gain: hard zero below DA≈0.12 (akinesia)
     const mD2 = P.daD2base + P.daD2 * (1 - DA);      // NoGo gain
 
     // delayed STN/GPe mean fields (true conduction delay)
@@ -198,12 +243,25 @@
     stnRaw /= nCh;
     S.surrSm += (dt / 0.030) * (stnRaw - S.surrSm);   // low-pass: β oscillation must not unclamp
     const stnBroadcast = S.surrSm * (1 - P.dbs);
+    // Pathological β ENSLAVES THE THALAMUS: a coherent β volley in the pallido-thalamic output
+    // entrains the thalamocortical relay and prevents it from forming a stable assembly. This
+    // acts DOWNSTREAM of GPi, so even a channel whose D1-Go has withdrawn its GPi clamp cannot
+    // select while β is high — this is WHY β is antikinetic (synchrony, not rate). Only β ABOVE
+    // a healthy floor bites (health untouched); DBS breaks the coherence → the loop is freed.
+    const betaExcess = Math.max(0, S.betaSm - P.betaFloor);
+    const betaThalClamp = P.betaThal * betaExcess * (1 - P.dbs);
 
     // lateral competition uses ACTIVITY (salience-ordered from the outset), plus a
     // coherence term (a locked winner clamps harder). Activity-first makes the winner
     // salience-determined rather than a locking race.
     let ctxSumAct = 0, ctxSumMf = 0;
     for (let c = 0; c < nCh; c++) { ctxSumAct += pops["ctx" + c].act; ctxSumMf += pops["ctx" + c].mf; }
+
+    // a goal (stimulus) drives ALL plans as candidates (nonspecific "prepare to act");
+    // the LEARNED weight W[plan][goal] steers which plan's D1 actually escapes.
+    let goalSum = 0; for (let g = 0; g < P.nGoal; g++) goalSum += S.goal[g];
+    const goalW = new Float64Array(nCh);
+    for (let c = 0; c < nCh; c++) { let s = 0; for (let g = 0; g < P.nGoal; g++) s += S.goal[g] * S.W[c][g]; goalW[c] = s; }
 
     // accumulate phase/activity deltas
     const upd = [];
@@ -212,19 +270,42 @@
             GPE = pops["gpe" + c], STN = pops["stn" + c], GPI = pops["gpi" + c],
             TH = pops["thal" + c], TRN = pops["trn" + c], FSI = pops["fsi" + c];
 
-      // ---- excitatory / inhibitory drives (mean-field magnitudes) ----
-      // CORTEX: salience + thalamic drive − lateral competition; assembly self-coupling
-      const ctxExc = P.extCtx + S.sal[c] * P.wStr[c] + P.wThCtx * TH.out;
-      const ctxInh = P.wLatA * (ctxSumAct - CTX.act) + P.wLat * (ctxSumMf - CTX.mf);   // WTA
-      const ctxK = P.ctxKbase + P.ctxKloop * TH.out; // assembly locks only when the loop closes
+      // ---- excitatory / inhibitory drives ----
+      // CORTEX: resting fluctuation + nonspecific goal drive + thalamic loop − lateral
+      // competition − spike-frequency ADAPTATION (adaptation lets a selection release/switch).
+      // spike-frequency adaptation fatigues a held plan two ways: it drains cortical
+      // ACTIVITY (so it releases when the goal is withdrawn) and loosens the assembly
+      // COUPLING (so a competing goal can displace the incumbent). No permanent lock.
+      // HUNTINGTON / chorea: indirect-pathway (D2 MSN) loss collapses the surround, so the
+      // excess disinhibited thalamocortical drive OVERFLOWS cortical competition. Two degen-gated
+      // effects (both exactly zero in health): the lateral surround weakens (rivals leak through),
+      // and a held plan self-terminates once fatigue accrues (so selection cannot be maintained →
+      // continuous involuntary switching). Nothing here is scripted — degen tunes an instability.
+      const ctxExc = P.extCtx + P.restFluct + S.sal[c] + P.goalCtx * goalSum + P.goalSpec * goalW[c]
+                     + P.wThCtx * TH.out - P.adaptGain * S.adapt[c]
+                     - P.choreaKick * P.degen * Math.max(0, S.adapt[c] - P.choreaHold);
+      const ctxInh = (P.wLatA * (ctxSumAct - CTX.act) + P.wLat * (ctxSumMf - CTX.mf))
+                     * (1 - P.choreaDisinh * P.degen);   // WTA, weakened by surround loss
+      const ctxK = P.ctxKbase + P.ctxKloop * TH.out;
       pushUpd(upd, CTX, ctxExc, ctxInh, [[TH, P.wThCtx]], P, ctxK, S);
+      // adaptation builds while this plan is coherent (selected), decays otherwise
+      S.adapt[c] += (dt / P.tauAdapt) * (CTX.mf - S.adapt[c]);
 
       // FSI: driven by cortex, tonically active, gap-junction coherent
       pushUpd(upd, FSI, P.extFsi + P.wCtxFsi * CTX.out, 0, [[CTX, P.wCtxFsi]], P, 0, S);
 
-      // STRIATUM D1/D2: cortex drive (DA-gated) − FSI feed-forward inhibition
-      pushUpd(upd, D1, P.extMsn + P.wCtxMsn * mD1 * CTX.out, P.wFsiMsn * FSI.act, [[CTX, P.wCtxMsn * mD1]], P, null, S);
-      pushUpd(upd, D2, P.extMsn + P.wCtxMsn * mD2 * CTX.out, P.wFsiMsn * FSI.act, [[CTX, P.wCtxMsn * mD2]], P, null, S);
+      // STRIATUM D1 (Go): cortical drive + the LEARNED goal→plan drive + exploration, all
+      // DA-gated; minus FSI feed-forward inhibition. This is where the goal selects a plan.
+      // D1 (Go) is driven PURELY by the learned goal→plan weight (corticostriatal), DA-gated
+      // + exploration. It carries no drive from the plan's own cortex, so a plan releases the
+      // moment its goal is withdrawn (GPi re-clamps) — the key to switching without getting stuck.
+      const d1goal = P.goalStr * goalW[c] + P.explore * (goalSum > 0.05 ? S.expl[c] : 0);
+      pushUpd(upd, D1, mD1 * d1goal, P.wFsiMsn * FSI.act, [], P, null, S);
+      // D2 (NoGo / indirect): tonic + cortical, scaled by (1−degen). Losing indirect-pathway
+      // MSNs (degen) removes this tonic brake → disinhibition → chorea.
+      const d2gain = (1 - P.degen);
+      pushUpd(upd, D2, d2gain * (P.extD2 + P.wCtxD2 * mD2 * CTX.out),
+              P.wFsiMsn * FSI.act, [[CTX, P.wCtxD2 * mD2 * d2gain]], P, null, S);
 
       // β loop gain rises as dopamine falls: the STN⟷GPe loop crosses into coherent
       // β-band hypersynchrony only in the parkinsonian regime.
@@ -243,8 +324,10 @@
       // TRN: thalamic drive, tonic — relay
       pushUpd(upd, TRN, P.extTrn + P.wThTrn * TH.act, 0, [[TH, P.wThTrn]], P, 0, S);
 
-      // THALAMUS: cortex drive − GPi clamp − TRN; assembly self-coupling (synchronises when released)
-      pushUpd(upd, TH, P.extThal + P.wCtxTh * CTX.out, P.wGpiTh * GPI.act + P.wTrnTh * TRN.act,
+      // THALAMUS: cortex drive − GPi clamp − TRN − β enslavement; assembly self-coupling
+      // (synchronises when released). betaThalClamp is the pathological β capturing the loop.
+      pushUpd(upd, TH, P.extThal + P.wCtxTh * CTX.out,
+              P.wGpiTh * GPI.act + P.wTrnTh * TRN.act + betaThalClamp,
               [[CTX, P.wCtxTh]], P, null, S);
     }
 
@@ -324,12 +407,25 @@
   // β coherence in STN, ACTIVITY-WEIGHTED (only active STN populations count)
   function betaCoh(S) { return S.betaSm; }
 
-  function reinforce(S, ch, reward, rate) {
-    rate = rate == null ? 0.06 : rate;
-    S.P.wStr[ch] = clamp(S.P.wStr[ch] + rate * reward * S.pops["d1" + ch].out, 0.3, 2.2);
+  // dopamine-gated corticostriatal learning: reward strengthens the association between
+  // the ACTIVE goal(s) and the currently-selected plan, and mildly weakens its rivals for
+  // that goal — so each goal converges onto one plan (three-factor / actor rule).
+  function reinforceGoal(S, reward, rate) {
+    const P = S.P; rate = rate == null ? P.lr : rate;
+    const sel = selected(S); if (sel < 0) return;
+    for (let g = 0; g < P.nGoal; g++) {
+      if (S.goal[g] < 0.05) continue;
+      const elig = S.pops["d1" + sel].act;            // eligibility ∝ the winner's D1 firing
+      S.W[sel][g] = clamp(S.W[sel][g] + rate * reward * elig * (P.Wmax - S.W[sel][g]), 0, P.Wmax);
+      for (let p = 0; p < S.nCh; p++) if (p !== sel)
+        S.W[p][g] = clamp(S.W[p][g] - 0.5 * rate * reward * S.W[p][g], 0, P.Wmax);
+    }
   }
+  // back-compat shim (old single-channel API)
+  function reinforce(S, ch, reward, rate) { reinforceGoal(S, reward, rate); }
 
-  return { create, defaults, step, run, meanFields, setSalience, selected, ctxR, ctxOut, betaCoh, reinforce, mulberry32, TAU };
+  return { create, defaults, step, run, meanFields, setSalience, setGoal, clearGoals,
+           selected, ctxR, ctxOut, betaCoh, reinforce, reinforceGoal, mulberry32, TAU };
 });
 
 /* ============================ headless tests ============================ */
@@ -339,57 +435,111 @@ if (typeof require !== "undefined" && require.main === module) {
   let pass = 0, fail = 0;
   const check = (n, c, d) => (c ? (pass++, console.log("  PASS  " + n + "   " + (d || "")))
                                 : (fail++, console.log("  FAIL  " + n + "   " + (d || ""))));
-  const outs = S => "[" + [0, 1, 2, 3].map(c => fmt(M.ctxOut(S, c))).join(" ") + "]";
-
-  console.log("\n[1] Healthy dopamine: exactly one cortical assembly synchronises");
-  {
-    const S = M.create({ DA: 0.6 });
-    M.setSalience(S, [0.9, 0.6, 0.5, 0.4]);
-    M.run(S, 1.2);
-    console.log("      ctx out=" + outs(S) + "  sel=" + M.selected(S));
-    check("channel 0 selected", M.selected(S) === 0, "sel=" + M.selected(S));
-    check("winner coherent+active", M.ctxOut(S, 0) > 0.55 && M.ctxR(S, 0) > 0.75, "out=" + fmt(M.ctxOut(S,0)) + " R=" + fmt(M.ctxR(S,0)));
-    check("others not selected", [1,2,3].every(c => M.ctxOut(S,c) < 0.35), "outs=" + outs(S));
+  const outs = S => "[" + [0,1,2,3].map(c => fmt(M.ctxOut(S,c))).join(" ") + "]";
+  const distinctSel = (S, secs) => { const seen=new Set(); const n=Math.round(secs/S.P.dt);
+    for(let k=0;k<n;k++){M.step(S); if(k%40===0){const s=M.selected(S); if(s>=0)seen.add(s);}} return seen; };
+  // train a goal by presenting it and rewarding whatever gets selected, repeatedly
+  function trainGoal(S, g, trials){
+    let last=-1;
+    for(let t=0;t<trials;t++){
+      M.setGoal(S,g); M.run(S,0.9);
+      const sel=M.selected(S); if(sel>=0){ M.reinforceGoal(S,1.0); last=sel; }
+      M.clearGoals(S); M.run(S,0.4);
+    }
+    return last;
   }
 
-  console.log("\n[2] Winner-take-all with two near-equal competitors");
+  console.log("\n[1] Rest (goal off): plans fluctuate, none escapes the cortex");
   {
-    const S = M.create({ DA: 0.6 });
-    M.setSalience(S, [0.82, 0.80, 0.4, 0.3]);
-    M.run(S, 1.4);
-    const n = [0,1,2,3].filter(c => M.ctxOut(S,c) > 0.55).length;
-    console.log("      ctx out=" + outs(S) + "  #selected=" + n);
-    check("exactly one selected", n === 1, "#=" + n);
+    const S = M.create({ DA:0.6 });
+    M.run(S, 1.5);
+    console.log("      ctx mf=" + outs(S) + "  selected=" + M.selected(S));
+    check("nothing selected at rest", M.selected(S) === -1, "sel=" + M.selected(S));
   }
 
-  console.log("\n[3] Parkinsonian (low DA): akinesia — nothing synchronises");
+  console.log("\n[2] A learned goal selects its associated plan");
   {
-    const S = M.create({ DA: 0.05 });
-    M.setSalience(S, [0.9, 0.6, 0.5, 0.4]);
-    M.run(S, 1.2);
-    console.log("      ctx out=" + outs(S) + "  sel=" + M.selected(S) + "  βcoh=" + fmt(M.betaCoh(S)));
-    check("no channel selected (akinesia)", M.selected(S) === -1, "sel=" + M.selected(S));
+    const S = M.create({ DA:0.6 });
+    S.W[2][0] = S.P.Wmax; for(let p=0;p<4;p++) if(p!==2) S.W[p][0]=0.1;   // goal0 → plan2
+    M.setGoal(S,0); M.run(S,1.2);
+    console.log("      ctx mf=" + outs(S) + "  selected=" + M.selected(S));
+    check("goal 0 selects its plan (2)", M.selected(S) === 2, "sel=" + M.selected(S));
+    check("winner is coherent", M.ctxR(S,2) > 0.8, "R=" + fmt(M.ctxR(S,2)));
   }
 
-  console.log("\n[4] β hypersynchrony in STN grows when dopamine is low");
+  console.log("\n[3] Learning: reward shapes a stable goal→plan association");
   {
-    // let selection settle first, THEN average β (a healthy transient during bootstrap
-    // is not the steady state)
-    const H = M.create({ DA: 0.6 }); M.setSalience(H, [0.9,0.6,0.5,0.4]); M.run(H, 1.8);
-    const Plo = M.create({ DA: 0.05 }); M.setSalience(Plo, [0.9,0.6,0.5,0.4]); M.run(Plo, 1.8);
-    const bH = M.betaCoh(H), bP = M.betaCoh(Plo);
-    console.log("      STN coherence: healthy=" + fmt(bH) + "  parkinsonian=" + fmt(bP));
-    check("STN β coherence higher when DA low", bP > bH + 0.25, "Δ=" + fmt(bP - bH));
+    const S = M.create({ DA:0.6 });
+    const learned = trainGoal(S, 0, 7);
+    // present goal 0 twice more and check it consistently evokes the same plan
+    M.setGoal(S,0); M.run(S,1.0); const a=M.selected(S);
+    M.clearGoals(S); M.run(S,0.4);
+    M.setGoal(S,0); M.run(S,1.0); const b=M.selected(S);
+    const Wg = [0,1,2,3].map(p=>S.W[p][0]);
+    console.log("      learned plan≈" + learned + "  recall=" + a + "," + b + "  W[·][0]=[" + Wg.map(x=>fmt(x)).join(" ") + "]");
+    check("goal 0 evokes a consistent plan", a >= 0 && a === b, "a=" + a + " b=" + b);
+    check("its corticostriatal weight dominates", Math.max(...Wg) > 2.2 * (Wg.reduce((s,x)=>s+x,0)-Math.max(...Wg))/3 + 0.01, "W=[" + Wg.map(x=>fmt(x)).join(" ") + "]");
   }
 
-  console.log("\n[5] STN-DBS desynchronises the loop and rescues selection");
+  console.log("\n[4] Release: removing the goal releases the selection (not stuck)");
   {
-    const S = M.create({ DA: 0.05, dbs: 0.8 });
-    M.setSalience(S, [0.9, 0.6, 0.5, 0.4]);
-    M.run(S, 1.6);
-    console.log("      ctx out=" + outs(S) + "  sel=" + M.selected(S) + "  βcoh=" + fmt(M.betaCoh(S)));
-    check("selection restored by DBS", M.selected(S) === 0, "sel=" + M.selected(S));
+    const S = M.create({ DA:0.6 });
+    S.W[1][0]=S.P.Wmax; M.setGoal(S,0); M.run(S,1.2);
+    const during = M.selected(S);
+    M.clearGoals(S); M.run(S,1.6);
+    const after = M.selected(S);
+    console.log("      during=" + during + "  after goal off=" + after);
+    check("selected while goal present", during === 1, "sel=" + during);
+    check("released after goal removed", after === -1, "sel=" + after);
   }
+
+  console.log("\n[5] Switching goals switches the plan — no dopamine change needed");
+  {
+    const S = M.create({ DA:0.6 });
+    S.W[0][0]=S.P.Wmax; S.W[3][1]=S.P.Wmax;                    // goal0→plan0, goal1→plan3
+    M.setGoal(S,0); M.run(S,1.2); const s0=M.selected(S);
+    M.setGoal(S,1); M.run(S,1.6); const s1=M.selected(S);
+    console.log("      goal0→" + s0 + "   then goal1→" + s1);
+    check("goal 0 → plan 0", s0 === 0, "sel=" + s0);
+    check("goal 1 → plan 3 (switched)", s1 === 3, "sel=" + s1);
+  }
+
+  console.log("\n[6] Hypodopaminergic: a goal cannot be tagged — hypokinesia/rigidity");
+  {
+    const S = M.create({ DA:0.05 });
+    S.W[2][0]=S.P.Wmax; M.setGoal(S,0); M.run(S,1.5);
+    console.log("      ctx mf=" + outs(S) + "  selected=" + M.selected(S));
+    check("no plan can be selected (akinesia)", M.selected(S) === -1, "sel=" + M.selected(S));
+  }
+
+  console.log("\n[7] Striatal (D2/indirect) degeneration → erratic selection (chorea)");
+  {
+    const S = M.create({ DA:0.6, degen:0.9 });
+    const seen = distinctSel(S, 4.0);     // no goal set — plans escape involuntarily
+    console.log("      distinct plans that escaped at rest = " + seen.size + " {" + [...seen].join(",") + "}");
+    check("multiple plans escape involuntarily (chorea)", seen.size >= 2, "n=" + seen.size);
+    // healthy control: rest should stay quiet
+    const H = M.create({ DA:0.6, degen:0 });
+    const seenH = distinctSel(H, 4.0);
+    check("healthy rest stays quiet", seenH.size === 0, "n=" + seenH.size);
+  }
+
+  console.log("\n[8] β hypersynchrony (low DA) and STN-DBS rescue");
+  {
+    const H = M.create({ DA:0.6 }); S_setGoalLearned(H,2,0); M.run(H,1.8); const bH=M.betaCoh(H);
+    const Plo = M.create({ DA:0.05 }); S_setGoalLearned(Plo,2,0); M.run(Plo,1.8); const bP=M.betaCoh(Plo);
+    console.log("      STN β: healthy=" + fmt(bH) + "  parkinsonian=" + fmt(bP));
+    check("β higher when DA is low", bP > bH + 0.25, "Δ=" + fmt(bP-bH));
+    // moderate PD: β ENSLAVES the thalamocortical loop → akinetic even with the goal tagged;
+    // DBS breaks the β coherence and restores selection (it does NOT replace dopamine).
+    const Poff = M.create({ DA:0.25 }); S_setGoalLearned(Poff,2,0); M.run(Poff,2.2);
+    const D = M.create({ DA:0.25, dbs:0.85 }); S_setGoalLearned(D,2,0); M.run(D,2.2);
+    console.log("      moderate PD  untreated sel=" + M.selected(Poff) + " (β=" + fmt(M.betaCoh(Poff))
+                + ")   +DBS sel=" + M.selected(D) + " (β=" + fmt(M.betaCoh(D)) + ")");
+    check("untreated moderate PD is akinetic (β blocks selection)", M.selected(Poff) === -1, "sel=" + M.selected(Poff));
+    check("STN-DBS restores selection (β desync, not DA)", M.selected(D) === 2, "sel=" + M.selected(D));
+  }
+  function S_setGoalLearned(S, plan, goal){ S.W[plan][goal]=S.P.Wmax; for(let p=0;p<4;p++) if(p!==plan) S.W[p][goal]=0.1; M.setGoal(S,goal); }
 
   console.log("\n==== " + pass + " passed, " + fail + " failed ====\n");
   process.exit(fail ? 1 : 0);

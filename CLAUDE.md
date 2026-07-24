@@ -95,25 +95,36 @@ entrain a rotating clock. Open: retroactive interference is real (a new engram w
 one); fixed assembly size; no asymmetric/STDP (β-offset) rule yet — that would write *directed*
 assemblies (sequences), the bridge to replay and chronotaxis. Full record: `docs/ASSEMBLY-VALIDATION.md`.
 
-**Basal Ganglia — selection by synchrony** (`apps/basal-ganglia.html`, model `models/basal-ganglia.js`) —
+**Basal Ganglia — goal-directed selection** (`apps/basal-ganglia.html`, model `models/basal-ganglia.js`) —
 a **mean-field oscillator network** (rebuilt from a rejected rate model — the author wanted true
-clocks, a watchable timescale, and real corticostriatal/thalamocortical structure). Every neuron is
-a clock (phase + activity); a population transmits its coherent mean field, so **synchrony gates
-transmission** and selection *is* which cortical channel's cortico-striato-pallido-thalamo-cortical
-loop **locks into a coherent assembly**. Cortex **cannot self-lock** — the thalamocortical loop is
-required, so the BG genuinely gate selection. Richer anatomy: striatal **FSI** feed-forward
-inhibition, **TRN** shell, prototypic GPe, D1/D2. Dopamine gates Go/NoGo; the delayed **STN⟷GPe loop
-locks into β-band HYPERSYNCHRONY at low dopamine only** (real synchrony, not a rate wiggle); DBS
-desynchronises to rescue. Validated 7/7 headless; robust 10/10 seeds for selection & akinesia, β
-higher in PD 10/10. Watchable: selection unfolds over ~0.5–0.9 s.
-Six things not to re-derive (all cost real tuning, see `docs/BASAL-GANGLIA-VALIDATION.md`):
-transmission = **activity·(0.5+0.5R)** (pure-synchrony transmission deadlocks bootstrap); the
-**desync repulsion sign** (`+` = apart; `−` silently synchronises everything → no akinesia);
-**ctxKbase = 0** (else cortex self-locks over ~1 s and false-selects at low DA); lateral inhibition
-on **activity** not coherence (else a noise race picks the wrong winner); relay nuclei have **no
-self-assembly coupling + larger spread** (else β isn't DA-specific); and **low-pass the STN surround**
-(β oscillation would otherwise unclamp the thalamus). The deprioritised inlined
-`basal-ganglia-selection.html` is unrelated and untouched.
+clocks, a watchable timescale, real corticostriatal/thalamocortical structure). Selection is now
+**goal-directed and learned**, fixing the earlier "stuck" model (once locked, only a hypodopaminergic
+state could switch it — biologically wrong). Motor plans idle as competing cortical assemblies; a
+*goal* (stimulus) makes them compete; dopamine **tags** the plan whose learned corticostriatal weight
+`W[plan][goal]` wins; reward (three-factor rule) shapes those weights so each goal evokes its own
+plan. **Removing the goal releases** the plan, **changing the goal switches** it — no dopamine change
+needed (D1 is goal-driven with NO term from its own cortex — that is the fix). **DUAL CODE, stated
+explicitly:** assembly pops (cortex/thalamus) carry selection as **synchrony** (`out = act·(0.5+0.5R)`;
+the loop closes only when coherent); relay pops (D1/D2/GPe/STN/GPi/FSI/TRN) are **pure rate**
+(`out = act`) — pallidal gating is disinhibition, not synchrony, and the healthy striatum is
+decorrelated. The one functional relay synchrony is **pathological β** (STN⟷GPe). Cortex **cannot
+self-lock** (`ctxKbase = 0`). Three disease states, all emergent: **akinesia** (low DA — no plan can
+be tagged); **chorea** (indirect-pathway D2-MSN degeneration slider `degen` → surround collapses,
+held plans self-terminate on fatigue → continuous involuntary breakthrough of *different* plans);
+**parkinsonian β** — the delayed STN⟷GPe loop locks into β HYPERSYNCHRONY at low DA, and coherent β
+**enslaves the thalamus** (downstream of GPi, so D1-Go can't bypass it) → moderate-PD akinesia that
+**STN-DBS rescues by desynchronising** (not by restoring DA). Validated **15/15 headless, robust
+12/12 seeds** (selection, akinesia, chorea ≥2 plans, DBS rescue, β higher in PD — all 12/12).
+Watchable: selection unfolds over ~0.5–0.9 s. Things not to re-derive (see
+`docs/BASAL-GANGLIA-VALIDATION.md`): the **dual code**; **D1 goal-driven not cortex-driven** (else
+stuck); transmission `act·(0.5+0.5R)` on assemblies (pure-synchrony deadlocks bootstrap); the
+**desync repulsion sign** (`+` apart; `−` silently synchronises → no akinesia); **ctxKbase = 0**;
+lateral inhibition on **activity** not coherence; relay nuclei **no self-coupling + larger spread**
+(else β isn't DA-specific); **low-pass the STN surround**; **chorea fatigue gated above an escape
+threshold** (else nothing escapes); **β clamps the thalamus, not the surround** (surround only jams
+rivals — the winner's D1 bypasses it). Open (next plausibility upgrades): **striosome/matrix** split
+(striosome = critic → emergent phasic DA/RPE) and **cholinergic TANs** (pause gates plasticity;
+ACh↔DA balance). The deprioritised inlined `basal-ganglia-selection.html` is unrelated and untouched.
 
 **Metastable Chronotaxis** (`metastable-chronotaxis.html`) — 15-clock cortical pool;
 assemblies are *dynamic coalitions* drawn from it, not fixed boxes. Kuramoto coupling
