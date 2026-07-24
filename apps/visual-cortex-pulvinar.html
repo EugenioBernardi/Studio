@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Visual Cortex + Pulvinar — transthalamic gate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#060911;--panel:rgba(13,19,33,.74);--line:rgba(120,150,200,.14);
+ --ink:#e4ebf7;--muted:#8a99b6;--faint:#4a5670;--idle:#41506e;
+ --RET:#ffc861;--LGN:#56d4ff;--S:#ff9d4d;--CX:#3ee6b0;--V2A:#ff4d7d;--V2B:#c07bff;
+ --DIR:#7f9bff;--V3:#4ce0c0;--MT:#ff79c6;--DEC:#9d8bff;--PUL:#ffd166;--TRN:#ff6b6b;--SC:#7bffb0;--good:#3ee6b0;--warn:#ff9d4d;
+ --D:'Space Grotesk',system-ui,sans-serif;--M:'IBM Plex Mono',ui-monospace,monospace;}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;font-family:var(--D);color:var(--ink);overflow:hidden;
+ background:radial-gradient(1300px 800px at 30% -15%,#0f1a2e 0,transparent 62%),
+ radial-gradient(900px 700px at 95% 115%,#0b1322 0,transparent 58%),var(--bg)}
+.app{display:grid;grid-template-columns:1fr 336px;height:100vh}
+.stage{position:relative;overflow:hidden;min-width:0}
+#cv{position:absolute;inset:0;width:100%;height:100%}
+.ttl{position:absolute;top:12px;left:18px;z-index:3;pointer-events:none;max-width:46%}
+.ttl h1{margin:0;font-size:13.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.ttl .s{margin-top:4px;font-family:var(--M);font-size:8.5px;color:var(--muted);line-height:1.5}
+.pan{background:linear-gradient(180deg,rgba(10,15,28,.93),rgba(8,12,22,.97));
+ border-left:1px solid var(--line);padding:12px 11px;overflow-y:auto;z-index:4;
+ display:flex;flex-direction:column;gap:9px}
+.pan::-webkit-scrollbar{width:8px}.pan::-webkit-scrollbar-thumb{background:rgba(120,150,200,.18);border-radius:4px}
+.b{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
+.b h2{margin:0 0 7px;font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+ font-weight:600;display:flex;align-items:center;gap:6px}
+.b h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--LGN));box-shadow:0 0 8px var(--dot,var(--LGN))}
+.g4{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.g4 button,.g3 button{border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);
+ font-family:var(--M);font-size:9.5px;cursor:pointer;padding:8px 3px;border-radius:8px;transition:.15s}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.g4 button:hover,.g3 button:hover{color:var(--ink);border-color:rgba(86,212,255,.45)}
+.g4 button.on,.g3 button.on{background:rgba(86,212,255,.15);color:var(--ink);border-color:rgba(86,212,255,.5)}
+.sl{display:flex;align-items:center;gap:6px;margin-top:6px;font-family:var(--M);font-size:8.5px;color:var(--muted)}
+.sl .n{width:70px;flex:none}.sl input{flex:1;accent-color:var(--c,var(--LGN));min-width:0}
+.sl .v{width:42px;text-align:right;color:var(--ink);flex:none}
+.btn{width:100%;border:0;cursor:pointer;font-family:var(--D);font-weight:600;font-size:11.5px;
+ padding:9px;border-radius:10px;margin-top:7px;color:#06121f;
+ background:linear-gradient(180deg,#a9e0ff,#56d4ff);box-shadow:0 6px 16px -8px rgba(86,212,255,.7)}
+.verdict{font-family:var(--D);font-size:17px;font-weight:700;letter-spacing:.05em;
+ text-align:center;padding:8px;border-radius:10px;margin-top:6px;
+ background:rgba(157,139,255,.10);border:1px solid rgba(157,139,255,.30)}
+.verdict small{display:block;font-family:var(--M);font-size:8px;font-weight:400;color:var(--muted);margin-top:3px}
+.mtbox{text-align:center;font-family:var(--M);font-size:8.5px;color:var(--muted);margin-top:5px}
+.mtbox b{display:block;font-family:var(--D);font-size:17px;font-weight:700;color:var(--MT);letter-spacing:.04em}
+.feat{display:flex;flex-direction:column;gap:3px;margin-top:5px;font-family:var(--M);font-size:8.5px;color:var(--muted)}
+.feat div{display:flex;justify-content:space-between}.feat b{color:var(--ink);font-weight:500}
+.note{font-family:var(--M);font-size:8.5px;line-height:1.5;color:var(--muted);margin-top:6px}
+.note b{color:var(--ink)}.note .w{color:var(--warn)}
+.busy{position:absolute;inset:0;display:none;place-items:center;z-index:5;
+ background:rgba(6,9,17,.55);font-family:var(--M);font-size:11px;color:var(--muted)}
+.busy.on{display:grid}
+@media(max-width:1020px){.app{grid-template-columns:1fr;grid-template-rows:1fr auto}
+ .pan{border-left:0;border-top:1px solid var(--line);max-height:46vh}}
+</style></head><body>
+<div class="app">
+ <div class="stage"><canvas id="cv"></canvas>
+  <div class="busy" id="busy">computing receptive fields…</div>
+  <div class="ttl"><h1>Visual Cortex · Ventral &amp; Dorsal</h1>
+   <div class="s">Retina → LGN → V1, then the streams split: form up through V2 to shape,
+   motion down through V3 to V5/MT.<br>Every unit is a clock.</div></div></div>
+ <aside class="pan">
+  <div class="b" style="--dot:var(--RET)"><h2>Stimulus</h2>
+   <div class="g4" id="shapes"></div>
+   <label class="sl" style="--c:var(--RET)"><span class="n">Rotation</span>
+    <input id="s-rot" type="range" min="0" max="1.57" step="0.03" value="0"><span class="v" id="v-rot">0°</span></label>
+   <label class="sl" style="--c:var(--RET)"><span class="n">Size</span>
+    <input id="s-size" type="range" min="0.25" max="0.75" step="0.02" value="0.45"><span class="v" id="v-size">0.45</span></label>
+   <label class="sl" style="--c:var(--warn)"><span class="n">Noise</span>
+    <input id="s-noise" type="range" min="0" max="1.0" step="0.05" value="0"><span class="v" id="v-noise">0.00</span></label>
+  </div>
+  <div class="b" style="--dot:var(--MT)"><h2>Motion</h2>
+   <div class="g3" id="mtypes"></div>
+   <label class="sl" style="--c:var(--MT)"><span class="n">Direction</span>
+    <input id="s-dir" type="range" min="0" max="350" step="10" value="0"><span class="v" id="v-dir">0°</span></label>
+   <label class="sl" style="--c:var(--MT)"><span class="n">Speed</span>
+    <input id="s-spd" type="range" min="0.10" max="0.55" step="0.05" value="0.30"><span class="v" id="v-spd">0.30</span></label>
+   <button class="btn" id="b-go">▶ Recompute &amp; present</button>
+   <label class="sl"><span class="n">Playback</span>
+    <input id="s-play" type="range" min="0.05" max="1" step="0.05" value="0.25"><span class="v" id="v-play">0.25x</span></label>
+  </div>
+  <div class="b" style="--dot:var(--PUL)"><h2>Pulvinar (higher-order thalamus)</h2>
+   <label class="tgl" style="display:flex;align-items:center;gap:9px;padding:5px 3px;cursor:pointer;font-size:11px">
+    <input type="checkbox" id="pu-on" style="accent-color:#ffd166"> transthalamic route ON</label>
+   <label class="sl" style="--c:var(--PUL)"><span class="n">gate x</span>
+    <input id="pu-x" type="range" min="-0.4" max="0.4" step="0.02" value="0"><span class="v" id="v-px">0.00</span></label>
+   <label class="sl" style="--c:var(--PUL)"><span class="n">gate width</span>
+    <input id="pu-s" type="range" min="0.8" max="5" step="0.2" value="2.0"><span class="v" id="v-ps">2.0</span></label>
+   <label class="sl" style="--c:var(--PUL)"><span class="n">δJ</span>
+    <input id="pu-j" type="range" min="0" max="2.5" step="0.1" value="1.1"><span class="v" id="v-pj">1.1</span></label>
+   <div class="note" id="pnote"></div>
+  </div>
+  <div class="b" style="--dot:var(--SC)"><h2>Dorsal higher-order thalamus</h2>
+   <label style="display:flex;align-items:center;gap:9px;padding:5px 3px;cursor:pointer;font-size:11px">
+    <input type="checkbox" id="dp-t" checked style="accent-color:#7bffb0"> tectopulvinar route (SC→pulvinar→MT)</label>
+   <label style="display:flex;align-items:center;gap:9px;padding:5px 3px;cursor:pointer;font-size:11px">
+    <input type="checkbox" id="dp-l" style="accent-color:#ff3b3b"> lesion V1</label>
+   <label class="sl" style="--c:var(--SC)"><span class="n">pulvinar w</span>
+    <input id="dp-w" type="range" min="0" max="1.5" step="0.1" value="0.7"><span class="v" id="v-dw">0.7</span></label>
+   <div class="note" id="dnote"></div>
+  </div>
+  <div class="b" style="--dot:var(--DEC)"><h2>Ventral readout — what</h2>
+   <div class="verdict" id="verdict">—<small>present a stimulus</small></div>
+   <div class="feat" id="feat"></div>
+  </div>
+  <div class="b" style="--dot:var(--MT)"><h2>Dorsal readout — where / how fast</h2>
+   <div class="mtbox"><b id="mtdir">—</b>MT population direction</div>
+   <div class="feat" id="mtfeat"></div>
+   <div class="note" id="note"></div>
+  </div>
+ </aside></div>
+<script>
+"use strict";
+
+// Retina -> LGN -> V1 simple -> V1 complex -> V2 (angle/curvature) -> decision
+const N=40;                 // retina grid
+const NORI=12;              // 15 deg steps: 60 deg = 4 steps, 90 deg = 6 steps
+const ORI=[...Array(NORI).keys()].map(i=>i*Math.PI/NORI);
+
+/* ---------- stimulus ---------- */
+function drawShape(kind,{size=0.52,rot=0,cx=0,cy=0,noise=0,thick=0}={}){
+  const img=new Float64Array(N*N);
+  const R=size*N/2, ox=N/2+cx*N, oy=N/2+cy*N;
+  const inside=(x,y)=>{
+    let dx=x-ox, dy=y-oy;
+    const c=Math.cos(-rot), s=Math.sin(-rot);
+    const X=dx*c-dy*s, Y=dx*s+dy*c;
+    if(kind==='bar') return Math.abs(Y)<=R*0.22 && Math.abs(X)<=R*1.9;
+    if(kind==='circle') return Math.hypot(X,Y)<=R;
+    if(kind==='square') return Math.abs(X)<=R*0.88&&Math.abs(Y)<=R*0.88;
+    if(kind==='triangle'){
+      // true equilateral, apex up: sides at 60 deg from horizontal
+      const a=R*1.02, h=a*Math.SQRT2*Math.sqrt(1.5);   // h = a*sqrt(3)
+      const yTop=-2*h/3, yBot=h/3;
+      if(Y<yTop||Y>yBot) return false;
+      const w=a*(Y-yTop)/h;
+      return Math.abs(X)<=w;
+    }
+    return false;
+  };
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    let v=0;
+    for(const [dx,dy] of [[0.25,0.25],[0.75,0.25],[0.25,0.75],[0.75,0.75]])
+      v+=inside(x+dx,y+dy)?0.25:0;      // 4x supersample for smooth edges
+    img[y*N+x]=v;
+  }
+  if(thick>0){  // outline mode: subtract an eroded copy
+    const er=new Float64Array(N*N);
+    for(let y=1;y<N-1;y++)for(let x=1;x<N-1;x++){
+      let m=1;
+      for(let j=-thick;j<=thick;j++)for(let i=-thick;i<=thick;i++)
+        m=Math.min(m,img[(y+j)*N+(x+i)]||0);
+      er[y*N+x]=m;
+    }
+    for(let i=0;i<N*N;i++) img[i]=Math.max(0,img[i]-er[i]);
+  }
+  if(noise>0) for(let i=0;i<N*N;i++) img[i]=Math.max(0,Math.min(1,img[i]+(Math.random()-0.5)*noise));
+  return img;
+}
+
+/* ---------- separable gaussian blur ---------- */
+function blur(src,sig){
+  const k=Math.max(1,Math.ceil(sig*3)), w=[];
+  let s=0; for(let i=-k;i<=k;i++){const v=Math.exp(-i*i/(2*sig*sig));w.push(v);s+=v;}
+  for(let i=0;i<w.length;i++)w[i]/=s;
+  const tmp=new Float64Array(N*N), out=new Float64Array(N*N);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    let a=0;for(let i=-k;i<=k;i++){const xx=Math.min(N-1,Math.max(0,x+i));a+=w[i+k]*src[y*N+xx];}
+    tmp[y*N+x]=a;}
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    let a=0;for(let i=-k;i<=k;i++){const yy=Math.min(N-1,Math.max(0,y+i));a+=w[i+k]*tmp[yy*N+x];}
+    out[y*N+x]=a;}
+  return out;
+}
+
+/* ---------- retina: DoG ganglion cells ---------- */
+function retina(img,{sc=0.9,ss=2.2,ws=0.85}={}){
+  const c=blur(img,sc), s=blur(img,ss);
+  const on=new Float64Array(N*N), off=new Float64Array(N*N), sd=new Float64Array(N*N);
+  for(let i=0;i<N*N;i++){
+    const d=c[i]-ws*s[i];
+    sd[i]=d; on[i]=Math.max(0,d); off[i]=Math.max(0,-d);
+  }
+  return {on,off,signed:sd};
+}
+
+/* ---------- LGN: relay + surround (reticular-like) inhibition + gain control ---------- */
+function lgn(R,{kSur=0.55,gain=1.6,sat=0.55}={}){
+  const on=new Float64Array(N*N), off=new Float64Array(N*N), sd=new Float64Array(N*N);
+  const sOn=blur(R.on,2.6), sOff=blur(R.off,2.6);
+  for(let i=0;i<N*N;i++){
+    const a=Math.max(0,R.on[i]-kSur*sOn[i]), b=Math.max(0,R.off[i]-kSur*sOff[i]);
+    on[i]=gain*a/(sat+gain*a); off[i]=gain*b/(sat+gain*b);
+    sd[i]=on[i]-off[i];
+  }
+  return {on,off,signed:sd};
+}
+
+/* ---------- V1 simple: oriented Gabor quadrature pairs ---------- */
+let GP={sigma:2.0,lambda:5.0,gamma:0.6};
+function gaborKernel(th,phase,o){
+  const sigma=(o&&o.sigma)||GP.sigma, lambda=(o&&o.lambda)||GP.lambda, gamma=(o&&o.gamma)||GP.gamma;
+  // kernel must cover the ELONGATED axis (sigma/gamma), otherwise the filter is
+  // truncated and orientation tuning collapses
+  const k=Math.ceil(Math.max(sigma,sigma/gamma)*2.6), K=[];
+  const ct=Math.cos(th), st=Math.sin(th);
+  let pos=0,neg=0;
+  for(let j=-k;j<=k;j++)for(let i=-k;i<=k;i++){
+    const X=i*ct+j*st, Y=-i*st+j*ct;
+    const g=Math.exp(-(X*X+gamma*gamma*Y*Y)/(2*sigma*sigma))*Math.cos(2*Math.PI*X/lambda+phase);
+    K.push({i,j,g}); if(g>0)pos+=g; else neg-=g;
+  }
+  const m=(pos+neg)/2||1;
+  K.forEach(e=>e.g/=m);
+  return {K,k};
+}
+let GK=ORI.map(th=>[gaborKernel(th,0),gaborKernel(th,Math.PI/2)]);
+function rebuildGabors(p){Object.assign(GP,p||{});
+  GK=ORI.map(th=>[gaborKernel(th,0),gaborKernel(th,Math.PI/2)]);}
+function v1simple(L){
+  const out=[];
+  for(let o=0;o<NORI;o++){
+    const ph=[];
+    for(let p=0;p<2;p++){
+      const {K}=GK[o][p], m=new Float64Array(N*N);
+      for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+        let a=0;
+        for(const e of K){
+          const xx=x+e.i, yy=y+e.j;
+          if(xx<0||yy<0||xx>=N||yy>=N) continue;
+          a+=e.g*L.signed[yy*N+xx];
+        }
+        m[y*N+x]=a;
+      }
+      ph.push(m);
+    }
+    out.push(ph);
+  }
+  return out;   // [ori][phase] -> map ; simple cell rate = relu(+/-)
+}
+/* ---------- V1 complex: energy model (phase invariant) ---------- */
+const NC=20;                                  // complex-cell grid
+function v1complex(S,{pool=1.4,norm=0.35,pw=1}={}){
+  const step=N/NC;
+  const C=[];
+  for(let o=0;o<NORI;o++) C.push(new Float64Array(NC*NC));
+  for(let cy=0;cy<NC;cy++)for(let cx=0;cx<NC;cx++){
+    const x0=Math.round((cx+0.5)*step), y0=Math.round((cy+0.5)*step);
+    const rad=Math.max(1,Math.round(pool));
+    for(let o=0;o<NORI;o++){
+      let e=0,n=0;
+      for(let j=-rad;j<=rad;j++)for(let i=-rad;i<=rad;i++){
+        const xx=x0+i, yy=y0+j;
+        if(xx<0||yy<0||xx>=N||yy>=N) continue;
+        const a=S[o][0][yy*N+xx], b=S[o][1][yy*N+xx];
+        e+=a*a+b*b; n++;
+      }
+      C[o][cy*NC+cx]=Math.pow(Math.sqrt(e/Math.max(1,n)),pw);
+    }
+    // divisive normalisation across orientations
+    let tot=0; for(let o=0;o<NORI;o++) tot+=C[o][cy*NC+cx];
+    for(let o=0;o<NORI;o++) C[o][cy*NC+cx]=C[o][cy*NC+cx]/(norm+tot);
+  }
+  return C;
+}
+
+/* ---------- V2: angle-selective (corner) cells + curvature ---------- */
+// At a corner two edge orientations coexist inside one RF; along a straight edge only
+// one does; on a smooth curve the dominant orientation rotates between neighbours.
+const V2N=10;
+function v2(C,{thr=0.02}={}){
+  const step=NC/V2N;
+  const D60=new Float64Array(V2N*V2N), D90=new Float64Array(V2N*V2N),
+        CURV=new Float64Array(V2N*V2N), EDGE=new Float64Array(V2N*V2N);
+  const d60=Math.round(60/(180/NORI)), d90=Math.round(90/(180/NORI));
+  for(let vy=0;vy<V2N;vy++)for(let vx=0;vx<V2N;vx++){
+    const x0=Math.floor(vx*step), y0=Math.floor(vy*step);
+    const H=new Float64Array(NORI);
+    let tot=0;
+    for(let j=0;j<step;j++)for(let i=0;i<step;i++){
+      const xx=x0+i,yy=y0+j; if(xx>=NC||yy>=NC)continue;
+      for(let o=0;o<NORI;o++){const v=C[o][yy*NC+xx];H[o]+=v;tot+=v;}
+    }
+    EDGE[vy*V2N+vx]=tot;
+    if(tot<thr) continue;
+    for(let o=0;o<NORI;o++) H[o]/=tot;
+    let a60=0,a90=0;
+    for(let o=0;o<NORI;o++){
+      a60+=H[o]*H[(o+d60)%NORI];
+      a90+=H[o]*H[(o+d90)%NORI];
+    }
+    D60[vy*V2N+vx]=a60*tot; D90[vy*V2N+vx]=a90*tot;
+    // curvature: single dominant orientation locally (low entropy) but non-zero energy
+    let mx=0;for(let o=0;o<NORI;o++)mx=Math.max(mx,H[o]);
+    CURV[vy*V2N+vx]=mx*tot;
+  }
+  return {D60,D90,CURV,EDGE};
+}
+function features(V){
+  const sum=a=>a.reduce((x,y)=>x+y,0);
+  const e=sum(Array.from(V.EDGE))||1e-9;
+  return {corner60:sum(Array.from(V.D60))/e, corner90:sum(Array.from(V.D90))/e,
+          curv:sum(Array.from(V.CURV))/e, edge:e};
+}
+
+/* ---------- global orientation statistics ---------- */
+function oriStats(C){
+  const H=new Float64Array(NORI); let tot=0;
+  for(let o=0;o<NORI;o++){let s=0;for(let i=0;i<NC*NC;i++)s+=C[o][i];H[o]=s;tot+=s;}
+  if(tot<=0) return {H,entropy:0,peaks:0};
+  for(let o=0;o<NORI;o++)H[o]/=tot;
+  let e=0;for(let o=0;o<NORI;o++) if(H[o]>0) e-=H[o]*Math.log(H[o]);
+  e/=Math.log(NORI);                       // 0 = one orientation, 1 = uniform
+  let peaks=0;
+  for(let o=0;o<NORI;o++){
+    const a=H[(o-1+NORI)%NORI],b=H[o],c=H[(o+1)%NORI];
+    if(b>a&&b>=c&&b>1.25/NORI) peaks++;
+  }
+  return {H,entropy:e,peaks};
+}
+
+/* ---------- decision layer: 3 units, mutual inhibition ---------- */
+const DEC=['square','triangle','circle'];
+function drives(f){
+  return [ f.corner90*5.0,
+           f.corner60*5.0,
+           Math.max(0,(f.entropy-0.88)/0.12)*0.75 ];
+}
+function classify(f){
+  const d=drives(f);
+  let st=[0,0,0];
+  for(let t=0;t<400;t++){          // settle the competition
+    const nx=[0,0,0];
+    for(let i=0;i<3;i++){
+      let inh=0; for(let j=0;j<3;j++) if(j!==i) inh+=st[j];
+      nx[i]=Math.max(0,Math.min(1,d[i]-0.85*inh));
+    }
+    for(let i=0;i<3;i++) st[i]+=(nx[i]-st[i])*0.08;
+  }
+  let mi=0; for(let i=1;i<3;i++) if(st[i]>st[mi]) mi=i;
+  const sorted=[...st].sort((a,b)=>b-a);
+  return {label:DEC[mi],state:st,drives:d,margin:sorted[0]-sorted[1]};
+}
+function pipeline(kind,opt){
+  const img=drawShape(kind,opt||{});
+  const R=retina(img), L=lgn(R), S=v1simple(L), C=v1complex(S,{pw:2});
+  const V=v2(C), f=features(V), st=oriStats(C);
+  const ff={...f,entropy:st.entropy,peaks:st.peaks};
+  return {img,R,L,S,C,V,f:ff,ori:st,dec:classify(ff)};
+}
+
+
+// Motion pathway: temporal filtering -> V1 direction-selective motion energy
+// (Adelson & Bergen 1985) -> V3 form/motion conjunction -> V5/MT pattern cells.
+
+const NM=24;                 // motion pathway runs at coarser resolution (MT has big RFs)
+const NDIR=12;               // MT directions over full 360 deg
+const NPH=10;                // precomputed motion phases
+
+/* small Gabors for the motion pathway (less elongated: speed over orientation precision) */
+function mGabor(th,phase,{sigma=2.0,lambda=4.0,gamma=0.55}={}){
+  const k=Math.ceil(Math.max(sigma,sigma/gamma)*2.2),K=[];
+  const ct=Math.cos(th),st=Math.sin(th);let pos=0,neg=0;
+  for(let j=-k;j<=k;j++)for(let i=-k;i<=k;i++){
+    const X=i*ct+j*st,Y=-i*st+j*ct;
+    const g=Math.exp(-(X*X+gamma*gamma*Y*Y)/(2*sigma*sigma))*Math.cos(2*Math.PI*X/lambda+phase);
+    K.push({i,j,g});if(g>0)pos+=g;else neg-=g;}
+  const m=(pos+neg)/2||1;K.forEach(e=>e.g/=m);
+  return K;
+}
+const MGK=ORI.map(th=>[mGabor(th,0),mGabor(th,Math.PI/2)]);
+
+function downsample(map,from,to){
+  const out=new Float64Array(to*to),st=from/to;
+  for(let y=0;y<to;y++)for(let x=0;x<to;x++){
+    let s=0,c=0;
+    for(let b=0;b<st;b++)for(let a=0;a<st;a++){
+      const xx=Math.floor(x*st+a),yy=Math.floor(y*st+b);
+      if(xx<from&&yy<from){s+=map[yy*from+xx];c++;}}
+    out[y*to+x]=c?s/c:0;}
+  return out;
+}
+function conv(map,K){
+  const out=new Float64Array(NM*NM);
+  for(let y=0;y<NM;y++)for(let x=0;x<NM;x++){
+    let a=0;
+    for(const e of K){const xx=x+e.i,yy=y+e.j;
+      if(xx<0||yy<0||xx>=NM||yy>=NM)continue;a+=e.g*map[yy*NM+xx];}
+    out[y*NM+x]=a;}
+  return out;
+}
+
+/* ---- build the motion sequence and extract direction-selective energy ---- */
+function motionSequence(kind,opt,mot){
+  // mot: {type:'translate'|'rotate', dir, speed, spin}
+  const frames=[];
+  for(let p=0;p<NPH;p++){
+    const t=p/NPH;
+    let o={...opt};
+    if(mot.type==='rotate') o.rot=(opt.rot||0)+mot.spin*t*Math.PI*2;
+    else{
+      const d=mot.dir, amp=mot.speed;
+      o.cx=(opt.cx||0)+Math.cos(d)*amp*(t-0.5);
+      o.cy=(opt.cy||0)+Math.sin(d)*amp*(t-0.5);
+    }
+    const img=drawShape(kind,o);
+    const L=lgn(retina(img));
+    frames.push(downsample(L.signed,N,NM));
+  }
+  return frames;
+}
+function motionEnergy(frames){
+  // spatial quadrature per frame
+  const Se=[],So=[];
+  for(let p=0;p<NPH;p++){
+    Se.push(ORI.map((_,o)=>conv(frames[p],MGK[o][0])));
+    So.push(ORI.map((_,o)=>conv(frames[p],MGK[o][1])));
+  }
+  // temporal filters across phases: slow (lowpass) and fast (biphasic)
+  const Ts=[0.25,0.50,0.25], Tf=[-0.5,0.0,0.5];   // proper dS/dt (was time-reversed)
+  // energy[o][dir 0=+theta,1=-theta] summed over space and phase
+  const E=[];for(let o=0;o<NORI;o++)E.push([0,0]);
+  const Emap=[];for(let o=0;o<NORI;o++)Emap.push([new Float64Array(NM*NM),new Float64Array(NM*NM)]);
+  for(let p=1;p<NPH-1;p++){
+    for(let o=0;o<NORI;o++){
+      for(let i=0;i<NM*NM;i++){
+        let se_s=0,se_f=0,so_s=0,so_f=0;
+        for(let k=-1;k<=1;k++){
+          se_s+=Ts[k+1]*Se[p+k][o][i]; se_f+=Tf[k+1]*Se[p+k][o][i];
+          so_s+=Ts[k+1]*So[p+k][o][i]; so_f+=Tf[k+1]*So[p+k][o][i];
+        }
+        const R1=se_f+so_s, R2=so_f-se_s;
+        const L1=se_f-so_s, L2=so_f+se_s;
+        const er=R1*R1+R2*R2, el=L1*L1+L2*L2;
+        const opp=er-el;
+        if(opp>0){E[o][0]+=opp;Emap[o][0][i]+=opp;} else {E[o][1]-=opp;Emap[o][1][i]-=opp;}
+      }
+    }
+  }
+  return {E,Emap};
+}
+/* ---- V5 / MT pattern cells: integrate components over orientation ---- */
+function mt(E,{q=1.6}={}){
+  const P=new Float64Array(NDIR);
+  for(let d=0;d<NDIR;d++){
+    const phi=d*2*Math.PI/NDIR;
+    let s=0;
+    for(let o=0;o<NORI;o++){
+      const th=o*Math.PI/NORI;
+      for(const [k,dirAng] of [[0,th],[1,th+Math.PI]]){
+        const w=Math.cos(phi-dirAng);
+        if(w>0) s+=E[o][k]*Math.pow(w,q);
+      }
+    }
+    P[d]=s;
+  }
+  let tot=0;for(let d=0;d<NDIR;d++)tot+=P[d];
+  // population vector = MT's estimate of true direction
+  let vx=0,vy=0;
+  for(let d=0;d<NDIR;d++){const phi=d*2*Math.PI/NDIR;vx+=P[d]*Math.cos(phi);vy+=P[d]*Math.sin(phi);}
+  const dir=Math.atan2(vy,vx), coh=tot>0?Math.hypot(vx,vy)/tot:0;
+  return {P,dir:(dir+2*Math.PI)%(2*Math.PI),coherence:coh,total:tot};
+}
+/* ---- V3: form x motion conjunction; how consistent are components with one velocity ---- */
+function v3(E,M){
+  let agree=0,tot=0;
+  for(let o=0;o<NORI;o++){
+    const th=o*Math.PI/NORI;
+    for(const [k,dirAng] of [[0,th],[1,th+Math.PI]]){
+      const w=Math.cos(M.dir-dirAng);
+      tot+=E[o][k];
+      if(w>0) agree+=E[o][k]*w;
+    }
+  }
+  const nOri=E.filter(e=>(e[0]+e[1])>0.05*tot/NORI).length;
+  return {consistency:tot>0?agree/tot:0, activeOri:nOri, total:tot};
+}
+
+
+// Pulvinar as a GATE ON EFFECTIVE CORTICO-CORTICAL CONNECTIVITY (Jaramillo, Mejias &
+// Wang 2019): V1 L5 -> pulvinar -> V2 L4 is a parallel transthalamic route whose gain
+// is set by TRN. J_eff(x) = J_direct + dJ * lambda(x).
+
+
+/* ---- multi-object scene: N shapes on a ring, one of them cued ---- */
+function scene(kinds,{size=0.19,radius=0.27,noise=0,jitter=0}={}){
+  const img=new Float64Array(N*N), pos=[];
+  const n=kinds.length;
+  for(let i=0;i<n;i++){
+    const a=(i/n)*2*Math.PI-Math.PI/2;
+    const cx=(n===1?0:Math.cos(a)*radius)+(Math.random()-0.5)*jitter;
+    const cy=(n===1?0:Math.sin(a)*radius)+(Math.random()-0.5)*jitter;
+    pos.push({cx,cy});
+    const s=drawShape(kinds[i],{size,cx,cy});
+    for(let k=0;k<N*N;k++) img[k]=Math.min(1,img[k]+s[k]);
+  }
+  if(noise>0)for(let k=0;k<N*N;k++)img[k]=Math.max(0,Math.min(1,img[k]+(Math.random()-0.5)*noise));
+  return {img,pos};
+}
+/* ---- TRN-set pulvinar excitability field lambda(x) ---- */
+function lambdaField(cx,cy,sig,base,peak){
+  const L=new Float64Array(NC*NC);
+  for(let y=0;y<NC;y++)for(let x=0;x<NC;x++){
+    const dx=(x/NC-0.5-cx)*NC,dy=(y/NC-0.5-cy)*NC;
+    L[y*NC+x]=base+(peak-base)*Math.exp(-(dx*dx+dy*dy)/(2*sig*sig));
+  }
+  return L;
+}
+/* ---- transthalamic gating of V1 -> V2 transmission ----
+   Jdir  : direct corticocortical weight (always present)
+   dJ    : extra connectivity supplied by the transthalamic route
+   lam   : pulvinar excitability per location (from TRN); null = pulvinar offline  */
+function gateV1toV2(C,{Jdir=1.0,dJ=1.1,lam=null}={}){
+  const out=[];
+  for(let o=0;o<NORI;o++){
+    const m=new Float64Array(NC*NC);
+    for(let i=0;i<NC*NC;i++){
+      const Jeff=Jdir+(lam?dJ*lam[i]:0);
+      m[i]=C[o][i]*Jeff;
+    }
+    out.push(m);
+  }
+  // V2 divisive normalisation across orientation (as in the feedforward model)
+  for(let i=0;i<NC*NC;i++){
+    let tot=0;for(let o=0;o<NORI;o++)tot+=out[o][i];
+    if(tot>0)for(let o=0;o<NORI;o++)out[o][i]=out[o][i]/(0.35+tot);
+  }
+  return out;
+}
+/* ---- object-based readout: pool V2 features in a window at the cued location ---- */
+function readAt(X,cx,cy,sig){
+  const Wt=new Float64Array(NC*NC);
+  for(let y=0;y<NC;y++)for(let x=0;x<NC;x++){
+    const dx=(x/NC-0.5-cx)*NC,dy=(y/NC-0.5-cy)*NC;
+    Wt[y*NC+x]=Math.exp(-(dx*dx+dy*dy)/(2*sig*sig));
+  }
+  const M=X.map(m=>{const o=Float64Array.from(m);
+    for(let i=0;i<NC*NC;i++)o[i]*=Wt[i];return o;});
+  const f=features(v2(M)),st=oriStats(M);
+  return classify({...f,entropy:st.entropy,peaks:st.peaks});
+}
+
+
+// Tectopulvinar route: retina -> superior colliculus -> pulvinar -> MT, BYPASSING V1.
+// This is the anatomical substrate of blindsight: motion direction can survive V1 loss.
+// Unlike the ventral pulvinar gate (which only added gain), here the higher-order
+// thalamus supplies an ALTERNATIVE route — which is what it is actually for.
+
+
+// SC receptive fields are coarse: large, poorly orientation-tuned, low resolution
+function scGabor(th,phase,{sigma=3.6,lambda=8.0,gamma=0.85}={}){
+  const k=Math.ceil(Math.max(sigma,sigma/gamma)*2.0),K=[];
+  const ct=Math.cos(th),st=Math.sin(th);let pos=0,neg=0;
+  for(let j=-k;j<=k;j++)for(let i=-k;i<=k;i++){
+    const X=i*ct+j*st,Y=-i*st+j*ct;
+    const g=Math.exp(-(X*X+gamma*gamma*Y*Y)/(2*sigma*sigma))*Math.cos(2*Math.PI*X/lambda+phase);
+    K.push({i,j,g});if(g>0)pos+=g;else neg-=g;}
+  const m=(pos+neg)/2||1;K.forEach(e=>e.g/=m);
+  return K;
+}
+const SCK=ORI.map(th=>[scGabor(th,0),scGabor(th,Math.PI/2)]);
+function conv(map,K){
+  const out=new Float64Array(NM*NM);
+  for(let y=0;y<NM;y++)for(let x=0;x<NM;x++){
+    let a=0;
+    for(const e of K){const xx=x+e.i,yy=y+e.j;
+      if(xx<0||yy<0||xx>=NM||yy>=NM)continue;a+=e.g*map[yy*NM+xx];}
+    out[y*NM+x]=a;}
+  return out;
+}
+// coarse motion energy computed on the SAME frame sequence, but through SC filters
+function scEnergy(frames){
+  const Se=[],So=[];
+  for(let p=0;p<NPH;p++){
+    Se.push(ORI.map((_,o)=>conv(frames[p],SCK[o][0])));
+    So.push(ORI.map((_,o)=>conv(frames[p],SCK[o][1])));
+  }
+  const Ts=[0.25,0.50,0.25], Tf=[-0.5,0.0,0.5];
+  const E=[];for(let o=0;o<NORI;o++)E.push([0,0]);
+  for(let p=1;p<NPH-1;p++)for(let o=0;o<NORI;o++)for(let i=0;i<NM*NM;i++){
+    let se_s=0,se_f=0,so_s=0,so_f=0;
+    for(let k=-1;k<=1;k++){
+      se_s+=Ts[k+1]*Se[p+k][o][i]; se_f+=Tf[k+1]*Se[p+k][o][i];
+      so_s+=Ts[k+1]*So[p+k][o][i]; so_f+=Tf[k+1]*So[p+k][o][i];
+    }
+    const R1=se_f+so_s,R2=so_f-se_s,L1=se_f-so_s,L2=so_f+se_s;
+    const opp=(R1*R1+R2*R2)-(L1*L1+L2*L2);
+    if(opp>0)E[o][0]+=opp; else E[o][1]-=opp;
+  }
+  return E;
+}
+// MT receives the cortical route and the transthalamic route in parallel
+function mtCombined(Ev1,Esc,{wV1=1,wPulv=0.7}={}){
+  const E=[];
+  const nrm=A=>{let m=1e-12;for(const p of A)m=Math.max(m,p[0],p[1]);
+    return A.map(p=>[p[0]/m,p[1]/m]);};
+  const a=nrm(Ev1), b=nrm(Esc);
+  for(let o=0;o<NORI;o++) E.push([wV1*a[o][0]+wPulv*b[o][0], wV1*a[o][1]+wPulv*b[o][1]]);
+  return mt(E);
+}
+
+(function(){
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const $=id=>document.getElementById(id);
+const CS=getComputedStyle(document.documentElement),cvar=n=>CS.getPropertyValue(n).trim();
+const C={};['RET','LGN','S','CX','V2A','V2B','DIR','V3','MT','DEC','PUL','TRN','SC','ink','faint','idle','muted','good','warn']
+ .forEach(k=>C[k]=cvar('--'+k));
+const FM="'IBM Plex Mono',monospace",FD="'Space Grotesk',sans-serif";
+const TAU=Math.PI*2,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function rgba(h,a){h=h.replace('#','');if(h.length===3)h=h.split('').map(x=>x+x).join('');
+ return`rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;}
+const D2R=Math.PI/180, R2D=180/Math.PI;
+
+const ST={kind:'square',rot:0,size:0.45,noise:0};
+const PU={on:false,ax:0,ay:0,sig:2.0,dJ:1.1};
+const DP={tecto:true,v1lesion:false,wPulv:0.7};
+const MO={type:'translate',dir:0,speed:0.30};
+let TGT=null,frames=null,phase=0,bootErr=null;
+
+function recompute(){
+  rebuildGabors({sigma:3,lambda:4,gamma:0.30});
+  const base={rot:ST.rot,size:ST.size,noise:ST.noise};
+  // form pathway: computed once (recognition is translation invariant)
+  const img=drawShape(ST.kind,base);
+  const R=retina(img),L=lgn(R),S=v1simple(L),Craw=v1complex(S,{pw:2});
+  // transthalamic route: V1 layer-5 -> pulvinar -> V2, gain lambda(x) set by TRN.
+  // J_eff = J_direct + dJ * lambda   (Jaramillo, Mejias & Wang 2019)
+  const lam=PU.on?lambdaField(PU.ax,PU.ay,PU.sig,0.05,1.0):null;
+  const Cx=PU.on?gateV1toV2(Craw,{Jdir:1.0,dJ:PU.dJ,lam}):Craw;
+  const V=v2(Cx),f=features(Cx?V:V),st=oriStats(Cx);
+  const ff={...f,entropy:st.entropy,peaks:st.peaks};
+  // motion pathway
+  let E=null,MTr=null,V3r=null,seq=null;
+  if(MO.type==='static'){
+    E=[];for(let o=0;o<NORI;o++)E.push([0,0]);
+    MTr={P:new Float64Array(NDIR),dir:0,coherence:0,total:0};
+    V3r={consistency:0,activeOri:0,total:0};
+    seq=[downsample(L.signed,N,NM)];
+  }else{
+    const mot=MO.type==='rotate'?{type:'rotate',spin:MO.speed*1.6}
+                                :{type:'translate',dir:MO.dir*D2R,speed:MO.speed};
+    seq=motionSequence(ST.kind,base,mot);
+    const me=motionEnergy(seq);
+    E=me.E;
+    // dorsal higher-order thalamus: retina -> SC -> pulvinar -> MT, bypassing V1
+    const Esc=DP.tecto?scEnergy(seq):E.map(()=>[0,0]);
+    const wV1=DP.v1lesion?0:1;
+    MTr=mtCombined(E,Esc,{wV1,wPulv:DP.tecto?DP.wPulv:0});
+    V3r=v3(E,MTr);
+    TGTemaps=me.Emap;TGTesc=Esc;
+  }
+    if(DP.v1lesion){ ff.corner60*=0.02; ff.corner90*=0.02; ff.entropy=0.5; }
+  TGT={img,R,L,C:Cx,Craw,lam,V,f:ff,ori:st,dec:classify(ff),E,MT:MTr,V3:V3r,seq,v1lesion:DP.v1lesion};
+  frames=seq;phase=0;
+}
+let TGTemaps=null,TGTesc=null;
+
+/* ---------------- clocks ---------------- */
+function mkC(n){return Array.from({length:n},()=>({ph:Math.random()*TAU,f:0.9+Math.random()*0.22}));}
+const CK={retina:mkC(64),lgn:mkC(64),v1:mkC(9*NORI),v1c:mkC(9*NORI),v2:mkC(36),pul:mkC(25),trn:mkC(1),
+          dir:mkC(NORI*2),v3:mkC(16),mt:mkC(NDIR),dec:mkC(3)};
+function stepClocks(dt,vals){
+  for(const k in CK){
+    const arr=CK[k],v=vals[k]||[];
+    let sx=0,sy=0,n=0;
+    for(let i=0;i<arr.length;i++){const a=v[i]||0;if(a>0.12){sx+=Math.cos(arr[i].ph)*a;sy+=Math.sin(arr[i].ph)*a;n+=a;}}
+    const mp=n>0?Math.atan2(sy/n,sx/n):0;
+    for(let i=0;i<arr.length;i++){const a=v[i]||0;
+      arr[i].ph=(arr[i].ph+(TAU*(1.5+6.5*a)*arr[i].f+7.5*a*Math.sin(mp-arr[i].ph)
+       +(Math.random()-.5)*0.7)*dt+TAU*2)%TAU;}
+  }
+}
+function clock(x,y,ph,a,col,sz){
+  const s=.5+.5*Math.sin(ph),on=a>0.10;
+  if(on&&sz>2.4){ctx.shadowColor=col;ctx.shadowBlur=2+s*11*Math.min(1,a*2);}
+  ctx.beginPath();ctx.arc(x,y,sz*(0.60+0.42*s),0,TAU);
+  ctx.fillStyle=on?rgba(col,.16+s*.66*Math.min(1,a*2.2)):rgba(C.idle,.05+s*.07);
+  ctx.fill();ctx.shadowBlur=0;
+  ctx.beginPath();ctx.arc(x,y,sz*(0.60+0.42*s),0,TAU);ctx.lineWidth=.8;
+  ctx.strokeStyle=on?rgba(col,.5+s*.5):rgba(C.idle,.22);ctx.stroke();
+  if(sz>2.6){ctx.beginPath();ctx.moveTo(x,y);
+   ctx.lineTo(x+Math.cos(ph)*sz,y+Math.sin(ph)*sz);
+   ctx.strokeStyle=rgba(C.ink,on?.5:.1);ctx.lineWidth=.8;ctx.stroke();}
+}
+
+/* ---------------- layout ---------------- */
+let W=0,H=0,DPR=1;
+function resize(){const r=cv.getBoundingClientRect();DPR=Math.min(devicePixelRatio||1,2);
+ W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+const yV=0.30, yD=0.74, ySplit=0.52;      // ventral row, dorsal row, shared row
+
+function sampleMap(map,n,g){const out=[],st=g/n;
+ for(let j=0;j<n;j++)for(let i=0;i<n;i++){let s=0,c=0;
+  for(let b=0;b<st;b++)for(let a=0;a<st;a++){const x=Math.floor(i*st+a),y=Math.floor(j*st+b);
+   if(x<g&&y<g){s+=map[y*g+x];c++;}}
+  out.push(c?s/c:0);}
+ return out;}
+
+function vals(){
+  if(!TGT)return{};
+  const v={};
+  const on=sampleMap(TGT.R.on,8,N),off=sampleMap(TGT.R.off,8,N);
+  v.retina=on.map((x,i)=>Math.min(1,(x+off[i])*7));
+  const lon=sampleMap(TGT.L.on,8,N),loff=sampleMap(TGT.L.off,8,N);
+  v.lgn=lon.map((x,i)=>Math.min(1,(x+loff[i])*2.2));
+  const a=[],b=[],stC=NC/3;
+  for(let j=0;j<3;j++)for(let i=0;i<3;i++)for(let o=0;o<NORI;o++){
+    let e=0,n=0;
+    for(let q=0;q<stC;q++)for(let p=0;p<stC;p++){
+      const x=Math.floor(i*stC+p),y=Math.floor(j*stC+q);
+      if(x<NC&&y<NC){e+=TGT.C[o][y*NC+x];n++;}}
+    const val=Math.min(1,(n?e/n:0)*9);a.push(val);b.push(val);}
+  v.v1=a;v.v1c=b;
+  const v2v=[];
+  for(let j=0;j<6;j++)for(let i=0;i<6;i++){
+    const x=Math.floor(i*V2N/6),y=Math.floor(j*V2N/6),gi=y*V2N+x;
+    const D6=TGT.V&&TGT.V.D60?TGT.V.D60[gi]:0, D9=TGT.V&&TGT.V.D90?TGT.V.D90[gi]:0;
+    v2v.push(Math.min(1,(D6+D9)*14));}
+  v.v2=v2v;
+  // direction-selective V1 cells: NORI x 2 directions
+  const dv=[];let mx=1e-9;
+  const E=Array.isArray(TGT.E)?TGT.E:[];
+  const Eo=o=>Array.isArray(E[o])?E[o]:[0,0];
+  for(let o=0;o<NORI;o++)for(let k=0;k<2;k++) mx=Math.max(mx,Eo(o)[k]||0);
+  for(let o=0;o<NORI;o++)for(let k=0;k<2;k++) dv.push((Eo(o)[k]||0)/mx);
+  v.dir=dv;
+  const mtv=[];let mm=1e-9;
+  const MP=(TGT.MT&&TGT.MT.P)?TGT.MT.P:new Float64Array(NDIR);
+  for(let d=0;d<NDIR;d++) mm=Math.max(mm,MP[d]||0);
+  for(let d=0;d<NDIR;d++) mtv.push((MP[d]||0)/mm);
+  v.mt=mtv;
+  v.v3=Array.from({length:16},()=>(TGT.V3?TGT.V3.consistency:0));
+  v.dec=(TGT.dec&&TGT.dec.state)?TGT.dec.state:[0,0,0];
+  return v;
+}
+
+function label(x,y,t,sub,col,a){
+  ctx.textAlign='center';ctx.font='600 9.5px '+FD;ctx.fillStyle=rgba(C.ink,0.30+a*0.7);
+  ctx.fillText(t,x,y);
+  ctx.font='500 7.5px '+FM;ctx.fillStyle=rgba(col,0.30+a*0.5);ctx.fillText(sub,x,y+13);
+}
+function arrow(x1,y1,x2,y2,col,a,w){
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);
+  ctx.strokeStyle=rgba(col,a);ctx.lineWidth=w;ctx.stroke();
+  const ang=Math.atan2(y2-y1,x2-x1);
+  ctx.beginPath();ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-Math.cos(ang-0.4)*8,y2-Math.sin(ang-0.4)*8);
+  ctx.lineTo(x2-Math.cos(ang+0.4)*8,y2-Math.sin(ang+0.4)*8);
+  ctx.closePath();ctx.fillStyle=rgba(col,a+0.2);ctx.fill();
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  if(bootErr){ctx.textAlign='left';ctx.font='600 12px '+FM;
+   ctx.fillStyle='#ff6b6b';ctx.fillText('model error: '+bootErr.message,24,40);
+   ctx.font='500 10px '+FM;ctx.fillStyle='#8a99b6';
+   ctx.fillText('try Recompute, or reduce size / noise',24,58);return;}
+  const V=vals();
+  const X={ret:0.085,lgn:0.205,v1:0.335,v1c:0.50,v2:0.645,dec:0.79,
+           dir:0.50,v3:0.645,mt:0.80};
+  const yS=H*ySplit,yVv=H*yV,yDd=H*yD;
+  // stream arrows
+  arrow(X.ret*W+W*0.045,yS,X.lgn*W-W*0.042,yS,C.LGN,0.5,2);
+  arrow(X.lgn*W+W*0.045,yS,X.v1*W-W*0.042,yS,C.S,0.5,2);
+  arrow(X.v1*W+W*0.04,yS-8,X.v1c*W-W*0.045,yVv+H*0.09,C.CX,0.45,2);
+  arrow(X.v1*W+W*0.04,yS+8,X.dir*W-W*0.045,yDd-H*0.09,C.DIR,0.45,2);
+  arrow(X.v1c*W+W*0.045,yVv,X.v2*W-W*0.042,yVv,C.V2A,0.45,2);
+  arrow(X.v2*W+W*0.045,yVv,X.dec*W-W*0.04,yVv,C.DEC,0.45,2);
+  arrow(X.dir*W+W*0.045,yDd,X.v3*W-W*0.042,yDd,C.V3,0.45,2);
+  arrow(X.v3*W+W*0.045,yDd,X.mt*W-W*0.045,yDd,C.MT,0.45,2);
+  ctx.font='600 8px '+FM;ctx.textAlign='left';
+  ctx.fillStyle=rgba(C.CX,.55);ctx.fillText('VENTRAL — what',W*0.40,yVv-H*0.115);
+  ctx.fillStyle=rgba(C.DIR,.55);ctx.fillText('DORSAL — where / how fast',W*0.40,yDd+H*0.135);
+
+  // retina + LGN (shared)
+  [['retina',X.ret,'RETINA','ON / OFF ganglion',C.RET],
+   ['lgn',X.lgn,'LGN','relay + surround',C.LGN]].forEach(([k,xx,t,sub,col])=>{
+    const cx=xx*W,sz=Math.min(W*0.0068,6.5),gap=sz*3.1;
+    label(cx,yS-H*0.115,t,sub,col,1);
+    for(let j=0;j<8;j++)for(let i=0;i<8;i++)
+      clock(cx+(i-3.5)*gap,yS+(j-3.5)*gap,CK[k][j*8+i].ph,(V[k]||[])[j*8+i]||0,col,sz);
+  });
+  // V1 (shared) — orientation pinwheels
+  {
+    const cx=X.v1*W,sz=Math.min(W*0.0046,4.4),R0=Math.min(W*0.026,26),gap=R0*2.3;
+    label(cx,yS-H*0.115,'V1','simple + complex',C.S,1);
+    for(let j=0;j<3;j++)for(let i=0;i<3;i++){
+      const ox=cx+(i-1)*gap,oy=yS+(j-1)*gap;
+      for(let o=0;o<NORI;o++){
+        const th=o*Math.PI/NORI,idx=(j*3+i)*NORI+o,a=(V.v1||[])[idx]||0;
+        clock(ox+Math.cos(th)*R0*0.66,oy+Math.sin(th)*R0*0.66,CK.v1[idx].ph,a,C.S,sz);
+        clock(ox-Math.cos(th)*R0*0.66,oy-Math.sin(th)*R0*0.66,CK.v1[idx].ph,a,C.S,sz*0.8);
+      }
+    }
+  }
+  // ---- transthalamic route: V1 -> pulvinar -> V2, gated by TRN
+  {
+    const px=(X.v1c+X.v2)/2*W, py=yVv+H*0.185;
+    const on=PU.on;
+    // parallel route arrows, bypassing the direct corticocortical link
+    ctx.beginPath();ctx.moveTo(X.v1c*W+W*0.02,yVv+H*0.055);
+    ctx.quadraticCurveTo(px-W*0.05,py,px-W*0.032,py);
+    ctx.strokeStyle=rgba(C.PUL,on?.5:.10);ctx.lineWidth=on?2:1;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(px+W*0.032,py);
+    ctx.quadraticCurveTo(px+W*0.05,py,X.v2*W-W*0.02,yVv+H*0.055);
+    ctx.strokeStyle=rgba(C.PUL,on?.5:.10);ctx.lineWidth=on?2:1;ctx.stroke();
+    label(px,py-H*0.075,'PULVINAR','transthalamic route',C.PUL,on?1:.35);
+    // 5x5 pulvinar sheet, brightness = local V1 drive x lambda
+    const sz=Math.min(W*0.0058,5.6),gap=sz*3.2;
+    for(let j=0;j<5;j++)for(let i=0;i<5;i++){
+      const gx=Math.floor((i+0.5)*NC/5),gy=Math.floor((j+0.5)*NC/5),gi=gy*NC+gx;
+      let e=0;if(TGT)for(let o=0;o<NORI;o++)e+=TGT.Craw[o][gi];
+      const lamv=(TGT&&TGT.lam)?TGT.lam[gi]:0;
+      const a=on?Math.min(1,e*7*(0.15+lamv)):0;
+      clock(px+(i-2)*gap,py+(j-2)*gap,CK.pul[j*5+i].ph,a,C.PUL,sz);
+    }
+    // TRN shell
+    const tx=px-W*0.075;
+    ctx.beginPath();ctx.arc(tx,py,Math.min(W*0.016,16),0,TAU);
+    ctx.fillStyle=rgba(C.TRN,on?.12:.03);ctx.fill();
+    ctx.strokeStyle=rgba(C.TRN,on?.7:.18);ctx.lineWidth=1.6;ctx.stroke();
+    ctx.textAlign='center';ctx.font='600 8px '+FM;ctx.fillStyle=rgba(C.TRN,on?.9:.3);
+    ctx.fillText('TRN',tx,py+3);
+    ctx.font='500 7px '+FM;ctx.fillStyle=rgba(C.muted,.55);
+    ctx.fillText('sets λ',tx,py+Math.min(W*0.016,16)+11);
+    if(on){ // attention marker on the cortical map
+      ctx.beginPath();ctx.arc(X.v1c*W+PU.ax*W*0.06,yVv+PU.ay*H*0.06,Math.min(W*0.02,20),0,TAU);
+      ctx.setLineDash([3,3]);ctx.strokeStyle=rgba(C.TRN,.5);ctx.lineWidth=1.4;ctx.stroke();ctx.setLineDash([]);
+    }
+  }
+  // ---- ventral: V1 complex, V2, decision
+  {
+    const cx=X.v1c*W,sz=Math.min(W*0.0046,4.4),R0=Math.min(W*0.024,24),gap=R0*2.3;
+    label(cx,yVv-H*0.105,'V1 COMPLEX','phase invariant',C.CX,1);
+    for(let j=0;j<2;j++)for(let i=0;i<2;i++){
+      const ox=cx+(i-0.5)*gap,oy=yVv+(j-0.5)*gap;
+      for(let o=0;o<NORI;o++){
+        const th=o*Math.PI/NORI,idx=(j*3+i)*NORI+o,a=(V.v1c||[])[idx]||0;
+        clock(ox+Math.cos(th)*R0*0.66,oy+Math.sin(th)*R0*0.66,CK.v1c[idx].ph,a,C.CX,sz);
+        clock(ox-Math.cos(th)*R0*0.66,oy-Math.sin(th)*R0*0.66,CK.v1c[idx].ph,a,C.CX,sz*0.8);
+      }
+    }
+  }
+  {
+    const cx=X.v2*W,sz=Math.min(W*0.0062,6),gap=sz*3.3;
+    label(cx,yVv-H*0.105,'V2','angle / corner cells',C.V2A,1);
+    for(let j=0;j<6;j++)for(let i=0;i<6;i++){
+      const idx=j*6+i,x=Math.floor(i*V2N/6),y=Math.floor(j*V2N/6),gi=y*V2N+x;
+      const c60=TGT?TGT.V.D60[gi]:0,c90=TGT?TGT.V.D90[gi]:0;
+      clock(cx+(i-2.5)*gap,yVv+(j-2.5)*gap,CK.v2[idx].ph,(V.v2||[])[idx]||0,
+        c90>=c60?C.V2A:C.V2B,sz);
+    }
+  }
+  {
+    const cx=X.dec*W,sz=Math.min(W*0.0095,9),names=['SQUARE','TRIANGLE','CIRCLE'];
+    label(cx,yVv-H*0.105,'SHAPE','competition',C.DEC,1);
+    for(let i=0;i<3;i++){
+      const y=yVv+(i-1)*H*0.075;
+      clock(cx,y,CK.dec[i].ph,(V.dec||[])[i]||0,C.DEC,sz);
+      ctx.font='600 8px '+FM;ctx.textAlign='center';
+      ctx.fillStyle=rgba(C.ink,0.22+((V.dec||[])[i]||0)*0.78);
+      ctx.fillText(names[i],cx+sz*3.6,y+3);
+    }
+  }
+  // ---- tectopulvinar route in the dorsal stream
+  {
+    const sx=X.dir*W-W*0.055, sy=yDd+H*0.20, on=DP.tecto;
+    label(sx,sy-H*0.055,'SC → PULVINAR','tectopulvinar route',C.SC,on?1:.3);
+    ctx.beginPath();ctx.arc(sx,sy,Math.min(W*0.019,19),0,TAU);
+    ctx.fillStyle=rgba(C.SC,on?.14:.03);ctx.fill();
+    ctx.strokeStyle=rgba(C.SC,on?.75:.18);ctx.lineWidth=1.8;ctx.stroke();
+    let scE=0;if(TGTesc)for(let o=0;o<NORI;o++)scE+=TGTesc[o][0]+TGTesc[o][1];
+    ctx.textAlign='center';ctx.font='600 8px '+FM;ctx.fillStyle=rgba(C.SC,on?.95:.3);
+    ctx.fillText('SC',sx,sy+3);
+    // bypass arrow: retina straight to SC, skipping V1
+    ctx.beginPath();ctx.moveTo(X.ret*W,yS+H*0.06);
+    ctx.quadraticCurveTo(W*0.28,sy+H*0.05,sx-W*0.022,sy);
+    ctx.setLineDash([5,4]);
+    ctx.strokeStyle=rgba(C.SC,on?.42:.08);ctx.lineWidth=on?2:1;ctx.stroke();ctx.setLineDash([]);
+    // SC -> MT
+    ctx.beginPath();ctx.moveTo(sx+W*0.022,sy);
+    ctx.quadraticCurveTo(X.mt*W-W*0.09,sy,X.mt*W-W*0.05,yDd+H*0.045);
+    ctx.strokeStyle=rgba(C.SC,on?.5:.08);ctx.lineWidth=on?2.2:1;ctx.stroke();
+    if(DP.v1lesion){   // strike out the cortical route into MT
+      const ax=X.dir*W+W*0.05,ay=yDd;
+      ctx.beginPath();ctx.moveTo(ax-14,ay-14);ctx.lineTo(ax+14,ay+14);
+      ctx.moveTo(ax+14,ay-14);ctx.lineTo(ax-14,ay+14);
+      ctx.strokeStyle=rgba('#ff3b3b',.9);ctx.lineWidth=3;ctx.stroke();
+      ctx.font='600 8px '+FM;ctx.textAlign='center';ctx.fillStyle=rgba('#ff3b3b',.9);
+      ctx.fillText('V1 LESION',ax,ay+30);
+    }
+  }
+  // ---- dorsal: V1 direction, V3, MT
+  {
+    const cx=X.dir*W,R0=Math.min(W*0.045,46),sz=Math.min(W*0.0055,5.4);
+    label(cx,yDd-H*0.105,'V1 DIRECTION','component motion',C.DIR,1);
+    for(let o=0;o<NORI;o++)for(let k=0;k<2;k++){
+      const ang=o*Math.PI/NORI+(k?Math.PI:0),idx=o*2+k;
+      clock(cx+Math.cos(ang)*R0,yDd+Math.sin(ang)*R0,CK.dir[idx].ph,(V.dir||[])[idx]||0,C.DIR,sz);
+    }
+    ctx.beginPath();ctx.arc(cx,yDd,R0,0,TAU);
+    ctx.strokeStyle=rgba(C.DIR,.10);ctx.lineWidth=1;ctx.stroke();
+  }
+  {
+    const cx=X.v3*W,sz=Math.min(W*0.0068,6.6),gap=sz*3.3;
+    label(cx,yDd-H*0.105,'V3','form × motion',C.V3,1);
+    for(let j=0;j<4;j++)for(let i=0;i<4;i++)
+      clock(cx+(i-1.5)*gap,yDd+(j-1.5)*gap,CK.v3[j*4+i].ph,(V.v3||[])[j*4+i]||0,C.V3,sz);
+  }
+  {
+    const cx=X.mt*W,R0=Math.min(W*0.050,52),sz=Math.min(W*0.0072,7);
+    label(cx,yDd-H*0.105,'V5 / MT','pattern direction',C.MT,1);
+    ctx.beginPath();ctx.arc(cx,yDd,R0,0,TAU);
+    ctx.strokeStyle=rgba(C.MT,.12);ctx.lineWidth=1;ctx.stroke();
+    for(let d=0;d<NDIR;d++){
+      const ang=d*TAU/NDIR;
+      clock(cx+Math.cos(ang)*R0,yDd+Math.sin(ang)*R0,CK.mt[d].ph,(V.mt||[])[d]||0,C.MT,sz);
+    }
+    if(TGT&&TGT.MT.coherence>0.02){
+      const a=TGT.MT.dir,L=R0*0.82*Math.min(1,TGT.MT.coherence*1.6);
+      arrow(cx,yDd,cx+Math.cos(a)*L,yDd+Math.sin(a)*L,C.MT,0.85,2.5);
+    }
+    if(MO.type!=='static'){
+      const a=MO.type==='rotate'?null:MO.dir*D2R;
+      if(a!==null){
+        ctx.setLineDash([4,4]);
+        ctx.beginPath();ctx.moveTo(cx,yDd);
+        ctx.lineTo(cx+Math.cos(a)*R0*0.95,yDd+Math.sin(a)*R0*0.95);
+        ctx.strokeStyle=rgba(C.ink,.35);ctx.lineWidth=1.4;ctx.stroke();ctx.setLineDash([]);
+        ctx.font='500 7px '+FM;ctx.textAlign='center';ctx.fillStyle=rgba(C.ink,.45);
+        ctx.fillText('true',cx+Math.cos(a)*R0*1.22,yDd+Math.sin(a)*R0*1.22+3);
+      }
+    }
+  }
+  // stimulus thumbnail (animated through the motion phases)
+  if(frames&&frames.length){
+    const s=Math.min(W*0.085,92),x0=W*0.018,y0=H*0.035,px=s/NM;
+    const fi=((Math.floor(phase)%frames.length)+frames.length)%frames.length;
+    const f=frames[fi];
+    if(!f||!f.length) return;
+    for(let y=0;y<NM;y++)for(let x=0;x<NM;x++){
+      const v=Math.abs(f[y*NM+x]);if(v<0.02)continue;
+      ctx.fillStyle=rgba(C.RET,0.10+Math.min(1,v*3)*0.75);
+      ctx.fillRect(x0+x*px,y0+y*px,Math.ceil(px),Math.ceil(px));}
+    ctx.strokeStyle=rgba(C.faint,.3);ctx.lineWidth=1;ctx.strokeRect(x0,y0,s,s);
+  }
+}
+
+/* ---------------- UI ---------------- */
+const SH=['square','triangle','circle','bar'];
+const shw=$('shapes');
+SH.forEach(k=>{const b=document.createElement('button');b.textContent=k;b.dataset.k=k;
+ b.onclick=()=>{ST.kind=k;[...shw.children].forEach(c=>c.classList.toggle('on',c.dataset.k===k));go();};
+ shw.appendChild(b);});
+const MT_=['static','translate','rotate'];
+const mtw=$('mtypes');
+MT_.forEach(k=>{const b=document.createElement('button');b.textContent=k;b.dataset.k=k;
+ b.onclick=()=>{MO.type=k;[...mtw.children].forEach(c=>c.classList.toggle('on',c.dataset.k===k));go();};
+ mtw.appendChild(b);});
+function bind(id,vid,fmt,set){const el=$(id),vl=$(vid);
+ el.oninput=()=>{const v=parseFloat(el.value);set(v);vl.textContent=fmt(v);};
+ el.onchange=()=>go(); vl.textContent=fmt(parseFloat(el.value));}
+bind('s-rot','v-rot',v=>(v*R2D).toFixed(0)+'°',v=>ST.rot=v);
+bind('s-size','v-size',v=>v.toFixed(2),v=>ST.size=v);
+bind('s-noise','v-noise',v=>v.toFixed(2),v=>ST.noise=v);
+bind('s-dir','v-dir',v=>v.toFixed(0)+'°',v=>MO.dir=v);
+bind('s-spd','v-spd',v=>v.toFixed(2),v=>MO.speed=v);
+bind('pu-x','v-px',v=>v.toFixed(2),v=>PU.ax=v);
+bind('pu-s','v-ps',v=>v.toFixed(1),v=>PU.sig=v);
+bind('pu-j','v-pj',v=>v.toFixed(1),v=>PU.dJ=v);
+$('pu-on').onchange=e=>{PU.on=e.target.checked;go();};
+bind('dp-w','v-dw',v=>v.toFixed(1),v=>DP.wPulv=v);
+$('dp-t').onchange=e=>{DP.tecto=e.target.checked;go();};
+$('dp-l').onchange=e=>{DP.v1lesion=e.target.checked;go();};
+let PLAY=0.25;
+$('s-play').oninput=e=>{PLAY=parseFloat(e.target.value);$('v-play').textContent=PLAY.toFixed(2)+'x';};
+$('b-go').onclick=()=>go();
+let busy=false;
+function go(){
+  if(busy)return; busy=true; $('busy').classList.add('on');
+  setTimeout(()=>{try{recompute();bootErr=null;}catch(e){bootErr=e;console.error(e);}
+    busy=false;$('busy').classList.remove('on');updateUI();},20);
+}
+function angErr(a,b){let d=Math.abs(a-b)%360;return d>180?360-d:d;}
+function updateUI(){
+  if(!TGT)return;
+  const names=['square','triangle','circle'];
+  const st=TGT.dec.state;let mi=0;for(let i=1;i<3;i++)if(st[i]>st[mi])mi=i;
+  const known=ST.kind!=='bar';
+  const conf=Math.max(...st);
+  if(conf<0.12){
+    $('verdict').innerHTML='NO PERCEPT<small>'+(TGT.v1lesion
+      ? 'V1 lesioned — the ventral stream has no subcortical bypass'
+      : 'insufficient evidence')+'</small>';
+  } else
+  $('verdict').innerHTML=names[mi].toUpperCase()+'<small>confidence '+TGT.dec.margin.toFixed(2)+
+    (known?(names[mi]===ST.kind?' · correct':' · MISCLASSIFIED'):' · (bar: no target class)')+'</small>';
+  const f=TGT.f;
+  $('feat').innerHTML=
+   '<div><span>corner 90°</span><b>'+f.corner90.toFixed(4)+'</b></div>'+
+   '<div><span>corner 60°</span><b>'+f.corner60.toFixed(4)+'</b></div>'+
+   '<div><span>orientation entropy</span><b>'+f.entropy.toFixed(3)+'</b></div>';
+  const dirDeg=((TGT.MT.dir*R2D)%360+360)%360;
+  $('mtdir').textContent=MO.type==='static'?'—':dirDeg.toFixed(0)+'°';
+  const err=(MO.type==='translate')?angErr(dirDeg,MO.dir):null;
+  $('mtfeat').innerHTML=
+   '<div><span>MT coherence</span><b>'+TGT.MT.coherence.toFixed(3)+'</b></div>'+
+   '<div><span>V3 form/motion consistency</span><b>'+TGT.V3.consistency.toFixed(3)+'</b></div>'+
+   '<div><span>orientations carrying motion</span><b>'+TGT.V3.activeOri+'</b></div>'+
+   (err!==null?'<div><span>error vs true direction</span><b>'+err.toFixed(0)+'°</b></div>':'');
+  $('pnote').innerHTML = PU.on
+    ? 'Gate ON. J<sub>eff</sub> = J<sub>direct</sub> + δJ·λ(x). <b>Measured: this does not improve accuracy on an isolated shape</b> — with one object there is nothing to select between (Desimone: pulvinar lesions impair discrimination only when distractors are present).'
+    : 'Gate OFF — pure corticocortical V1→V2. Turn it on and compare: the honest result is that it changes nothing here, which is the point.';
+  $('dnote').innerHTML = DP.v1lesion
+    ? (DP.tecto
+       ? '<b>Blindsight.</b> V1 is lesioned, yet MT still recovers direction through SC→pulvinar→MT. Shape recognition collapses — the ventral stream has no such bypass. This dissociation is Riddoch\'s phenomenon: motion survives cortical blindness because direction does not need V1\'s fine spatial detail.'
+       : '<b>V1 and tectopulvinar both cut.</b> MT coherence falls to zero — no residual vision.')
+    : 'Both routes intact. Here the higher-order thalamus supplies an <b>alternative route</b>, not just gain — which is why it does something the ventral gate could not.';
+  let t;
+  if(MO.type==='static') t='No motion: the dorsal stream is silent. Ventral recognition is unaffected — <b>form and motion are computed separately</b>.';
+  else if(ST.kind==='bar') t='<span class="w">Aperture problem.</span> A single bar carries one orientation, so every V1 component signals the direction <b>perpendicular to the bar</b>. MT has nothing to integrate and inherits that bias.';
+  else t='Each V1 component signals only the motion perpendicular to its own contour. MT sums them with a cosine weighting and the population vector recovers the <b>true</b> direction.';
+  $('note').innerHTML=t;
+}
+let last=performance.now(),ui=0,acc=0;
+function frame(now){
+  let dt=(now-last)/1000;last=now;dt=Math.min(dt,0.05);
+  if(frames&&frames.length>1){acc+=dt*PLAY*14;phase=(acc)%frames.length;}
+  stepClocks(dt*PLAY*6,vals());
+  draw();
+  ui+=dt;if(ui>0.15){ui=0;updateUI();}
+  requestAnimationFrame(frame);
+}
+addEventListener('resize',resize);
+resize();
+[...shw.children][0].classList.add('on');
+[...mtw.children][1].classList.add('on');
+try{recompute();updateUI();}catch(e){bootErr=e;console.error(e);}
+requestAnimationFrame(frame);
+})();
+</script></body></html>

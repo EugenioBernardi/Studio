@@ -198,6 +198,17 @@ direction). No speed tuning, no MST/optic flow.
 
 **Higher-order thalamus** — four experiments, all negative. Read
 `HIGHER-ORDER-THALAMUS.md` before touching this; the failure modes are characterised.
+The **pulvinar app** (`apps/visual-cortex-pulvinar.html`) is the ventral+dorsal streams
+model plus two transthalamic routes that *do* work as demonstrations: a ventral gain gate
+`J_eff(x)=J_direct+δJ·λ(x)` (Jaramillo/Mejias/Wang 2019) and a dorsal **tectopulvinar /
+blindsight** route (retina→SC→pulvinar→MT) that recovers motion direction with V1 lesioned.
+
+**Auditory cortex** (`apps/auditory-cortex.html`) — the visual STRF machinery re-cast onto a
+frequency×time cochleagram: ERB-spaced constant-Q cochlea → lateral suppression → MGv → A1
+oriented Gabors where **orientation = FM sweep direction** (Shamma ripple/modulation
+framework) → belt harmonic-template pitch. Classifies tone / harmonic / noise / up- and
+down-sweep / AM. Same clocks, different axes. (Note: tone vs harmonic complex is not
+resolved at 40 channels — a known limit.)
 
 ---
 

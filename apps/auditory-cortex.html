@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Auditory Cortex — Cochlea to Belt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#060911;--panel:rgba(13,19,33,.74);--line:rgba(120,150,200,.14);
+ --ink:#e4ebf7;--muted:#8a99b6;--faint:#4a5670;--idle:#41506e;
+ --COCH:#ffc861;--MGV:#56d4ff;--A1:#ff9d4d;--A1C:#3ee6b0;--BELT:#ff4d7d;--DEC:#9d8bff;
+ --good:#3ee6b0;--warn:#ff9d4d;--D:'Space Grotesk',system-ui,sans-serif;--M:'IBM Plex Mono',monospace;}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;font-family:var(--D);color:var(--ink);overflow:hidden;
+ background:radial-gradient(1300px 800px at 30% -15%,#0f1a2e 0,transparent 62%),
+ radial-gradient(900px 700px at 95% 115%,#0b1322 0,transparent 58%),var(--bg)}
+.app{display:grid;grid-template-columns:1fr 336px;height:100vh}
+.stage{position:relative;overflow:hidden;min-width:0}#cv{position:absolute;inset:0;width:100%;height:100%}
+.ttl{position:absolute;top:12px;left:18px;z-index:3;pointer-events:none;max-width:48%}
+.ttl h1{margin:0;font-size:13.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.ttl .s{margin-top:4px;font-family:var(--M);font-size:8.5px;color:var(--muted);line-height:1.5}
+.pan{background:linear-gradient(180deg,rgba(10,15,28,.93),rgba(8,12,22,.97));border-left:1px solid var(--line);
+ padding:12px 11px;overflow-y:auto;z-index:4;display:flex;flex-direction:column;gap:9px}
+.pan::-webkit-scrollbar{width:8px}.pan::-webkit-scrollbar-thumb{background:rgba(120,150,200,.18);border-radius:4px}
+.b{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
+.b h2{margin:0 0 7px;font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);font-weight:600;
+ display:flex;align-items:center;gap:6px}
+.b h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--MGV));box-shadow:0 0 8px var(--dot,var(--MGV))}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.g3 button{border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);font-family:var(--M);
+ font-size:9px;cursor:pointer;padding:8px 2px;border-radius:8px;transition:.15s}
+.g3 button:hover{color:var(--ink);border-color:rgba(86,212,255,.45)}
+.g3 button.on{background:rgba(86,212,255,.15);color:var(--ink);border-color:rgba(86,212,255,.5)}
+.sl{display:flex;align-items:center;gap:6px;margin-top:6px;font-family:var(--M);font-size:8.5px;color:var(--muted)}
+.sl .n{width:62px;flex:none}.sl input{flex:1;accent-color:var(--c,var(--MGV));min-width:0}
+.sl .v{width:48px;text-align:right;color:var(--ink);flex:none}
+.verdict{font-family:var(--D);font-size:17px;font-weight:700;letter-spacing:.05em;text-align:center;padding:8px;
+ border-radius:10px;margin-top:6px;background:rgba(157,139,255,.10);border:1px solid rgba(157,139,255,.30)}
+.verdict small{display:block;font-family:var(--M);font-size:8px;font-weight:400;color:var(--muted);margin-top:3px}
+.feat{display:flex;flex-direction:column;gap:3px;margin-top:5px;font-family:var(--M);font-size:8.5px;color:var(--muted)}
+.feat div{display:flex;justify-content:space-between}.feat b{color:var(--ink);font-weight:500}
+.note{font-family:var(--M);font-size:8.5px;line-height:1.5;color:var(--muted);margin-top:6px}
+.note b{color:var(--ink)}.note .w{color:var(--warn)}
+@media(max-width:1020px){.app{grid-template-columns:1fr;grid-template-rows:1fr auto}
+ .pan{border-left:0;border-top:1px solid var(--line);max-height:48vh}}
+</style></head><body>
+<div class="app"><div class="stage"><canvas id="cv"></canvas>
+ <div class="ttl"><h1>Auditory Cortex · Cochlea → Belt</h1>
+  <div class="s">A1 receptive fields are Gabors in <b>frequency × time</b> — "orientation" is FM sweep
+  direction.<br>Same machinery as the visual model, different axes.</div></div></div>
+ <aside class="pan">
+  <div class="b" style="--dot:var(--COCH)"><h2>Stimulus</h2>
+   <div class="g3" id="stim"></div>
+   <label class="sl" style="--c:var(--COCH)"><span class="n">f0</span>
+    <input id="s-f0" type="range" min="150" max="900" step="10" value="400"><span class="v" id="v-f0">400 Hz</span></label>
+   <label class="sl" style="--c:var(--COCH)"><span class="n">sweep</span>
+    <input id="s-sw" type="range" min="1.5" max="8" step="0.5" value="6"><span class="v" id="v-sw">6.0×</span></label>
+   <label class="sl" style="--c:var(--warn)"><span class="n">noise</span>
+    <input id="s-nz" type="range" min="0" max="0.6" step="0.05" value="0"><span class="v" id="v-nz">0.00</span></label>
+   <label class="sl"><span class="n">speed</span>
+    <input id="s-sp" type="range" min="0.05" max="1" step="0.05" value="0.3"><span class="v" id="v-sp">0.30×</span></label>
+  </div>
+  <div class="b" style="--dot:var(--DEC)"><h2>Belt readout</h2>
+   <div class="verdict" id="verdict">—</div>
+   <div class="feat" id="feat"></div>
+   <div class="note" id="note"></div>
+  </div>
+  <div class="b" style="--dot:var(--A1)"><h2>Circuit</h2>
+   <label class="sl" style="--c:var(--MGV)"><span class="n">lat. supp.</span>
+    <input id="s-li" type="range" min="0" max="1" step="0.05" value="0.55"><span class="v" id="v-li">0.55</span></label>
+   <label class="sl" style="--c:var(--A1)"><span class="n">STRF σ</span>
+    <input id="s-sig" type="range" min="1.6" max="4" step="0.2" value="2.6"><span class="v" id="v-sig">2.6</span></label>
+   <label class="sl" style="--c:var(--A1)"><span class="n">elongation</span>
+    <input id="s-gam" type="range" min="0.2" max="0.9" step="0.05" value="0.35"><span class="v" id="v-gam">0.35</span></label>
+   <div class="note">Elongation sets FM-rate tuning. The modulation spectrum below is the
+   auditory analogue of the orientation histogram: 90° = steady tone, &lt;90° and &gt;90° are
+   the two sweep directions.</div>
+  </div>
+ </aside></div>
+<script>
+"use strict";
+
+// Cochlea -> cochleagram (frequency x time), the auditory "image".
+const SR=16000, DUR=0.40, NCH=40, NT=48;
+const F_LO=120, F_HI=6000;
+// ERB-spaced characteristic frequencies (cochlear place code)
+const erb=f=>21.4*Math.log10(1+f*0.00437);
+const erbInv=e=>(Math.pow(10,e/21.4)-1)/0.00437;
+const CF=[...Array(NCH)].map((_,i)=>erbInv(erb(F_LO)+(erb(F_HI)-erb(F_LO))*i/(NCH-1)));
+
+/* ---------- stimuli ---------- */
+function synth(kind,{f0=440,noise=0,level=1,sweep=1.6,am=8}={}){
+  const n=Math.round(SR*DUR), x=new Float64Array(n);
+  for(let i=0;i<n;i++){
+    const t=i/SR; let v=0;
+    if(kind==='tone')      v=Math.sin(2*Math.PI*f0*t);
+    else if(kind==='harmonic'){                 // voiced: f0 + harmonics, 1/k amplitude
+      for(let k=1;k<=8;k++){const f=f0*k; if(f<SR/2) v+=Math.sin(2*Math.PI*f*t)/k;}
+      v/=2.0;
+    }
+    else if(kind==='noise') v=(Math.random()*2-1);
+    else if(kind==='up'||kind==='down'){         // linear FM chirp
+      const r=(kind==='up')?sweep:1/sweep;
+      const f1=f0, f2=f0*r;
+      const ph=2*Math.PI*(f1*t+(f2-f1)*t*t/(2*DUR));
+      v=Math.sin(ph);
+    }
+    else if(kind==='am')   v=(1+0.9*Math.sin(2*Math.PI*am*t))*Math.sin(2*Math.PI*f0*t)/2;
+    // onset/offset ramp (5 ms) so we do not measure clicks
+    const rp=0.005*SR;
+    const g=Math.min(1,Math.min(i,n-1-i)/rp);
+    x[i]=level*v*g;
+  }
+  if(noise>0)for(let i=0;i<n;i++)x[i]+=noise*(Math.random()*2-1);
+  return x;
+}
+/* ---------- constant-Q (cochlea-like) analysis ---------- */
+function cochleagram(x,{cycles=4,comp=0.30}={}){
+  const M=new Float64Array(NCH*NT);
+  const n=x.length;
+  for(let c=0;c<NCH;c++){
+    const fc=CF[c];
+    const w=Math.min(1024,Math.max(48,Math.round(cycles*SR/fc)));  // constant-Q window
+    for(let t=0;t<NT;t++){
+      const centre=Math.round((t+0.5)/NT*n);
+      let re=0,im=0,norm=0;
+      for(let k=-w>>1;k<w>>1;k++){
+        const idx=centre+k; if(idx<0||idx>=n) continue;
+        const hann=0.5-0.5*Math.cos(2*Math.PI*(k+(w>>1))/w);
+        const a=2*Math.PI*fc*k/SR;
+        re+=x[idx]*hann*Math.cos(a); im+=x[idx]*hann*Math.sin(a); norm+=hann;
+      }
+      const mag=Math.hypot(re,im)/(norm||1);
+      M[c*NT+t]=Math.pow(mag,comp);      // hair-cell compression
+    }
+  }
+  // normalise to peak 1
+  let mx=0;for(let i=0;i<M.length;i++)mx=Math.max(mx,M[i]);
+  if(mx>0)for(let i=0;i<M.length;i++)M[i]/=mx;
+  return M;
+}
+/* ---------- lateral suppression along frequency (cochlear nucleus) + MGv relay ---------- */
+function lateralInhibit(M,{k=0.55,sig=2.0}={}){
+  const out=new Float64Array(NCH*NT);
+  const w=[],K=Math.ceil(sig*2.5);
+  let s=0;for(let i=-K;i<=K;i++){const v=Math.exp(-i*i/(2*sig*sig));w.push(v);s+=v;}
+  for(let i=0;i<w.length;i++)w[i]/=s;
+  for(let t=0;t<NT;t++)for(let c=0;c<NCH;c++){
+    let sur=0;
+    for(let i=-K;i<=K;i++){const cc=Math.min(NCH-1,Math.max(0,c+i));sur+=w[i+K]*M[cc*NT+t];}
+    out[c*NT+t]=Math.max(0,M[c*NT+t]-k*sur);
+  }
+  let mx=0;for(let i=0;i<out.length;i++)mx=Math.max(mx,out[i]);
+  if(mx>0)for(let i=0;i<out.length;i++)out[i]/=mx;
+  return out;
+}
+
+
+// A1 spectrotemporal receptive fields = oriented Gabors on the cochleagram.
+// Orientation in (frequency x time) IS the FM sweep rate/direction; this is the
+// ripple / modulation-spectrum framework (Shamma, Chi & Ru).
+const NORI=12;                                  // 15 deg steps over 180 deg
+const ORI=[...Array(NORI).keys()].map(i=>i*Math.PI/NORI);
+
+function gabor(th,phase,{sigma=2.6,lambda=4.5,gamma=0.35}={}){
+  const k=Math.ceil(Math.max(sigma,sigma/gamma)*2.4),K=[];
+  const ct=Math.cos(th),st=Math.sin(th);let pos=0,neg=0;
+  for(let j=-k;j<=k;j++)for(let i=-k;i<=k;i++){
+    const X=i*ct+j*st,Y=-i*st+j*ct;
+    const g=Math.exp(-(X*X+gamma*gamma*Y*Y)/(2*sigma*sigma))*Math.cos(2*Math.PI*X/lambda+phase);
+    K.push({i,j,g});if(g>0)pos+=g;else neg-=g;}
+  const m=(pos+neg)/2||1;K.forEach(e=>e.g/=m);
+  return K;
+}
+let GK=ORI.map(th=>[gabor(th,0),gabor(th,Math.PI/2)]);
+function rebuild(p){GK=ORI.map(th=>[gabor(th,0,p),gabor(th,Math.PI/2,p)]);}
+
+// map index: [freqChannel][timeFrame]; i indexes TIME, j indexes FREQUENCY
+function conv(M,K){
+  const out=new Float64Array(NCH*NT);
+  for(let c=0;c<NCH;c++)for(let t=0;t<NT;t++){
+    let a=0;
+    for(const e of K){
+      const tt=t+e.i, cc=c+e.j;
+      if(tt<0||cc<0||tt>=NT||cc>=NCH) continue;
+      a+=e.g*M[cc*NT+tt];
+    }
+    out[c*NT+t]=a;
+  }
+  return out;
+}
+/* A1 simple -> complex (energy model, phase invariant), then divisive normalisation */
+function a1(M,{pw=2}={}){
+  const E=[];
+  for(let o=0;o<NORI;o++){
+    const a=conv(M,GK[o][0]), b=conv(M,GK[o][1]);
+    const e=new Float64Array(NCH*NT);
+    for(let i=0;i<NCH*NT;i++) e[i]=Math.pow(Math.sqrt(a[i]*a[i]+b[i]*b[i]),pw);
+    E.push(e);
+  }
+  for(let i=0;i<NCH*NT;i++){
+    let tot=0;for(let o=0;o<NORI;o++)tot+=E[o][i];
+    if(tot>0)for(let o=0;o<NORI;o++)E[o][i]/=(0.35+tot);
+  }
+  return E;
+}
+/* modulation spectrum = global "orientation" histogram */
+function modSpectrum(E){
+  const H=new Float64Array(NORI);let tot=0;
+  for(let o=0;o<NORI;o++){let s=0;for(let i=0;i<NCH*NT;i++)s+=E[o][i];H[o]=s;tot+=s;}
+  if(tot<=0)return{H,entropy:0,tot:0};
+  for(let o=0;o<NORI;o++)H[o]/=tot;
+  let e=0;for(let o=0;o<NORI;o++)if(H[o]>0)e-=H[o]*Math.log(H[o]);
+  return {H,entropy:e/Math.log(NORI),tot};
+}
+
+
+// Belt / "A2-A4": harmonic template matching (pitch) — the conjunction detector,
+// analogous to V2 angle cells. A voiced sound has energy at integer multiples of f0;
+// noise and pure tones do not.
+const chanNear=f=>{let b=0,bd=1e9;for(let c=0;c<NCH;c++){const d=Math.abs(Math.log(CF[c]/f));
+  if(d<bd){bd=d;b=c;}}return bd<0.12?b:-1;};   // within ~12% in log-frequency
+function spectralProfile(M){                    // time-averaged excitation pattern
+  const P=new Float64Array(NCH);
+  for(let c=0;c<NCH;c++){let s=0;for(let t=0;t<NT;t++)s+=M[c*NT+t];P[c]=s/NT;}
+  let mx=0;for(let c=0;c<NCH;c++)mx=Math.max(mx,P[c]);
+  if(mx>0)for(let c=0;c<NCH;c++)P[c]/=mx;
+  return P;
+}
+// spectral PEAKS, not raw excitation: a pure tone smears across several channels, so
+// template matching on the raw profile lets one partial satisfy many harmonic slots.
+function peaks(P,{thr=0.22}={}){
+  const pk=new Float64Array(P.length);
+  for(let c=1;c<P.length-1;c++)
+    if(P[c]>thr && P[c]>=P[c-1] && P[c]>=P[c+1]) pk[c]=P[c];
+  return pk;
+}
+function harmonicTemplates(M,{nH=6,f0lo:lo=100,f0hi:hi=900,steps=60}={}){
+  const P0=spectralProfile(M), P=peaks(P0);
+  const out=[];
+  for(let s=0;s<steps;s++){
+    const f0=lo*Math.pow(hi/lo,s/(steps-1));
+    // absolute score: missing harmonics count as ZERO, so a pure tone can never
+    // score like a full harmonic stack (this was the bug — dividing by `used` let
+    // a single partial match any template)
+    // require the fundamental region to be present (rejects subharmonic templates
+    // whose 3rd harmonic happens to land on the only real partial) and weight low
+    // harmonics more heavily, as harmonic-template pitch neurons do
+    let hit=0,filled=0,wsum=0,haveF0=false;
+    for(let k=1;k<=nH;k++){
+      const c=chanNear(f0*k); if(c<0) continue;
+      const v=Math.max(P[c],P[Math.max(0,c-1)]||0,P[Math.min(P.length-1,c+1)]||0);
+      const w=1/Math.sqrt(k);
+      hit+=w*v; wsum+=w;
+      if(v>0.22){ filled++; if(k===1) haveF0=true; }
+    }
+    const sc=(haveF0&&wsum>0)?hit/wsum:0;
+    out.push({f0,score:sc,filled});
+  }
+  let best=out[0];for(const o of out) if(o.score>best.score) best=o;
+  return {best,harmonicity:best.score,nPartials:best.filled,profile:P0,peaks:P,curve:out};
+}
+// spectral flatness: 1 = noise-like (flat), low = tonal
+function flatness(M){
+  const P=spectralProfile(M);
+  let g=0,a=0,n=0;
+  for(let c=0;c<NCH;c++){const v=P[c]+1e-6;g+=Math.log(v);a+=v;n++;}
+  return Math.exp(g/n)/(a/n);
+}
+
+
+(function(){
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const $=id=>document.getElementById(id);
+const CS=getComputedStyle(document.documentElement),cvar=n=>CS.getPropertyValue(n).trim();
+const C={};['COCH','MGV','A1','A1C','BELT','DEC','ink','faint','idle','muted','good','warn'].forEach(k=>C[k]=cvar('--'+k));
+const FM="'IBM Plex Mono',monospace",FD="'Space Grotesk',sans-serif";
+const TAU=Math.PI*2,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function rgba(h,a){h=h.replace('#','');if(h.length===3)h=h.split('').map(x=>x+x).join('');
+ return`rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;}
+
+const ST={kind:'tone',f0:400,sweep:6,noise:0};
+const PAR={li:0.55,sigma:2.6,gamma:0.35};
+let T=null;
+function recompute(){
+  rebuild({sigma:PAR.sigma,lambda:4.5,gamma:PAR.gamma});
+  const x=synth(ST.kind,{f0:ST.f0,sweep:ST.sweep,noise:ST.noise});
+  const raw=cochleagram(x);
+  const M=lateralInhibit(raw,{k:PAR.li});
+  const E=a1(M), S=modSpectrum(E);
+  const h=harmonicTemplates(M), fl=flatness(M);
+  const asym=(S.H[7]-S.H[5])/(S.H[7]+S.H[5]+1e-9);
+  let label,why;
+  if(fl>0.90){label='NOISE';why='Spectral flatness '+fl.toFixed(2)+' — energy uniform across the tonotopic axis. Same signature as the circle in the visual model: maximal entropy.';}
+  else if(asym>0.5){label='UP-SWEEP';why='A1 modulation energy tilted to >90° — Gabors oriented for rising FM. Sweep direction is literally orientation in the cochleagram.';}
+  else if(asym<-0.5){label='DOWN-SWEEP';why='A1 modulation energy tilted to <90° — falling FM.';}
+  else {label='STEADY';why='Energy concentrated at 90° (horizontal in frequency × time) = no frequency modulation. <span class="w">Tone vs harmonic complex is not resolved at 40 channels</span> — see note.';}
+  T={x,raw,M,E,S,h,fl,asym,label,why};
+}
+/* ---------- clocks ---------- */
+function mkC(n){return Array.from({length:n},()=>({ph:Math.random()*TAU,f:0.9+Math.random()*0.22}));}
+const NCLK_COCH=NCH, NMG=20, NA1=NORI, NBELT=10;
+const CK={coch:mkC(NCLK_COCH),mgv:mkC(NMG),a1:mkC(NA1),belt:mkC(NBELT),dec:mkC(4)};
+function stepClocks(dt,v){
+ for(const k in CK){const arr=CK[k],val=v[k]||[];
+  let sx=0,sy=0,n=0;
+  for(let i=0;i<arr.length;i++){const a=val[i]||0;if(a>0.12){sx+=Math.cos(arr[i].ph)*a;sy+=Math.sin(arr[i].ph)*a;n+=a;}}
+  const mp=n>0?Math.atan2(sy/n,sx/n):0;
+  for(let i=0;i<arr.length;i++){const a=val[i]||0;
+   arr[i].ph=(arr[i].ph+(TAU*(1.5+6.5*a)*arr[i].f+7.5*a*Math.sin(mp-arr[i].ph)+(Math.random()-.5)*0.7)*dt+TAU*2)%TAU;}}}
+function clock(x,y,ph,a,col,sz){
+ const s=.5+.5*Math.sin(ph),on=a>0.10;
+ if(on&&sz>2.4){ctx.shadowColor=col;ctx.shadowBlur=2+s*11*Math.min(1,a*2);}
+ ctx.beginPath();ctx.arc(x,y,sz*(0.6+0.42*s),0,TAU);
+ ctx.fillStyle=on?rgba(col,.16+s*.66*Math.min(1,a*2.2)):rgba(C.idle,.05+s*.07);ctx.fill();ctx.shadowBlur=0;
+ ctx.beginPath();ctx.arc(x,y,sz*(0.6+0.42*s),0,TAU);ctx.lineWidth=.8;
+ ctx.strokeStyle=on?rgba(col,.5+s*.5):rgba(C.idle,.22);ctx.stroke();
+ if(sz>2.6){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(ph)*sz,y+Math.sin(ph)*sz);
+  ctx.strokeStyle=rgba(C.ink,on?.5:.1);ctx.lineWidth=.8;ctx.stroke();}}
+
+let W=0,H=0,DPR=1;
+function resize(){const r=cv.getBoundingClientRect();DPR=Math.min(devicePixelRatio||1,2);
+ W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+function vals(){
+ if(!T)return{};
+ const v={};
+ const prof=spectralProfile(T.M);
+ v.coch=Array.from(prof).map(p=>Math.min(1,p*1.4));
+ v.mgv=[...Array(NMG)].map((_,i)=>{const c=Math.floor(i*NCH/NMG);return Math.min(1,prof[c]*1.4);});
+ v.a1=[...Array(NORI)].map((_,o)=>Math.min(1,T.S.H[o]*NORI*0.9));
+ const hc=Math.min(1,T.h.harmonicity*1.4);
+ v.belt=[...Array(NBELT)].map((_,i)=>i<3?hc:(i<6?Math.min(1,T.fl):Math.min(1,Math.abs(T.asym))));
+ const lbls=['NOISE','UP-SWEEP','DOWN-SWEEP','STEADY'];
+ v.dec=lbls.map(l=>l===T.label?1:0.05);
+ return v;
+}
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ if(!T)return;
+ const V=vals();
+ const X={coch:0.115,mgv:0.30,a1:0.50,belt:0.70,dec:0.885};
+ const yM=H*0.52;
+ // arrows
+ const arr=(a,b,col,al)=>{const x1=a*W+W*0.055,x2=b*W-W*0.05;
+  ctx.beginPath();ctx.moveTo(x1,yM);ctx.lineTo(x2,yM);ctx.strokeStyle=rgba(col,al);ctx.lineWidth=2;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x2,yM);ctx.lineTo(x2-7,yM-4);ctx.lineTo(x2-7,yM+4);ctx.closePath();
+  ctx.fillStyle=rgba(col,al+0.2);ctx.fill();};
+ arr(X.coch,X.mgv,C.MGV,.45);arr(X.mgv,X.a1,C.A1,.45);arr(X.a1,X.belt,C.BELT,.45);arr(X.belt,X.dec,C.DEC,.45);
+ const lab=(x,t,s,col)=>{ctx.textAlign='center';ctx.font='600 10px '+FD;ctx.fillStyle=rgba(C.ink,.9);
+  ctx.fillText(t,x*W,H*0.155);ctx.font='500 7.5px '+FM;ctx.fillStyle=rgba(col,.7);ctx.fillText(s,x*W,H*0.172);};
+ lab(X.coch,'COCHLEA','tonotopic · 40 ch',C.COCH);
+ lab(X.mgv,'MGv','lemniscal relay',C.MGV);
+ lab(X.a1,'A1','STRF · modulation',C.A1);
+ lab(X.belt,'BELT','harmonic templates',C.BELT);
+ lab(X.dec,'IDENTITY','competition',C.DEC);
+ // cochleagram image
+ {const w=W*0.135,h=H*0.42,x0=X.coch*W-w/2,y0=yM-h/2;
+  const pw=w/NT,ph=h/NCH;
+  for(let c=0;c<NCH;c++)for(let t=0;t<NT;t++){
+   const v2=T.M[c*NT+t];if(v2<0.04)continue;
+   ctx.fillStyle=rgba(C.COCH,0.06+Math.min(1,v2)*0.8);
+   ctx.fillRect(x0+t*pw,y0+(NCH-1-c)*ph,Math.ceil(pw),Math.ceil(ph));}
+  ctx.strokeStyle=rgba(C.faint,.3);ctx.lineWidth=1;ctx.strokeRect(x0,y0,w,h);
+  ctx.textAlign='right';ctx.font='500 7px '+FM;ctx.fillStyle=rgba(C.muted,.65);
+  ctx.fillText(Math.round(CF[NCH-1])+' Hz',x0-4,y0+7);
+  ctx.fillText(Math.round(CF[0])+' Hz',x0-4,y0+h);
+  ctx.textAlign='center';ctx.fillText('time →',x0+w/2,y0+h+12);
+  // tonotopic clock column
+  const cx=x0+w+W*0.028;
+  for(let c=0;c<NCH;c+=2){const y=y0+(NCH-1-c)*ph;
+   clock(cx,y,CK.coch[c].ph,(V.coch||[])[c]||0,C.COCH,Math.min(W*0.0035,3.4));}}
+ // MGv
+ {const cx=X.mgv*W,sz=Math.min(W*0.0055,5.4),gap=sz*3.2;
+  for(let i=0;i<NMG;i++){const y=yM+(i-(NMG-1)/2)*gap*0.62;
+   clock(cx,y,CK.mgv[i].ph,(V.mgv||[])[i]||0,C.MGV,sz);}}
+ // A1 modulation pinwheel — clocks at their preferred FM orientation
+ {const cx=X.a1*W,R0=Math.min(W*0.062,64),sz=Math.min(W*0.0062,6);
+  ctx.beginPath();ctx.arc(cx,yM,R0,0,TAU);ctx.strokeStyle=rgba(C.A1,.12);ctx.lineWidth=1;ctx.stroke();
+  for(let o=0;o<NORI;o++){const th=o*Math.PI/NORI;
+   const a=(V.a1||[])[o]||0;
+   clock(cx+Math.cos(th)*R0,yM+Math.sin(th)*R0,CK.a1[o].ph,a,C.A1,sz);
+   clock(cx-Math.cos(th)*R0,yM-Math.sin(th)*R0,CK.a1[o].ph,a,C.A1,sz*0.82);}
+  ctx.textAlign='center';ctx.font='500 7px '+FM;ctx.fillStyle=rgba(C.muted,.6);
+  ctx.fillText('steady',cx,yM-R0-10);ctx.fillText('↑FM',cx+R0+18,yM+3);ctx.fillText('↓FM',cx-R0-18,yM+3);
+  if(T){const a=Math.PI/2+T.asym*Math.PI/4,L=R0*0.8;
+   ctx.beginPath();ctx.moveTo(cx,yM);ctx.lineTo(cx+Math.cos(a)*L,yM+Math.sin(a)*L);
+   ctx.strokeStyle=rgba(C.A1C,.85);ctx.lineWidth=2.4;ctx.stroke();}}
+ // belt
+ {const cx=X.belt*W,sz=Math.min(W*0.0068,6.6),gap=sz*3.3;
+  for(let i=0;i<NBELT;i++){const y=yM+(i-(NBELT-1)/2)*gap;
+   clock(cx,y,CK.belt[i].ph,(V.belt||[])[i]||0,C.BELT,sz);}
+  ctx.textAlign='center';ctx.font='500 7px '+FM;ctx.fillStyle=rgba(C.muted,.6);
+  ctx.fillText('harmonicity / flatness / FM',cx,yM+gap*6.2);}
+ // decision
+ {const cx=X.dec*W,sz=Math.min(W*0.0095,9),L=['NOISE','UP-SWEEP','DOWN-SWEEP','STEADY'];
+  for(let i=0;i<4;i++){const y=yM+(i-1.5)*H*0.085;
+   clock(cx,y,CK.dec[i].ph,(V.dec||[])[i]||0,C.DEC,sz);
+   ctx.textAlign='right';ctx.font='600 8px '+FM;
+   ctx.fillStyle=rgba(C.ink,0.22+((V.dec||[])[i]||0)*0.78);ctx.fillText(L[i],cx-sz*2.2,y+3);}}
+}
+/* ---------- UI ---------- */
+const KINDS=['tone','harmonic','noise','up','down','am'];
+const sw=$('stim');
+KINDS.forEach(k=>{const b=document.createElement('button');b.textContent=k;b.dataset.k=k;
+ b.onclick=()=>{ST.kind=k;[...sw.children].forEach(c=>c.classList.toggle('on',c.dataset.k===k));go();};sw.appendChild(b);});
+function bind(id,vid,fmt,set){const el=$(id),vl=$(vid);
+ el.oninput=()=>{const v=parseFloat(el.value);set(v);vl.textContent=fmt(v);};el.onchange=()=>go();
+ vl.textContent=fmt(parseFloat(el.value));}
+bind('s-f0','v-f0',v=>v+' Hz',v=>ST.f0=v);
+bind('s-sw','v-sw',v=>v.toFixed(1)+'×',v=>ST.sweep=v);
+bind('s-nz','v-nz',v=>v.toFixed(2),v=>ST.noise=v);
+bind('s-li','v-li',v=>v.toFixed(2),v=>PAR.li=v);
+bind('s-sig','v-sig',v=>v.toFixed(1),v=>PAR.sigma=v);
+bind('s-gam','v-gam',v=>v.toFixed(2),v=>PAR.gamma=v);
+let SPEED=0.3;$('s-sp').oninput=e=>{SPEED=parseFloat(e.target.value);$('v-sp').textContent=SPEED.toFixed(2)+'×';};
+let busy=false;
+function go(){if(busy)return;busy=true;setTimeout(()=>{try{recompute();}catch(e){console.error(e);}busy=false;ui();},10);}
+function ui(){
+ if(!T)return;
+ $('verdict').innerHTML=T.label+'<small>'+(T.label.toLowerCase().replace('-','')===ST.kind||
+   (T.label==='STEADY'&&(ST.kind==='tone'||ST.kind==='harmonic'||ST.kind==='am'))?'consistent with stimulus':'MISMATCH')+'</small>';
+ $('feat').innerHTML=
+  '<div><span>spectral flatness</span><b>'+T.fl.toFixed(3)+'</b></div>'+
+  '<div><span>FM asymmetry</span><b>'+(T.asym>=0?'+':'')+T.asym.toFixed(2)+'</b></div>'+
+  '<div><span>modulation entropy</span><b>'+T.S.entropy.toFixed(3)+'</b></div>'+
+  '<div><span>estimated pitch</span><b>'+Math.round(T.h.best.f0)+' Hz</b></div>';
+ $('note').innerHTML=T.why;
+}
+let last=performance.now(),acc=0;
+function frame(now){let dt=(now-last)/1000;last=now;dt=Math.min(dt,.05);
+ stepClocks(dt*SPEED*6,vals());draw();
+ acc+=dt;if(acc>0.2){acc=0;ui();}
+ requestAnimationFrame(frame);}
+addEventListener('resize',resize);
+resize();[...sw.children][0].classList.add('on');
+try{recompute();ui();}catch(e){console.error(e);}
+requestAnimationFrame(frame);
+})();
+</script></body></html>

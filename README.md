@@ -26,6 +26,10 @@ See [`CLAUDE.md`](CLAUDE.md) for the full project memory and method.
   ripples, replay, and the interneuron brake on runaway synchrony.
 - `apps/visual-cortex-streams.html` / `apps/ventral-stream-shapes.html` — retina → LGN → V1 →
   V2 form recognition and the V3 → V5/MT motion pathway.
+- `apps/visual-cortex-pulvinar.html` — the streams model plus the pulvinar: a ventral
+  transthalamic gain gate and a dorsal tectopulvinar (blindsight) route that survives V1 loss.
+- `apps/auditory-cortex.html` — cochlea → MGv → A1 → belt; the same STRF/Gabor machinery on a
+  frequency × time cochleagram, where orientation is FM sweep direction.
 
 ## Method (non-negotiable)
 
