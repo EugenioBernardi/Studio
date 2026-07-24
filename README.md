@@ -20,6 +20,10 @@ See [`CLAUDE.md`](CLAUDE.md) for the full project memory and method.
   the strengthening/weakening of the coupling that carries that synchrony. Encode a memory by
   driving its clocks together (Hebbian LTP), then recall it from a partial cue at frozen
   weights. Validated in [`docs/ASSEMBLY-VALIDATION.md`](docs/ASSEMBLY-VALIDATION.md).
+- **`apps/basal-ganglia.html`** — *Action Selection.* Competing motor programs as cortical
+  assemblies; direct/indirect/hyperdirect pathways release one winner, dopamine sets the balance.
+  Drive it into parkinsonian akinesia with β oscillations, then rescue it with STN-DBS. Validated
+  in [`docs/BASAL-GANGLIA-VALIDATION.md`](docs/BASAL-GANGLIA-VALIDATION.md).
 - `apps/thalamocortical-3d.html` — 19-column thalamocortical sheet; sleep rhythms, spindles,
   and the spindle→spike-wave switch.
 - `apps/hippocampus-index-replay.html` — trisynaptic circuit: sparse indexing, sharp-wave

@@ -95,6 +95,19 @@ entrain a rotating clock. Open: retroactive interference is real (a new engram w
 one); fixed assembly size; no asymmetric/STDP (β-offset) rule yet — that would write *directed*
 assemblies (sequences), the bridge to replay and chronotaxis. Full record: `docs/ASSEMBLY-VALIDATION.md`.
 
+**Basal Ganglia — action selection** (`apps/basal-ganglia.html`, model `models/basal-ganglia.js`) —
+the *new* clock-paradigm build (distinct from the deprioritised inlined `basal-ganglia-selection.html`).
+Competing motor programs are cortical **assemblies**; canonical off-centre (D1⊣GPi) / on-surround
+(STN→GPi) selection with a **cortico-thalamo-cortical positive-feedback loop** (thalamus sustains the
+winner's synchrony — the "reinforcement through thalamus") plus cortical lateral inhibition for WTA.
+Dopamine gates Go/NoGo (D1 gain ∝ DA); the delayed **STN⟷GPe loop Hopf-bifurcates into a ~16 Hz β
+limit cycle at low dopamine only**. Validated 14/14 headless, robust over 8 seeds: healthy selects
+one at ~62 ms; low DA → akinesia (GPi ~0.92 everywhere); β amplitude ≈42× higher parkinsonian;
+STN-DBS rescues; dopamine-gated reinforcement biases future choice. Three things not to remove:
+**cortical lateral inhibition** (WTA brake on the positive loop), **through-origin DA gate on D1**
+(else no akinesia), and the **true STN⟷GPe delay** (a first-order lag only damps — β needs a real
+limit cycle, measured by amplitude not normalised fraction). Full record: `docs/BASAL-GANGLIA-VALIDATION.md`.
+
 **Metastable Chronotaxis** (`metastable-chronotaxis.html`) — 15-clock cortical pool;
 assemblies are *dynamic coalitions* drawn from it, not fixed boxes. Kuramoto coupling
 K=11, γ 2.6 Hz. Basal ganglia composes the next coalition (carry-over + recency-penalised

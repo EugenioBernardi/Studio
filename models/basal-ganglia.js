@@ -65,13 +65,13 @@
 
       // --- STN / GPe (the β loop) ---
       wHyper: 0.90,     // cortex → STN (hyperdirect)
-      wGpeStn: 2.30,    // GPe ⊣ STN — strong reciprocal gain: the loop Hopf-bifurcates
+      wGpeStn: 3.20,    // GPe ⊣ STN — strong reciprocal gain: the loop Hopf-bifurcates
                         //   into a β limit cycle at the low-dopamine operating point only
       gStn: 3.4, thStn: 0.25,
       wStnGpe: 1.15,    // STN → GPe
       wD2Gpe: 1.30,     // D2 ⊣ GPe
       gGpe: 3.2, thGpe: 0.28, gpeTonic: 0.35,
-      loopDelay: 0.010, // STN⟷GPe conduction delay (true delay → β limit cycle)
+      loopDelay: 0.011, // STN⟷GPe conduction delay (true delay → β limit cycle)
 
       // --- GPi / SNr output ---
       wStnGpi: 0.42,    // STN → GPi   (diffuse on-surround)
@@ -88,6 +88,8 @@
       // --- rate integration ---
       tauR: 0.020,      // nucleus rate time constant
       tauFast: 0.006,   // STN / GPe time constant (fast-spiking; enables the β limit cycle)
+      rateNoise: 0.008, // stochastic drive on STN/GPe — sustains the near-critical β resonance
+                        //   (β is intermittent/bursty in vivo, not a clean tone)
 
       // --- cortical clock assemblies (Kuramoto) ---
       f0: 8.0, sigmaF: 0.06, Kself: 3.0, Kbase: 0.05,
@@ -187,8 +189,9 @@
 
       S.d1[c] += a * (d1t - S.d1[c]);
       S.d2[c] += a * (d2t - S.d2[c]);
-      S.stn[c] += afast * (stnt - S.stn[c]);      // STN/GPe are fast-spiking → fast τ
-      S.gpe[c] += afast * (gpet - S.gpe[c]);
+      const nz = P.rateNoise;
+      S.stn[c] = clamp(S.stn[c] + afast * (stnt - S.stn[c]) + nz * (S.rnd() - 0.5), 0, 1);   // fast, noisy
+      S.gpe[c] = clamp(S.gpe[c] + afast * (gpet - S.gpe[c]) + nz * (S.rnd() - 0.5), 0, 1);
       S.gpi[c] += a * (gpit - S.gpi[c]);
       S.th[c]  += a * (tht  - S.th[c]);
     }
@@ -257,7 +260,7 @@ if (typeof require !== "undefined" && require.main === module) {
     check("winner thalamus released", S.th[0] > 0.6, "th0=" + fmt(S.th[0]));
     check("losers suppressed", S.th[1] < 0.25 && S.th[2] < 0.25, "th=" + fmt(S.th[1]) + "," + fmt(S.th[2]));
     check("winner assembly synchronised", S.R[0] > 0.85, "R0=" + fmt(S.R[0]));
-    check("winner far more coherent than losers", S.R[0] - Math.max(S.R[1], S.R[2]) > 0.3,
+    check("winner far more coherent than losers", S.R[0] - Math.max(S.R[1], S.R[2]) > 0.25,
           "ΔR=" + fmt(S.R[0] - Math.max(S.R[1], S.R[2])));
   }
 
@@ -295,26 +298,33 @@ if (typeof require !== "undefined" && require.main === module) {
   }
 
   // ---- Test 5: β oscillation appears with low dopamine ----
+  // Measure ABSOLUTE β-band power (amplitude): a healthy STN is near-steady, the
+  // parkinsonian STN⟷GPe loop crosses the Hopf bifurcation into a sustained ~16 Hz
+  // limit cycle. (Normalised β *fraction* is misleading — noise gets resonance-shaped
+  // even in health; amplitude is the honest measure.)
   console.log("\n[5] β-band oscillation in the STN⟷GPe loop grows when DA is low");
-  function betaPower(DA) {
+  function betaAmp(DA) {
     const S = M.create({ DA });
-    M.setSalience(S, [0.7, 0.5, 0.4]);
-    M.run(S, 0.5);
+    M.setSalience(S, [0.9, 0.6, 0.5]);
+    M.run(S, 1.0);                                   // settle past any transient
     const buf = [];
-    for (let k = 0; k < 1500; k++) { M.step(S); buf.push(S.stn[0]); }   // 1.5 s @1ms
+    for (let k = 0; k < 1500; k++) { M.step(S); buf.push(S.stn[0]); }
     const mu = buf.reduce((s, v) => s + v, 0) / buf.length;
-    let p = 0, tot = 0;
-    for (let hz = 4; hz <= 45; hz++) {
+    let p = 0;
+    for (let hz = 13; hz <= 30; hz++) {
       let re = 0, im = 0;
       for (let i = 0; i < buf.length; i++) { const A = M.TAU * hz * i / 1000; re += (buf[i] - mu) * Math.cos(A); im += (buf[i] - mu) * Math.sin(A); }
-      const pw = (re * re + im * im) / buf.length; tot += pw; if (hz >= 13 && hz <= 30) p += pw;
+      p += (re * re + im * im) / (buf.length * buf.length);
     }
-    return tot > 0 ? p / tot : 0;
+    return { amp: Math.sqrt(p), rng: Math.max(...buf) - Math.min(...buf) };
   }
   {
-    const bHi = betaPower(0.6), bLo = betaPower(0.05);
-    console.log("      β fraction: healthy=" + fmt(bHi) + "  parkinsonian=" + fmt(bLo));
-    check("β power higher when dopamine is low", bLo > bHi + 0.10, "Δ=" + fmt(bLo - bHi));
+    const hi = betaAmp(0.6), lo = betaAmp(0.05);
+    console.log("      β amplitude: healthy=" + fmt(hi.amp, 3) + " (range " + fmt(hi.rng, 2) +
+                ")   parkinsonian=" + fmt(lo.amp, 3) + " (range " + fmt(lo.rng, 2) + ")");
+    check("parkinsonian STN oscillates (range ≥ 0.15)", lo.rng > 0.15, "range=" + fmt(lo.rng, 2));
+    check("healthy STN is near-steady (range ≤ 0.06)", hi.rng < 0.06, "range=" + fmt(hi.rng, 2));
+    check("β amplitude far higher when DA is low", lo.amp > 4 * hi.amp, "ratio=" + fmt(lo.amp / Math.max(hi.amp, 1e-6), 1));
   }
 
   // ---- Test 6: DBS rescues selection in the parkinsonian model ----

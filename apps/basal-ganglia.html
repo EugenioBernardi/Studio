@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Basal Ganglia — Action Selection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#060911; --panel:rgba(13,19,33,.74); --line:rgba(120,150,200,.14);
+    --ink:#e4ebf7; --muted:#8a99b6; --faint:#4a5670; --idle:#3f4d68;
+    --cx:#ffc861; --d1:#3ee6b0; --d2:#ff7a6b; --stn:#ff4d7d; --gpe:#c07bff;
+    --gpi:#ff9d4d; --th:#56d4ff; --da:#4ce0c0;
+    --good:#3ee6b0; --warn:#ff9d4d; --bad:#ff4d7d;
+    --display:'Space Grotesk',system-ui,-apple-system,Segoe UI,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:var(--display);color:var(--ink);overflow:hidden;transition:background .7s;
+    background:radial-gradient(1200px 700px at 25% -10%,#101a2e 0%,transparent 60%),
+      radial-gradient(900px 600px at 100% 110%,#0c1424 0%,transparent 55%),var(--bg)}
+  body.pd{background:radial-gradient(1200px 800px at 40% 20%,#2a1533 0%,transparent 62%),#0a0614}
+  .app{display:grid;grid-template-columns:1fr 380px;height:100vh;width:100vw}
+  .stage{position:relative;min-width:0;overflow:hidden}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .title{position:absolute;top:15px;left:22px;z-index:3;pointer-events:none;max-width:52%}
+  .title h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.15em;text-transform:uppercase}
+  .title .sub{margin-top:5px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.6}
+  .title em{font-style:normal;color:var(--d1)}
+  .read{position:absolute;left:22px;bottom:14px;z-index:3;pointer-events:none;font-family:var(--mono);
+    font-size:10px;color:var(--muted);display:flex;gap:15px;flex-wrap:wrap;max-width:94%}
+  .read b{color:var(--ink);font-weight:600}
+  .read b.ok{color:var(--good)} .read b.hot{color:var(--warn)} .read b.bad{color:var(--bad)}
+  .pill{position:absolute;top:14px;right:14px;z-index:3;font-family:var(--mono);font-size:10px;
+    letter-spacing:.14em;padding:7px 13px;border-radius:20px;opacity:0;transition:.25s}
+  .pill.on{opacity:1}
+  .pill.pd{color:#fff;border:1px solid var(--stn);background:rgba(255,77,125,.3)}
+  .panel{background:linear-gradient(180deg,rgba(10,15,28,.93),rgba(8,12,22,.97));
+    border-left:1px solid var(--line);padding:15px 14px;overflow-y:auto;z-index:4;
+    display:flex;flex-direction:column;gap:12px}
+  .panel::-webkit-scrollbar{width:8px}
+  .panel::-webkit-scrollbar-thumb{background:rgba(120,150,200,.18);border-radius:4px}
+  .blk{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px}
+  .blk h2{margin:0 0 9px;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;display:flex;align-items:center;gap:7px}
+  .blk h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--th));
+    box-shadow:0 0 8px var(--dot,var(--th))}
+  .pre{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+  .pre button{border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);
+    font-family:var(--mono);font-size:10px;cursor:pointer;padding:8px 3px;border-radius:8px;transition:.15s}
+  .pre button:hover{color:var(--ink);border-color:rgba(86,212,255,.45)}
+  .pre button.on{background:rgba(86,212,255,.15);color:var(--ink);border-color:rgba(86,212,255,.5)}
+  .pre button.pdp{border-color:rgba(255,77,125,.35)}
+  .pre button.pdp:hover,.pre button.pdp.on{border-color:var(--bad);background:rgba(255,77,125,.15);color:#ffd0dc}
+  .note{font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--muted);min-height:54px;margin-top:9px}
+  .note b{color:var(--ink)} .note em{font-style:normal;color:var(--d1)} .note .w{color:var(--warn)}
+  .ch{display:grid;grid-template-columns:58px 1fr 30px auto;gap:8px;align-items:center;margin-top:8px}
+  .ch .nm{font-family:var(--mono);font-size:10px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .ch .nm i{width:8px;height:8px;border-radius:50%;display:block;box-shadow:0 0 6px currentColor}
+  .ch input{width:100%;accent-color:var(--cx)}
+  .ch .vl{font-family:var(--mono);font-size:9.5px;color:var(--ink);text-align:right}
+  .ch .rw{border:1px solid var(--line);background:rgba(62,230,176,.06);color:var(--d1);
+    font-family:var(--mono);font-size:9px;cursor:pointer;padding:4px 7px;border-radius:6px}
+  .ch .rw:hover{border-color:var(--d1)}
+  .sl{display:flex;align-items:center;gap:9px;margin-top:8px;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  .sl .nm{width:98px;flex:none} .sl input{flex:1;accent-color:var(--c2,var(--th));min-width:0}
+  .sl .vl{width:46px;text-align:right;color:var(--ink);flex:none}
+  .bars{display:flex;flex-direction:column;gap:6px}
+  .bar{display:grid;grid-template-columns:56px 1fr 34px;gap:8px;align-items:center;
+    font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  .bar .t{height:6px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden}
+  .bar .t i{display:block;height:100%;border-radius:3px;transition:width .12s}
+  .bar .v{text-align:right;color:var(--ink)}
+  #beta{width:100%;height:52px;display:block;border-radius:8px;background:rgba(0,0,0,.3);border:1px solid var(--line)}
+  .cap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8.5px;color:var(--faint);margin-top:5px}
+  @media (max-width:1040px){.app{grid-template-columns:1fr;grid-template-rows:1fr auto}
+    .panel{border-left:0;border-top:1px solid var(--line);max-height:52vh}
+    .title{max-width:70%}.read{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <canvas id="cv"></canvas>
+    <div class="title">
+      <h1>Basal Ganglia · Action Selection</h1>
+      <div class="sub">
+        Competing motor programs are cortical <em>assemblies</em>. The basal ganglia release
+        exactly one — off-centre <em>Go</em> (D1⊣GPi) against on-surround <em>No-Go</em>
+        (STN→GPi) — and the thalamus sustains the winner's synchrony. Dopamine sets the balance.
+      </div>
+    </div>
+    <div class="pill pd" id="pill-pd">PARKINSONIAN · β-LOCKED</div>
+    <div class="read">
+      <span>DA <b id="r-da">–</b></span>
+      <span>selected <b id="r-sel" class="ok">–</b></span>
+      <span>latency <b id="r-lat">–</b></span>
+      <span>β power <b id="r-beta">–</b></span>
+      <span>winner R <b id="r-R">–</b></span>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <div class="blk" style="--dot:var(--da)">
+      <h2>State</h2>
+      <div class="pre" id="pre"></div>
+      <label class="sl" style="--c2:var(--da)"><span class="nm">Dopamine (SNc)</span>
+        <input id="s-da" type="range" min="0" max="1" step="0.02" value="0.6"><span class="vl" id="v-da">0.60</span></label>
+      <label class="sl" style="--c2:var(--stn)"><span class="nm">STN-DBS</span>
+        <input id="s-dbs" type="range" min="0" max="1" step="0.05" value="0"><span class="vl" id="v-dbs">off</span></label>
+      <div class="note" id="note"></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--cx)">
+      <h2>Motor programs — cortical salience</h2>
+      <div id="channels"></div>
+      <div class="cap"><span>drag to propose an action · Reward biases learning</span><span>wStr = learned value</span></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--th)">
+      <h2>Thalamic release (selection)</h2>
+      <div class="bars" id="bars"></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--stn)">
+      <h2>STN β oscillation</h2>
+      <canvas id="beta"></canvas>
+      <div class="cap"><span id="beta-lab">subthalamic rate</span><span id="beta-val">β –</span></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ===================== MODEL (inlined, single source of truth) ===================== */
+"use strict";
+/* =====================================================================
+   Basal Ganglia — action selection as competition between clock assemblies.
+
+   Same thesis as the rest of the project: each competing motor program is a
+   cortical ASSEMBLY (a group of phase-clocks). The basal ganglia decide which
+   assembly wins, and the thalamocortical loop then SUSTAINS the winner's
+   synchrony while the losers are held desynchronised.
+
+   Architecture (Gurney, Prescott & Redgrave 2001; Humphries, Stewart & Gurney
+   2006) — a rate model per channel with the selection motif:
+     - direct  (D1):  cortex → striatum-D1 ⊣ GPi           ("Go", off-CENTRE)
+     - indirect(D2):  cortex → striatum-D2 ⊣ GPe ⊣ STN → GPi ("No-Go")
+     - hyperdirect:   cortex → STN → GPi  (diffuse, on-SURROUND, fast brake)
+     - output:        GPi/SNr tonically inhibits thalamus; low GPi = released
+   Dopamine sets the D1/D2 balance (the selection threshold and vigour).
+   The STN⟷GPe loop, with transmission delay, is the β-oscillation generator
+   that runs away when dopamine is low (parkinsonian).
+
+   Synchrony does work: a channel's drive to the BG is scaled by how coherent
+   its cortical assembly is, so selection → synchrony → stronger drive → a
+   committed, hysteretic choice.
+
+   Single source of truth: runs headless (`node models/basal-ganglia.js test`)
+   and inlines into the app.
+   ===================================================================== */
+
+(function (root, factory) {
+  if (typeof module !== "undefined" && module.exports) module.exports = factory();
+  else root.BasalGanglia = factory();
+})(typeof self !== "undefined" ? self : this, function () {
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const sig = (x, g, th) => 1 / (1 + Math.exp(-g * (x - th)));   // logistic activation
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ---------------- validated default parameters ---------------- */
+  function defaults() {
+    return {
+      nCh: 3,            // competing channels (motor programs)
+      m: 6,             // clocks per cortical assembly
+      DA: 0.6,          // dopamine tone (0 parkinsonian … 1 hyperdopaminergic)
+      dt: 0.001,        // s
+
+      // --- cortex (integrates salience + thalamic feedback: the selection loop) ---
+      tauCx: 0.030,     // cortical integration time constant
+      tcExcite: 1.15,   // thalamus → cortex re-excitation (closes the positive-FB loop)
+      cohBonus: 0.35,   // coherent assembly adds drive (synchrony does work)
+      wLat: 1.40,       // cortical lateral inhibition between channels (winner-take-all)
+
+      // --- corticostriatal / dopamine gains ---
+      wCxStr: 1.55,     // cortex → striatum
+      daD1: 0.55,       // D1 potentiation by DA   (Go gain ∝ 1 + daD1·DA)
+      daD2: 0.55,       // D2 suppression by DA    (NoGo gain ∝ 1 − daD2·DA)
+      gStr: 4.6, thStr: 0.62,
+
+      // --- STN / GPe (the β loop) ---
+      wHyper: 0.90,     // cortex → STN (hyperdirect)
+      wGpeStn: 3.20,    // GPe ⊣ STN — strong reciprocal gain: the loop Hopf-bifurcates
+                        //   into a β limit cycle at the low-dopamine operating point only
+      gStn: 3.4, thStn: 0.25,
+      wStnGpe: 1.15,    // STN → GPe
+      wD2Gpe: 1.30,     // D2 ⊣ GPe
+      gGpe: 3.2, thGpe: 0.28, gpeTonic: 0.35,
+      loopDelay: 0.011, // STN⟷GPe conduction delay (true delay → β limit cycle)
+
+      // --- GPi / SNr output ---
+      wStnGpi: 0.42,    // STN → GPi   (diffuse on-surround)
+      wD1Gpi: 1.75,     // D1 ⊣ GPi    (focused off-centre)
+      wGpeGpi: 0.55,    // GPe ⊣ GPi
+      gGpi: 3.6, thGpi: 0.24, gpiTonic: 0.52,
+
+      // --- thalamus + thalamocortical loop ---
+      wGpiTh: 1.55,     // GPi ⊣ thalamus (disinhibition when GPi is low)
+      wCxTh: 0.65,      // cortex → thalamus
+      gTh: 4.0, thTh: 0.40,
+      tcGain: 0.9,      // thalamus → cortical-assembly coupling boost
+
+      // --- rate integration ---
+      tauR: 0.020,      // nucleus rate time constant
+      tauFast: 0.006,   // STN / GPe time constant (fast-spiking; enables the β limit cycle)
+      rateNoise: 0.008, // stochastic drive on STN/GPe — sustains the near-critical β resonance
+                        //   (β is intermittent/bursty in vivo, not a clean tone)
+
+      // --- cortical clock assemblies (Kuramoto) ---
+      f0: 8.0, sigmaF: 0.06, Kself: 3.0, Kbase: 0.05,
+      Ginh: 3.2,        // repulsion between channels (keeps losers desynchronised)
+      D: 0.05,          // phase noise
+      cohFloor: 0.35,   // drive = salience·(cohFloor + (1−cohFloor)·R)  — synchrony does work
+
+      // --- DBS (STN high-frequency stim ≈ informational lesion of STN output) ---
+      dbs: 0,           // 0..1 fraction by which STN output is clamped/regularised
+
+      seed: 7,
+    };
+  }
+
+  function create(opts) {
+    const P = Object.assign(defaults(), opts || {});
+    const rnd = mulberry32(P.seed);
+    const nCh = P.nCh, m = P.m;
+    const S = {
+      P, nCh, m, rnd, t: 0,
+      sal: new Float64Array(nCh),        // external salience per channel (cortical input)
+      cx: new Float64Array(nCh),         // cortical state (salience + thalamic feedback)
+      // rates
+      d1: new Float64Array(nCh), d2: new Float64Array(nCh),
+      stn: new Float64Array(nCh), gpe: new Float64Array(nCh),
+      gpi: new Float64Array(nCh), th: new Float64Array(nCh),
+      stnHist: [], gpeHist: [], histPtr: 0,
+      DLEN: Math.max(1, Math.round(P.loopDelay / P.dt)),
+      // cortical assemblies
+      ph: [], w: [], R: new Float64Array(nCh), mph: new Float64Array(nCh),
+      // corticostriatal weights (plastic, actor)
+      wStr: new Float64Array(nCh).fill(1),
+    };
+    for (let c = 0; c < nCh; c++) {
+      S.gpe[c] = P.gpeTonic; S.gpi[c] = P.gpiTonic; S.wStr[c] = 1;
+      S.stnHist[c] = new Float64Array(S.DLEN); S.gpeHist[c] = new Float64Array(S.DLEN).fill(P.gpeTonic);
+      S.ph[c] = new Float64Array(m); S.w[c] = new Float64Array(m);
+      for (let i = 0; i < m; i++) { S.ph[c][i] = rnd() * TAU; S.w[c][i] = TAU * (P.f0 + P.sigmaF * (rnd() - 0.5) * 2); }
+    }
+    return S;
+  }
+
+  function setSalience(S, arr) { for (let c = 0; c < S.nCh; c++) S.sal[c] = arr[c] || 0; }
+
+  // order parameter of channel c's assembly
+  function order(S, c) {
+    const ph = S.ph[c], m = S.m; let sx = 0, sy = 0;
+    for (let i = 0; i < m; i++) { sx += Math.cos(ph[i]); sy += Math.sin(ph[i]); }
+    return { R: Math.hypot(sx / m, sy / m), psi: Math.atan2(sy / m, sx / m) };
+  }
+
+  /* ---------------- one integration step ---------------- */
+  function step(S) {
+    const P = S.P, nCh = S.nCh, dt = P.dt;
+    const a = dt / P.tauR;                       // rate leak
+    const afast = dt / P.tauFast;                // fast leak for STN / GPe
+    const da = P.DA;
+
+    // cortex integrates salience + thalamic re-excitation + a coherence bonus.
+    // This closes the cortico-thalamo-cortical positive-feedback loop that commits
+    // to a winner ("reinforcement through thalamus"); synchrony does work via cohBonus.
+    const acx = dt / P.tauCx;
+    const u = new Float64Array(nCh);
+    let sumTh = 0; for (let c = 0; c < nCh; c++) sumTh += S.th[c];
+    for (let c = 0; c < nCh; c++) {
+      const o = order(S, c); S.R[c] = o.R; S.mph[c] = o.psi;
+      const target = S.sal[c] + P.tcExcite * S.th[c] + P.cohBonus * o.R * S.th[c]
+                     - P.wLat * (sumTh - S.th[c]);        // lateral inhibition ⇒ WTA
+      S.cx[c] += acx * (Math.max(0, target) - S.cx[c]);
+      u[c] = S.cx[c] * S.wStr[c];
+    }
+    // dopamine sets the Go/NoGo balance with real teeth: D1 (Go) scales ~linearly from
+    // zero, so the direct pathway is essentially dead at low dopamine (akinesia).
+    const mD1 = 1.55 * P.DA, mD2 = 0.40 + 1.00 * (1 - P.DA);
+
+    // delayed copies for the STN⟷GPe loop — TRUE conduction delay (ring buffer),
+    // which is what turns the reciprocal STN⟷GPe loop into a β limit cycle.
+    const rd = S.histPtr;                        // oldest sample = current write slot
+    const stnDelayed = new Float64Array(nCh), gpeDelayed = new Float64Array(nCh);
+    for (let c = 0; c < nCh; c++) { stnDelayed[c] = S.stnHist[c][rd]; gpeDelayed[c] = S.gpeHist[c][rd]; }
+
+    // diffuse STN broadcast (on-surround)
+    let stnSum = 0; for (let c = 0; c < nCh; c++) stnSum += stnDelayed[c] * (1 - P.dbs);
+
+    for (let c = 0; c < nCh; c++) {
+      // striatum (dopamine-gated Go / NoGo)
+      const d1t = sig(P.wCxStr * u[c] * mD1, P.gStr, P.thStr);
+      const d2t = sig(P.wCxStr * u[c] * mD2, P.gStr, P.thStr);
+      // STN: cortical hyperdirect drive − GPe inhibition (delayed)
+      const stnt = sig(P.wHyper * S.cx[c] - P.wGpeStn * gpeDelayed[c] + 0.35, P.gStn, P.thStn);
+      // GPe: tonic + STN drive (delayed) − D2 inhibition.
+      const gpet = sig(P.gpeTonic + P.wStnGpe * stnDelayed[c] - P.wD2Gpe * S.d2[c], P.gGpe, P.thGpe);
+      // GPi: tonic + diffuse STN (surround) − focused D1 (centre) − GPe
+      const gpit = sig(P.gpiTonic + P.wStnGpi * stnSum - P.wD1Gpi * S.d1[c] - P.wGpeGpi * S.gpe[c], P.gGpi, P.thGpi);
+      // thalamus: cortical drive, disinhibited as GPi falls
+      const tht = sig(P.wCxTh * S.cx[c] - P.wGpiTh * S.gpi[c] + 0.30, P.gTh, P.thTh);
+
+      S.d1[c] += a * (d1t - S.d1[c]);
+      S.d2[c] += a * (d2t - S.d2[c]);
+      const nz = P.rateNoise;
+      S.stn[c] = clamp(S.stn[c] + afast * (stnt - S.stn[c]) + nz * (S.rnd() - 0.5), 0, 1);   // fast, noisy
+      S.gpe[c] = clamp(S.gpe[c] + afast * (gpet - S.gpe[c]) + nz * (S.rnd() - 0.5), 0, 1);
+      S.gpi[c] += a * (gpit - S.gpi[c]);
+      S.th[c]  += a * (tht  - S.th[c]);
+    }
+    // commit the STN/GPe delay lines and advance the ring pointer
+    for (let c = 0; c < nCh; c++) { S.stnHist[c][rd] = S.stn[c]; S.gpeHist[c][rd] = S.gpe[c]; }
+    S.histPtr = (rd + 1) % S.DLEN;
+
+    // cortical assemblies: thalamic feedback boosts within-channel coupling
+    // global mean phase across ALL active clocks (for repulsion between channels)
+    let gx = 0, gy = 0, gn = 0;
+    for (let c = 0; c < nCh; c++) for (let i = 0; i < S.m; i++) { gx += Math.cos(S.ph[c][i]); gy += Math.sin(S.ph[c][i]); gn++; }
+    gx /= gn; gy /= gn;
+    const Rg = Math.hypot(gx, gy), psig = Math.atan2(gy, gx);
+    const sqrtD = Math.sqrt(2 * P.D * dt);
+    for (let c = 0; c < nCh; c++) {
+      const K = P.Kbase + P.Kself * P.tcGain * S.th[c];   // thalamus sustains the winner
+      const ph = S.ph[c], mph = S.mph[c], w = S.w[c];
+      for (let i = 0; i < S.m; i++) {
+        let coup = K * Math.sin(mph - ph[i]);
+        const shear = P.Ginh * Rg * Math.sin(ph[i] - psig);
+        ph[i] = (ph[i] + (w[i] + coup + shear) * dt + sqrtD * gaussian(S.rnd) + TAU) % TAU;
+      }
+    }
+    S.t += dt;
+  }
+  function gaussian(rnd) { let u = 0, v = 0; while (u === 0) u = rnd(); while (v === 0) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+
+  function run(S, seconds) { const n = Math.round(seconds / S.P.dt); for (let k = 0; k < n; k++) step(S); }
+
+  // which channel is selected (thalamus released) — returns index or -1
+  function selected(S, thr) {
+    thr = thr == null ? 0.5 : thr;
+    let best = -1, bv = thr;
+    for (let c = 0; c < S.nCh; c++) if (S.th[c] > bv) { bv = S.th[c]; best = c; }
+    return best;
+  }
+
+  // dopamine-gated corticostriatal plasticity (three-factor / actor): reward the
+  // channel that was selected → its cortical drive potentiates (faster next time).
+  function reinforce(S, ch, reward, rate) {
+    rate = rate == null ? 0.05 : rate;
+    const dw = rate * reward * S.d1[ch];          // eligibility ∝ D1 activity
+    S.wStr[ch] = clamp(S.wStr[ch] + dw, 0.3, 2.0);
+  }
+
+  return { create, defaults, step, run, order, selected, setSalience, reinforce, mulberry32, TAU };
+});
+
+/* ============================ headless tests ============================ */
+if (typeof require !== "undefined" && require.main === module) {
+  const M = module.exports;
+  const fmt = (x, d = 2) => (x >= 0 ? " " : "") + x.toFixed(d);
+  let pass = 0, fail = 0;
+  const check = (n, c, d) => (c ? (pass++, console.log("  PASS  " + n + "   " + (d || "")))
+                                : (fail++, console.log("  FAIL  " + n + "   " + (d || ""))));
+  const arr = (a, f = fmt) => "[" + Array.from(a).map(x => f(x)).join(" ") + "]";
+
+  // ---- Test 1: healthy selection — one winner ----
+  console.log("\n[1] Healthy dopamine selects exactly one channel");
+  {
+    const S = M.create({ DA: 0.6 });
+    M.setSalience(S, [0.9, 0.6, 0.5]);
+    M.run(S, 1.0);
+    console.log("      thal=" + arr(S.th) + "  R=" + arr(S.R) + "  sel=" + M.selected(S));
+    check("channel 0 selected", M.selected(S) === 0, "sel=" + M.selected(S));
+    check("winner thalamus released", S.th[0] > 0.6, "th0=" + fmt(S.th[0]));
+    check("losers suppressed", S.th[1] < 0.25 && S.th[2] < 0.25, "th=" + fmt(S.th[1]) + "," + fmt(S.th[2]));
+    check("winner assembly synchronised", S.R[0] > 0.85, "R0=" + fmt(S.R[0]));
+    check("winner far more coherent than losers", S.R[0] - Math.max(S.R[1], S.R[2]) > 0.25,
+          "ΔR=" + fmt(S.R[0] - Math.max(S.R[1], S.R[2])));
+  }
+
+  // ---- Test 2: winner-take-all with near-equal competitors ----
+  console.log("\n[2] Winner-take-all: two strong competitors, only one wins");
+  {
+    const S = M.create({ DA: 0.6 });
+    M.setSalience(S, [0.82, 0.80, 0.3]);
+    M.run(S, 1.2);
+    const nSel = [0, 1, 2].filter(c => S.th[c] > 0.5).length;
+    console.log("      thal=" + arr(S.th) + "  #released=" + nSel);
+    check("exactly one channel released", nSel === 1, "#=" + nSel);
+  }
+
+  // ---- Test 3: selection latency ----
+  console.log("\n[3] Selection latency (healthy)");
+  {
+    const S = M.create({ DA: 0.6 });
+    M.setSalience(S, [0.9, 0.6, 0.5]);
+    let lat = -1;
+    for (let k = 0; k < 600; k++) { M.step(S); if (lat < 0 && S.th[0] > 0.5) lat = S.t * 1000; }
+    console.log("      latency to release = " + fmt(lat, 0) + " ms");
+    check("selects within a plausible window (40–250 ms)", lat > 30 && lat < 250, "lat=" + fmt(lat, 0) + "ms");
+  }
+
+  // ---- Test 4: parkinsonian — low dopamine fails to select ----
+  console.log("\n[4] Low dopamine (parkinsonian) — akinesia / failure to release");
+  {
+    const S = M.create({ DA: 0.05 });
+    M.setSalience(S, [0.9, 0.6, 0.5]);
+    M.run(S, 1.0);
+    console.log("      thal=" + arr(S.th) + "  GPi=" + arr(S.gpi) + "  sel=" + M.selected(S));
+    check("no channel released (akinesia)", M.selected(S) === -1, "sel=" + M.selected(S));
+    check("GPi output pathologically high", S.gpi[0] > 0.6, "gpi0=" + fmt(S.gpi[0]));
+  }
+
+  // ---- Test 5: β oscillation appears with low dopamine ----
+  // Measure ABSOLUTE β-band power (amplitude): a healthy STN is near-steady, the
+  // parkinsonian STN⟷GPe loop crosses the Hopf bifurcation into a sustained ~16 Hz
+  // limit cycle. (Normalised β *fraction* is misleading — noise gets resonance-shaped
+  // even in health; amplitude is the honest measure.)
+  console.log("\n[5] β-band oscillation in the STN⟷GPe loop grows when DA is low");
+  function betaAmp(DA) {
+    const S = M.create({ DA });
+    M.setSalience(S, [0.9, 0.6, 0.5]);
+    M.run(S, 1.0);                                   // settle past any transient
+    const buf = [];
+    for (let k = 0; k < 1500; k++) { M.step(S); buf.push(S.stn[0]); }
+    const mu = buf.reduce((s, v) => s + v, 0) / buf.length;
+    let p = 0;
+    for (let hz = 13; hz <= 30; hz++) {
+      let re = 0, im = 0;
+      for (let i = 0; i < buf.length; i++) { const A = M.TAU * hz * i / 1000; re += (buf[i] - mu) * Math.cos(A); im += (buf[i] - mu) * Math.sin(A); }
+      p += (re * re + im * im) / (buf.length * buf.length);
+    }
+    return { amp: Math.sqrt(p), rng: Math.max(...buf) - Math.min(...buf) };
+  }
+  {
+    const hi = betaAmp(0.6), lo = betaAmp(0.05);
+    console.log("      β amplitude: healthy=" + fmt(hi.amp, 3) + " (range " + fmt(hi.rng, 2) +
+                ")   parkinsonian=" + fmt(lo.amp, 3) + " (range " + fmt(lo.rng, 2) + ")");
+    check("parkinsonian STN oscillates (range ≥ 0.15)", lo.rng > 0.15, "range=" + fmt(lo.rng, 2));
+    check("healthy STN is near-steady (range ≤ 0.06)", hi.rng < 0.06, "range=" + fmt(hi.rng, 2));
+    check("β amplitude far higher when DA is low", lo.amp > 4 * hi.amp, "ratio=" + fmt(lo.amp / Math.max(hi.amp, 1e-6), 1));
+  }
+
+  // ---- Test 6: DBS rescues selection in the parkinsonian model ----
+  console.log("\n[6] STN-DBS restores selection under low dopamine");
+  {
+    const S = M.create({ DA: 0.05, dbs: 0.85 });
+    M.setSalience(S, [0.9, 0.6, 0.5]);
+    let lat = -1;
+    for (let k = 0; k < 800; k++) { M.step(S); if (lat < 0 && S.th[0] > 0.5) lat = S.t * 1000; }
+    console.log("      thal=" + arr(S.th) + "  sel=" + M.selected(S) + "  latency=" + fmt(lat, 0) + " ms");
+    check("selection restored by DBS", M.selected(S) === 0, "sel=" + M.selected(S));
+  }
+
+  // ---- Test 7: dopamine-gated reinforcement biases future selection ----
+  console.log("\n[7] Reinforcement: rewarding a weaker channel makes it win next time");
+  {
+    const S = M.create({ DA: 0.6 });
+    // ch1 is initially weaker than ch0
+    for (let trial = 0; trial < 8; trial++) {
+      // reset phases/rates lightly between trials, keep learned weights
+      M.setSalience(S, [0.7, 0.68, 0.3]);
+      M.run(S, 0.6);
+      const win = M.selected(S);
+      // reward ONLY when ch1 is chosen (shape behaviour toward ch1)
+      if (win === 1) M.reinforce(S, 1, 1.0);
+      else if (win === 0) M.reinforce(S, 0, -0.4);   // mild punishment of the habit
+      M.setSalience(S, [0, 0, 0]); M.run(S, 0.15);    // inter-trial
+    }
+    M.setSalience(S, [0.7, 0.68, 0.3]); M.run(S, 0.7);
+    console.log("      after training  wStr=" + arr(S.wStr) + "  sel=" + M.selected(S));
+    check("reinforced channel now wins", M.selected(S) === 1, "sel=" + M.selected(S) + " wStr=" + arr(S.wStr));
+  }
+
+  console.log("\n==== " + pass + " passed, " + fail + " failed ====\n");
+  process.exit(fail ? 1 : 0);
+}
+
+</script>
+
+<script>
+"use strict";
+(function(){
+  const M = window.BasalGanglia;
+  const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  const betaC=document.getElementById('beta'), bctx=betaC.getContext('2d');
+  const $=id=>document.getElementById(id);
+  const CSv=getComputedStyle(document.documentElement), cvar=n=>CSv.getPropertyValue(n).trim();
+  const C={cx:cvar('--cx'),d1:cvar('--d1'),d2:cvar('--d2'),stn:cvar('--stn'),gpe:cvar('--gpe'),
+    gpi:cvar('--gpi'),th:cvar('--th'),da:cvar('--da'),ink:cvar('--ink'),faint:cvar('--faint'),
+    idle:cvar('--idle'),muted:cvar('--muted'),good:cvar('--good'),warn:cvar('--warn'),bad:cvar('--bad')};
+  const FD="'Space Grotesk',system-ui,sans-serif", FM="'IBM Plex Mono',monospace";
+  const TAU=Math.PI*2, clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function rgba(hex,a){hex=hex.replace('#','');
+    if(hex.length===3)hex=hex.split('').map(x=>x+x).join('');
+    return `rgba(${parseInt(hex.slice(0,2),16)},${parseInt(hex.slice(2,4),16)},${parseInt(hex.slice(4,6),16)},${a})`;}
+
+  const NCH=3;
+  const S = M.create({ nCh:NCH, m:6, DA:0.6 });
+  const CH=[{nm:'REACH',col:C.d1},{nm:'GRASP',col:C.th},{nm:'LOOK',col:C.gpe}];
+  const St={ speed:1, t:0, latency:-1, selAt:-1 };
+
+  M.setSalience(S,[0.9,0.6,0.5]);
+
+  /* ---- nuclei layout: rows (dorsoventral), channels = columns ---- */
+  const ROWS=[
+    {k:'cx', lab:'CORTEX', sub:'motor programs', col:C.cx, y:0.16, assembly:true},
+    {k:'d1', lab:'STR D1', sub:'direct · Go', col:C.d1, y:0.30},
+    {k:'d2', lab:'STR D2', sub:'indirect · NoGo', col:C.d2, y:0.30, x2:true},
+    {k:'gpe',lab:'GPe', sub:'', col:C.gpe, y:0.46, x2:true},
+    {k:'stn',lab:'STN', sub:'hyperdirect', col:C.stn, y:0.46},
+    {k:'gpi',lab:'GPi / SNr', sub:'output', col:C.gpi, y:0.64},
+    {k:'th', lab:'THALAMUS', sub:'release', col:C.th, y:0.82},
+  ];
+
+  let W=0,H=0,DPR=1;
+  function chX(c){ return W*(0.22 + 0.56*(NCH===1?0.5:c/(NCH-1))); }
+  function resize(){
+    const r=cv.getBoundingClientRect();
+    DPR=Math.min(window.devicePixelRatio||1,2);
+    W=r.width;H=r.height;
+    cv.width=Math.max(1,W*DPR);cv.height=Math.max(1,H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    const br=betaC.getBoundingClientRect();
+    betaC.width=Math.max(1,br.width*DPR);betaC.height=Math.max(1,br.height*DPR);
+    bctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+
+  function nodePos(row,c){
+    let x=chX(c);
+    if(row.x2) x += W*0.048;               // split D2/GPe slightly right of D1/STN
+    else if(row.k==='d1'||row.k==='stn') x -= W*0.048;
+    return {x, y:H*row.y};
+  }
+  function rateOf(k,c){ return S[k]? S[k][c] : 0; }
+
+  function clock(x,y,ph,act,col,r){
+    const s=.5+.5*Math.sin(ph), rr=r*(0.7+0.4*s);
+    if(act){ctx.shadowColor=col;ctx.shadowBlur=3+s*10;}
+    ctx.beginPath();ctx.arc(x,y,rr,0,TAU);
+    ctx.fillStyle=act?rgba(col,.22+s*.6):rgba(C.idle,.06+s*.10);ctx.fill();ctx.shadowBlur=0;
+    ctx.beginPath();ctx.arc(x,y,rr,0,TAU);ctx.lineWidth=.8;
+    ctx.strokeStyle=act?rgba(col,.6+s*.4):rgba(C.idle,.3);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(ph)*r*0.9,y+Math.sin(ph)*r*0.9);
+    ctx.strokeStyle=rgba(C.ink,act?.65:.16);ctx.lineWidth=.8;ctx.stroke();
+  }
+  // terminal: 'glut' arrow, 'gaba' bar, 'dop' diamond
+  function conn(a,b,col,act,kind){
+    ctx.beginPath();ctx.moveTo(a.x,a.y);
+    const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+    ctx.quadraticCurveTo(mx,my,b.x,b.y);
+    ctx.strokeStyle=rgba(col,0.06+act*0.5);ctx.lineWidth=0.6+act*2.2;ctx.stroke();
+    const ang=Math.atan2(b.y-a.y,b.x-a.x), ex=b.x-Math.cos(ang)*8, ey=b.y-Math.sin(ang)*8;
+    ctx.fillStyle=rgba(col,0.2+act*0.7); ctx.strokeStyle=ctx.fillStyle;
+    if(kind==='gaba'){ ctx.lineWidth=2.2; ctx.beginPath();
+      ctx.moveTo(ex-Math.sin(ang)*5,ey+Math.cos(ang)*5);ctx.lineTo(ex+Math.sin(ang)*5,ey-Math.cos(ang)*5);ctx.stroke(); }
+    else { ctx.beginPath();ctx.moveTo(b.x,b.y);
+      ctx.lineTo(b.x-Math.cos(ang-0.5)*8,b.y-Math.sin(ang-0.5)*8);
+      ctx.lineTo(b.x-Math.cos(ang+0.5)*8,b.y-Math.sin(ang+0.5)*8);ctx.closePath();ctx.fill(); }
+  }
+  function node(x,y,v,col,lab,sub){
+    const r=Math.min(W*0.017,17);
+    ctx.beginPath();ctx.arc(x,y,r,0,TAU);
+    ctx.fillStyle=rgba(col,.08+v*.55);ctx.fill();
+    if(v>.2){ctx.shadowColor=col;ctx.shadowBlur=v*16;}
+    ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.lineWidth=1.4;
+    ctx.strokeStyle=rgba(col,.4+v*.6);ctx.stroke();ctx.shadowBlur=0;
+    ctx.textAlign='center';ctx.font='600 8px '+FM;ctx.fillStyle=rgba(C.ink,.85);
+    ctx.fillText((v).toFixed(2),x,y+3);
+    return r;
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    const sel=M.selected(S);
+    // ---- connections (drawn behind) ----
+    for(let c=0;c<NCH;c++){
+      const cx=nodePos(ROWS[0],c), d1=nodePos(ROWS[1],c), d2=nodePos(ROWS[2],c),
+            gpe=nodePos(ROWS[3],c), stn=nodePos(ROWS[4],c), gpi=nodePos(ROWS[5],c), th=nodePos(ROWS[6],c);
+      const A=k=>rateOf(k,c);
+      conn(cx,d1,C.cx,S.cx[c],'glut'); conn(cx,d2,C.cx,S.cx[c],'glut');
+      conn(cx,stn,C.cx,S.cx[c],'glut');                 // hyperdirect
+      conn(d1,gpi,C.d1,A('d1'),'gaba');                 // direct Go
+      conn(d2,gpe,C.d2,A('d2'),'gaba');
+      conn(gpe,stn,C.gpe,A('gpe'),'gaba');
+      conn(gpe,gpi,C.gpe,A('gpe'),'gaba');
+      conn(gpi,th,C.gpi,A('gpi'),'gaba');               // tonic inhibition of thalamus
+      conn(th,cx,C.th,A('th'),'glut');                  // thalamocortical loop
+      // STN diffuse to ALL GPi (on-surround)
+      for(let c2=0;c2<NCH;c2++){ const gpi2=nodePos(ROWS[5],c2);
+        conn(stn,gpi2,C.stn,A('stn')*(1-S.P.dbs),'glut'); }
+    }
+    // ---- SNc dopamine node projecting to striatum ----
+    const snc={x:W*0.06,y:H*0.30};
+    ctx.beginPath();ctx.arc(snc.x,snc.y,13,0,TAU);
+    ctx.fillStyle=rgba(C.da,.08+S.P.DA*.4);ctx.fill();
+    ctx.lineWidth=1.4;ctx.strokeStyle=rgba(C.da,.5);ctx.stroke();
+    ctx.textAlign='center';ctx.font='600 8px '+FM;ctx.fillStyle=rgba(C.da,.9);
+    ctx.fillText('SNc',snc.x,snc.y+3);ctx.fillText('DA '+S.P.DA.toFixed(2),snc.x,snc.y+24);
+    for(let c=0;c<NCH;c++){ const d1=nodePos(ROWS[1],c);
+      ctx.beginPath();ctx.moveTo(snc.x+12,snc.y);ctx.quadraticCurveTo((snc.x+d1.x)/2,snc.y-30,d1.x-14,d1.y);
+      ctx.setLineDash([2,3]);ctx.strokeStyle=rgba(C.da,.1+S.P.DA*.3);ctx.lineWidth=1;ctx.stroke();ctx.setLineDash([]); }
+
+    // ---- nodes ----
+    for(const row of ROWS){
+      for(let c=0;c<NCH;c++){
+        const p=nodePos(row,c);
+        if(row.assembly){
+          // cortical assembly: ring of clocks, halo shows coherence R
+          const R=S.R[c], mph=S.mph[c];
+          const on=(sel===c);
+          const rr=Math.min(W*0.02,20);
+          if(R>0.4){ ctx.beginPath();ctx.arc(p.x,p.y,rr*1.7,0,TAU);
+            ctx.strokeStyle=rgba(CH[c].col,(R-0.35)*0.6);ctx.lineWidth=1.4;ctx.stroke(); }
+          for(let i=0;i<S.m;i++){ const a=-TAU/4+i*TAU/S.m;
+            clock(p.x+Math.cos(a)*rr,p.y+Math.sin(a)*rr,S.ph[c][i],on||R>0.5,CH[c].col,Math.min(W*0.004,4)); }
+          ctx.textAlign='center';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(CH[c].col,on?1:.6);
+          ctx.fillText(CH[c].nm,p.x,p.y-rr-8);
+          if(on){ ctx.font='500 7.5px '+FM;ctx.fillStyle=rgba(C.good,.9);ctx.fillText('SELECTED',p.x,p.y+rr+16); }
+        } else {
+          node(p.x,p.y,rateOf(row.k,c),row.col);
+        }
+      }
+      // row label at left
+      const yy=H*row.y;
+      ctx.textAlign='left';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(row.col,.75);
+      ctx.fillText(row.lab, W*0.015, yy+3);
+      if(row.sub){ ctx.font='500 7px '+FM;ctx.fillStyle=rgba(C.faint,.8);ctx.fillText(row.sub,W*0.015,yy+13); }
+    }
+  }
+
+  /* ---- β spectrum panel ---- */
+  const stnBuf=[]; let betaFrac=0;   // betaFrac here = β oscillation AMPLITUDE (honest measure)
+  function pushBeta(){ stnBuf.push(S.stn[0]); if(stnBuf.length>1200) stnBuf.shift(); }
+  function computeBeta(){
+    const n=Math.min(stnBuf.length,600); if(n<200){betaFrac=0;return;}
+    const y=stnBuf.slice(-n), mu=y.reduce((s,v)=>s+v,0)/n;
+    let p=0;                          // absolute 13–30 Hz power → amplitude
+    for(let hz=13;hz<=30;hz++){ let re=0,im=0;
+      for(let i=0;i<n;i++){const A=TAU*hz*i/1000; re+=(y[i]-mu)*Math.cos(A); im+=(y[i]-mu)*Math.sin(A);}
+      p+=(re*re+im*im)/(n*n); }
+    betaFrac=Math.min(1, Math.sqrt(p)*11);   // scaled to ~0..1 for the readout
+  }
+  function drawBeta(){
+    const w=betaC.clientWidth,h=betaC.clientHeight; if(!w) return;
+    bctx.clearRect(0,0,w,h);
+    const n=Math.min(stnBuf.length,300); if(n<4) return;
+    const y=stnBuf.slice(-n), mn=Math.min(...y), mx=Math.max(...y), rng=Math.max(0.02,mx-mn);
+    bctx.strokeStyle=betaFrac>0.4?rgba(C.bad,1):rgba(C.stn,.85);bctx.lineWidth=1.4;bctx.beginPath();
+    for(let i=0;i<n;i++){ const x=i/(n-1)*w, yy=h-6-((y[i]-mn)/rng)*(h-12);
+      i?bctx.lineTo(x,yy):bctx.moveTo(x,yy); }
+    bctx.stroke();
+  }
+
+  /* ---------------- UI ---------------- */
+  const PRE=[
+    {k:'healthy',n:'Healthy',m:{DA:0.6,dbs:0}},
+    {k:'pd',n:'Parkinsonian',pd:1,m:{DA:0.05,dbs:0}},
+    {k:'dbs',n:'PD + STN-DBS',pd:1,m:{DA:0.05,dbs:0.85}},
+    {k:'hyper',n:'Hyperdopaminergic',m:{DA:0.95,dbs:0}},
+  ];
+  const pw=$('pre');
+  PRE.forEach(p=>{const b=document.createElement('button');b.textContent=p.n;b.dataset.k=p.k;
+    if(p.pd)b.className='pdp'; b.onclick=()=>applyPre(p); pw.appendChild(b);});
+  function applyPre(p){
+    S.P.DA=p.m.DA; S.P.dbs=p.m.dbs;
+    $('s-da').value=S.P.DA; $('v-da').textContent=S.P.DA.toFixed(2);
+    $('s-dbs').value=S.P.dbs; $('v-dbs').textContent=S.P.dbs>0?S.P.dbs.toFixed(2):'off';
+    [...pw.children].forEach(b=>b.classList.toggle('on',b.dataset.k===p.k));
+    St.latency=-1; St.selAt=-1;
+    updateNote();
+  }
+  const chWrap=$('channels');
+  CH.forEach((c,i)=>{
+    const row=document.createElement('div');row.className='ch';
+    row.innerHTML=`<span class="nm"><i style="color:${c.col};background:${c.col}"></i>${c.nm}</span>`+
+      `<input type="range" min="0" max="1" step="0.02" value="${[0.9,0.6,0.5][i]}" data-ch="${i}">`+
+      `<span class="vl" id="sv-${i}">${[0.9,0.6,0.5][i].toFixed(2)}</span>`+
+      `<button class="rw" data-rw="${i}">⇧ Reward</button>`;
+    chWrap.appendChild(row);
+  });
+  chWrap.addEventListener('input',e=>{
+    const ch=e.target.getAttribute('data-ch'); if(ch==null)return;
+    S.sal[+ch]=parseFloat(e.target.value); $('sv-'+ch).textContent=(+e.target.value).toFixed(2);
+    St.latency=-1; St.selAt=-1;
+  });
+  chWrap.addEventListener('click',e=>{
+    const rw=e.target.getAttribute('data-rw'); if(rw==null)return;
+    M.reinforce(S,+rw,1.0,0.12);   // deliver a reward to that channel
+  });
+  const barWrap=$('bars');
+  CH.forEach((c,i)=>{const d=document.createElement('div');d.className='bar';
+    d.innerHTML=`<span style="color:${c.col}">${c.nm}</span><span class="t"><i id="tb-${i}" style="background:${c.col}"></i></span><span class="v" id="tv-${i}">.00</span>`;
+    barWrap.appendChild(d);});
+  const bind=(id,vid,fmt,set)=>{const el=$(id),vl=$(vid);
+    const f=()=>{const v=parseFloat(el.value);set(v);vl.textContent=fmt(v);};el.oninput=()=>{f();St.latency=-1;St.selAt=-1;[...pw.children].forEach(b=>b.classList.remove('on'));};f();};
+  bind('s-da','v-da',v=>v.toFixed(2),v=>S.P.DA=v);
+  bind('s-dbs','v-dbs',v=>v>0?v.toFixed(2):'off',v=>S.P.dbs=v);
+
+  function updateNote(){
+    const pd=S.P.DA<0.25;
+    document.body.classList.toggle('pd',pd&&S.P.dbs<0.3);
+    $('pill-pd').classList.toggle('on',pd&&S.P.dbs<0.3);
+    let t;
+    if(pd&&S.P.dbs>0.3) t='<b>DBS.</b> High-frequency STN stimulation regularises the pathological output — the on-surround is quenched, GPi falls, and selection is <em>restored</em> despite low dopamine.';
+    else if(pd) t='<b>Parkinsonian.</b> Dopamine is gone: the direct (Go) pathway is dead, GPi stays high on every channel — <span class="w">akinesia</span>. The STN⟷GPe loop is <span class="w">β-locked</span>.';
+    else if(S.P.DA>0.8) t='<b>Hyperdopaminergic.</b> The Go pathway is over-facilitated — selection is fast and can become impulsive (weak channels break through).';
+    else t='<b>Healthy.</b> One motor program wins: its D1 shuts off its own GPi (Go) while its STN raises GPi on the others (No-Go). The thalamus then <em>sustains</em> the winner\'s synchrony.';
+    $('note').innerHTML=t;
+  }
+
+  function updateUI(){
+    const sel=M.selected(S);
+    $('r-da').textContent=S.P.DA.toFixed(2);
+    const rs=$('r-sel'); rs.textContent=sel<0?'none':CH[sel].nm; rs.className=sel<0?'bad':'ok';
+    $('r-lat').textContent=St.latency<0?'—':St.latency.toFixed(0)+' ms';
+    const rb=$('r-beta'); rb.textContent=betaFrac.toFixed(2); rb.className=betaFrac>0.4?'bad':'';
+    $('r-R').textContent=sel<0?'—':S.R[sel].toFixed(2);
+    CH.forEach((c,i)=>{ $('tb-'+i).style.width=(S.th[i]*100).toFixed(0)+'%';
+      $('tv-'+i).textContent=S.th[i].toFixed(2); });
+    $('beta-val').textContent='β '+betaFrac.toFixed(2);
+    $('beta-lab').textContent=betaFrac>0.4?'STN — pathological β':'subthalamic rate';
+  }
+
+  /* ---------------- main loop ---------------- */
+  let last=performance.now(), carry=0, ui=0, betaTick=0;
+  function frame(now){
+    let dt=(now-last)/1000; last=now; dt=Math.min(dt,0.05);
+    carry+=dt*St.speed;
+    let steps=Math.min(80,Math.round(carry/S.P.dt)); carry-=steps*S.P.dt;
+    for(let s=0;s<steps;s++){ M.step(S); St.t+=S.P.dt; pushBeta();
+      if(St.selAt<0 && M.selected(S)>=0){ St.selAt=St.t; St.latency=St.t*1000 - (St.lastReset||0); }
+    }
+    computeBeta();
+    draw(); drawBeta();
+    ui+=dt; if(ui>0.1){ui=0;updateUI();}
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize',resize);
+  resize(); applyPre(PRE[0]); updateUI();
+  requestAnimationFrame(frame);
+
+  /* ---------- in-app verification (reproduces the headless numbers) ---------- */
+  (function verify(){
+    try{
+      const T=M.create({seed:7,DA:0.6}); M.setSalience(T,[0.9,0.6,0.5]); M.run(T,1.0);
+      const selH=M.selected(T), rH=T.R[0];
+      const P=M.create({seed:7,DA:0.05}); M.setSalience(P,[0.9,0.6,0.5]); M.run(P,0.9);
+      const selP=M.selected(P);
+      const ok = selH===0 && rH>0.85 && selP===-1;
+      console.log(`[verify] healthy sel=${selH} R=${rH.toFixed(3)} | parkinsonian sel=${selP} → ${ok?'PASS':'FAIL'}`);
+    }catch(e){ console.error('[verify] error', e); }
+  })();
+})();
+</script>
+</body>
+</html>
