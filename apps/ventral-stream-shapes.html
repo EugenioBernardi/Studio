@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ventral Stream — Retina to V2 Shape Recognition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#060911;--panel:rgba(13,19,33,.74);--line:rgba(120,150,200,.14);
+ --ink:#e4ebf7;--muted:#8a99b6;--faint:#4a5670;--idle:#41506e;
+ --RET:#ffc861;--LGN:#56d4ff;--S:#ff9d4d;--CX:#3ee6b0;--V2A:#ff4d7d;--V2B:#c07bff;
+ --DEC:#7f9bff;--good:#3ee6b0;--warn:#ff9d4d;
+ --D:'Space Grotesk',system-ui,sans-serif;--M:'IBM Plex Mono',ui-monospace,monospace;}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;font-family:var(--D);color:var(--ink);overflow:hidden;
+ background:radial-gradient(1300px 800px at 30% -15%,#0f1a2e 0,transparent 62%),
+ radial-gradient(900px 700px at 95% 115%,#0b1322 0,transparent 58%),var(--bg)}
+.app{display:grid;grid-template-columns:1fr 340px;height:100vh}
+.stage{position:relative;overflow:hidden;min-width:0}
+#cv{position:absolute;inset:0;width:100%;height:100%}
+.ttl{position:absolute;top:13px;left:20px;z-index:3;pointer-events:none;max-width:52%}
+.ttl h1{margin:0;font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.ttl .s{margin-top:4px;font-family:var(--M);font-size:9px;color:var(--muted);line-height:1.5}
+.pan{background:linear-gradient(180deg,rgba(10,15,28,.93),rgba(8,12,22,.97));
+ border-left:1px solid var(--line);padding:13px 12px;overflow-y:auto;z-index:4;
+ display:flex;flex-direction:column;gap:10px}
+.pan::-webkit-scrollbar{width:8px}.pan::-webkit-scrollbar-thumb{background:rgba(120,150,200,.18);border-radius:4px}
+.b{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px}
+.b h2{margin:0 0 8px;font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+ font-weight:600;display:flex;align-items:center;gap:7px}
+.b h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--LGN));box-shadow:0 0 8px var(--dot,var(--LGN))}
+.shapes{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.shapes button{border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);
+ font-family:var(--M);font-size:10px;cursor:pointer;padding:9px 3px;border-radius:8px;transition:.15s}
+.shapes button:hover{color:var(--ink);border-color:rgba(86,212,255,.45)}
+.shapes button.on{background:rgba(86,212,255,.15);color:var(--ink);border-color:rgba(86,212,255,.5)}
+.sl{display:flex;align-items:center;gap:7px;margin-top:7px;font-family:var(--M);font-size:9px;color:var(--muted)}
+.sl .n{width:74px;flex:none}.sl input{flex:1;accent-color:var(--c,var(--LGN));min-width:0}
+.sl .v{width:42px;text-align:right;color:var(--ink);flex:none}
+.btn{width:100%;border:0;cursor:pointer;font-family:var(--D);font-weight:600;font-size:12px;
+ padding:10px;border-radius:10px;margin-top:8px;color:#06121f;
+ background:linear-gradient(180deg,#a9e0ff,#56d4ff);box-shadow:0 6px 16px -8px rgba(86,212,255,.7)}
+.btn:hover{filter:brightness(1.07)}
+.dec{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.dr{display:grid;grid-template-columns:56px 1fr 36px;gap:7px;align-items:center;
+ font-family:var(--M);font-size:10px;color:var(--muted)}
+.dr .t{height:8px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}
+.dr .t i{display:block;height:100%;border-radius:4px;transition:width .1s}
+.dr .v{text-align:right;color:var(--ink)}
+.dr.win{color:var(--ink);font-weight:600}
+.verdict{font-family:var(--D);font-size:19px;font-weight:700;letter-spacing:.06em;
+ text-align:center;padding:9px;border-radius:10px;margin-top:8px;
+ background:rgba(127,155,255,.10);border:1px solid rgba(127,155,255,.30)}
+.verdict small{display:block;font-family:var(--M);font-size:8.5px;font-weight:400;
+ letter-spacing:.04em;color:var(--muted);margin-top:3px}
+.feat{display:flex;flex-direction:column;gap:3px;margin-top:6px;
+ font-family:var(--M);font-size:9px;color:var(--muted)}
+.feat div{display:flex;justify-content:space-between}
+.feat b{color:var(--ink);font-weight:500}
+.note{font-family:var(--M);font-size:9px;line-height:1.5;color:var(--muted);margin-top:7px}
+.note b{color:var(--ink)}
+.rd{position:absolute;left:20px;bottom:11px;z-index:3;font-family:var(--M);font-size:9px;
+ color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;pointer-events:none}
+.rd b{color:var(--ink);font-weight:600}
+@media(max-width:1020px){.app{grid-template-columns:1fr;grid-template-rows:1fr auto}
+ .pan{border-left:0;border-top:1px solid var(--line);max-height:48vh}.rd{display:none}}
+</style></head><body>
+<div class="app">
+ <div class="stage"><canvas id="cv"></canvas>
+  <div class="ttl"><h1>Ventral Stream · Retina → V2</h1>
+   <div class="s">Feedforward shape recognition. Every unit is a clock; units driven by the
+   same contour fall into synchrony.<br>Watch the wave propagate after "Present stimulus".</div></div>
+  <div class="rd"><span>t <b id="r-t">0 ms</b></span><span>STAGE <b id="r-stage">–</b></span>
+   <span>V1 peak ori <b id="r-ori">–</b></span><span>corners <b id="r-cor">–</b></span></div></div>
+ <aside class="pan">
+  <div class="b" style="--dot:var(--RET)"><h2>Stimulus</h2>
+   <div class="shapes" id="shapes"></div>
+   <label class="sl" style="--c:var(--RET)"><span class="n">Rotation</span>
+    <input id="s-rot" type="range" min="0" max="1.57" step="0.02" value="0"><span class="v" id="v-rot">0°</span></label>
+   <label class="sl" style="--c:var(--RET)"><span class="n">Size</span>
+    <input id="s-size" type="range" min="0.22" max="0.85" step="0.01" value="0.52"><span class="v" id="v-size">0.52</span></label>
+   <label class="sl" style="--c:var(--warn)"><span class="n">Noise</span>
+    <input id="s-noise" type="range" min="0" max="1.4" step="0.05" value="0"><span class="v" id="v-noise">0.00</span></label>
+   <label class="sl" style="--c:var(--RET)"><span class="n">Outline</span>
+    <input id="s-thick" type="range" min="0" max="2" step="1" value="0"><span class="v" id="v-thick">filled</span></label>
+   <button class="btn" id="b-go">▶ Present stimulus</button>
+   <label class="sl"><span class="n">Speed</span>
+    <input id="s-sp" type="range" min="0.05" max="1" step="0.05" value="0.25"><span class="v" id="v-sp">0.25x</span></label>
+  </div>
+  <div class="b" style="--dot:var(--DEC)"><h2>Decision</h2>
+   <div class="dec" id="dec"></div>
+   <div class="verdict" id="verdict">—<small>present a stimulus</small></div>
+  </div>
+  <div class="b" style="--dot:var(--V2A)"><h2>V2 feature evidence</h2>
+   <div class="feat" id="feat"></div>
+   <div class="note" id="note"></div>
+  </div>
+  <div class="b" style="--dot:var(--CX)"><h2>Circuit parameters</h2>
+   <label class="sl" style="--c:var(--LGN)"><span class="n">LGN surround</span>
+    <input id="s-sur" type="range" min="0" max="1" step="0.05" value="0.55"><span class="v" id="v-sur">0.55</span></label>
+   <label class="sl" style="--c:var(--S)"><span class="n">Gabor σ</span>
+    <input id="s-sig" type="range" min="1.4" max="4" step="0.1" value="3.0"><span class="v" id="v-sig">3.0</span></label>
+   <label class="sl" style="--c:var(--S)"><span class="n">Elongation</span>
+    <input id="s-gam" type="range" min="0.2" max="1" step="0.05" value="0.30"><span class="v" id="v-gam">0.30</span></label>
+   <label class="sl" style="--c:var(--CX)"><span class="n">Complex pool</span>
+    <input id="s-pool" type="range" min="1" max="4" step="0.5" value="1.4"><span class="v" id="v-pool">1.4</span></label>
+   <div class="note">Elongation sets V1 orientation selectivity. Below ~0.5 the tuning
+   sharpens enough for V2 angle cells to separate 60° from 90° corners.</div>
+  </div>
+ </aside></div>
+<script>
+"use strict";
+
+// Retina -> LGN -> V1 simple -> V1 complex -> V2 (angle/curvature) -> decision
+const N=40;                 // retina grid
+const NORI=12;              // 15 deg steps: 60 deg = 4 steps, 90 deg = 6 steps
+const ORI=[...Array(NORI).keys()].map(i=>i*Math.PI/NORI);
+
+/* ---------- stimulus ---------- */
+function drawShape(kind,{size=0.52,rot=0,cx=0,cy=0,noise=0,thick=0}={}){
+  const img=new Float64Array(N*N);
+  const R=size*N/2, ox=N/2+cx*N, oy=N/2+cy*N;
+  const inside=(x,y)=>{
+    let dx=x-ox, dy=y-oy;
+    const c=Math.cos(-rot), s=Math.sin(-rot);
+    const X=dx*c-dy*s, Y=dx*s+dy*c;
+    if(kind==='circle') return Math.hypot(X,Y)<=R;
+    if(kind==='square') return Math.abs(X)<=R*0.88&&Math.abs(Y)<=R*0.88;
+    if(kind==='triangle'){
+      // true equilateral, apex up: sides at 60 deg from horizontal
+      const a=R*1.02, h=a*Math.SQRT2*Math.sqrt(1.5);   // h = a*sqrt(3)
+      const yTop=-2*h/3, yBot=h/3;
+      if(Y<yTop||Y>yBot) return false;
+      const w=a*(Y-yTop)/h;
+      return Math.abs(X)<=w;
+    }
+    return false;
+  };
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    let v=0;
+    for(const [dx,dy] of [[0.25,0.25],[0.75,0.25],[0.25,0.75],[0.75,0.75]])
+      v+=inside(x+dx,y+dy)?0.25:0;      // 4x supersample for smooth edges
+    img[y*N+x]=v;
+  }
+  if(thick>0){  // outline mode: subtract an eroded copy
+    const er=new Float64Array(N*N);
+    for(let y=1;y<N-1;y++)for(let x=1;x<N-1;x++){
+      let m=1;
+      for(let j=-thick;j<=thick;j++)for(let i=-thick;i<=thick;i++)
+        m=Math.min(m,img[(y+j)*N+(x+i)]||0);
+      er[y*N+x]=m;
+    }
+    for(let i=0;i<N*N;i++) img[i]=Math.max(0,img[i]-er[i]);
+  }
+  if(noise>0) for(let i=0;i<N*N;i++) img[i]=Math.max(0,Math.min(1,img[i]+(Math.random()-0.5)*noise));
+  return img;
+}
+
+/* ---------- separable gaussian blur ---------- */
+function blur(src,sig){
+  const k=Math.max(1,Math.ceil(sig*3)), w=[];
+  let s=0; for(let i=-k;i<=k;i++){const v=Math.exp(-i*i/(2*sig*sig));w.push(v);s+=v;}
+  for(let i=0;i<w.length;i++)w[i]/=s;
+  const tmp=new Float64Array(N*N), out=new Float64Array(N*N);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    let a=0;for(let i=-k;i<=k;i++){const xx=Math.min(N-1,Math.max(0,x+i));a+=w[i+k]*src[y*N+xx];}
+    tmp[y*N+x]=a;}
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    let a=0;for(let i=-k;i<=k;i++){const yy=Math.min(N-1,Math.max(0,y+i));a+=w[i+k]*tmp[yy*N+x];}
+    out[y*N+x]=a;}
+  return out;
+}
+
+/* ---------- retina: DoG ganglion cells ---------- */
+function retina(img,{sc=0.9,ss=2.2,ws=0.85}={}){
+  const c=blur(img,sc), s=blur(img,ss);
+  const on=new Float64Array(N*N), off=new Float64Array(N*N), sd=new Float64Array(N*N);
+  for(let i=0;i<N*N;i++){
+    const d=c[i]-ws*s[i];
+    sd[i]=d; on[i]=Math.max(0,d); off[i]=Math.max(0,-d);
+  }
+  return {on,off,signed:sd};
+}
+
+/* ---------- LGN: relay + surround (reticular-like) inhibition + gain control ---------- */
+function lgn(R,{kSur=0.55,gain=1.6,sat=0.55}={}){
+  const on=new Float64Array(N*N), off=new Float64Array(N*N), sd=new Float64Array(N*N);
+  const sOn=blur(R.on,2.6), sOff=blur(R.off,2.6);
+  for(let i=0;i<N*N;i++){
+    const a=Math.max(0,R.on[i]-kSur*sOn[i]), b=Math.max(0,R.off[i]-kSur*sOff[i]);
+    on[i]=gain*a/(sat+gain*a); off[i]=gain*b/(sat+gain*b);
+    sd[i]=on[i]-off[i];
+  }
+  return {on,off,signed:sd};
+}
+
+/* ---------- V1 simple: oriented Gabor quadrature pairs ---------- */
+let GP={sigma:2.0,lambda:5.0,gamma:0.6};
+function gaborKernel(th,phase,o){
+  const sigma=(o&&o.sigma)||GP.sigma, lambda=(o&&o.lambda)||GP.lambda, gamma=(o&&o.gamma)||GP.gamma;
+  // kernel must cover the ELONGATED axis (sigma/gamma), otherwise the filter is
+  // truncated and orientation tuning collapses
+  const k=Math.ceil(Math.max(sigma,sigma/gamma)*2.6), K=[];
+  const ct=Math.cos(th), st=Math.sin(th);
+  let pos=0,neg=0;
+  for(let j=-k;j<=k;j++)for(let i=-k;i<=k;i++){
+    const X=i*ct+j*st, Y=-i*st+j*ct;
+    const g=Math.exp(-(X*X+gamma*gamma*Y*Y)/(2*sigma*sigma))*Math.cos(2*Math.PI*X/lambda+phase);
+    K.push({i,j,g}); if(g>0)pos+=g; else neg-=g;
+  }
+  const m=(pos+neg)/2||1;
+  K.forEach(e=>e.g/=m);
+  return {K,k};
+}
+let GK=ORI.map(th=>[gaborKernel(th,0),gaborKernel(th,Math.PI/2)]);
+function rebuildGabors(p){Object.assign(GP,p||{});
+  GK=ORI.map(th=>[gaborKernel(th,0),gaborKernel(th,Math.PI/2)]);}
+function v1simple(L){
+  const out=[];
+  for(let o=0;o<NORI;o++){
+    const ph=[];
+    for(let p=0;p<2;p++){
+      const {K}=GK[o][p], m=new Float64Array(N*N);
+      for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+        let a=0;
+        for(const e of K){
+          const xx=x+e.i, yy=y+e.j;
+          if(xx<0||yy<0||xx>=N||yy>=N) continue;
+          a+=e.g*L.signed[yy*N+xx];
+        }
+        m[y*N+x]=a;
+      }
+      ph.push(m);
+    }
+    out.push(ph);
+  }
+  return out;   // [ori][phase] -> map ; simple cell rate = relu(+/-)
+}
+/* ---------- V1 complex: energy model (phase invariant) ---------- */
+const NC=20;                                  // complex-cell grid
+function v1complex(S,{pool=1.4,norm=0.35,pw=1}={}){
+  const step=N/NC;
+  const C=[];
+  for(let o=0;o<NORI;o++) C.push(new Float64Array(NC*NC));
+  for(let cy=0;cy<NC;cy++)for(let cx=0;cx<NC;cx++){
+    const x0=Math.round((cx+0.5)*step), y0=Math.round((cy+0.5)*step);
+    const rad=Math.max(1,Math.round(pool));
+    for(let o=0;o<NORI;o++){
+      let e=0,n=0;
+      for(let j=-rad;j<=rad;j++)for(let i=-rad;i<=rad;i++){
+        const xx=x0+i, yy=y0+j;
+        if(xx<0||yy<0||xx>=N||yy>=N) continue;
+        const a=S[o][0][yy*N+xx], b=S[o][1][yy*N+xx];
+        e+=a*a+b*b; n++;
+      }
+      C[o][cy*NC+cx]=Math.pow(Math.sqrt(e/Math.max(1,n)),pw);
+    }
+    // divisive normalisation across orientations
+    let tot=0; for(let o=0;o<NORI;o++) tot+=C[o][cy*NC+cx];
+    for(let o=0;o<NORI;o++) C[o][cy*NC+cx]=C[o][cy*NC+cx]/(norm+tot);
+  }
+  return C;
+}
+
+/* ---------- V2: angle-selective (corner) cells + curvature ---------- */
+// At a corner two edge orientations coexist inside one RF; along a straight edge only
+// one does; on a smooth curve the dominant orientation rotates between neighbours.
+const V2N=10;
+function v2(C,{thr=0.02}={}){
+  const step=NC/V2N;
+  const D60=new Float64Array(V2N*V2N), D90=new Float64Array(V2N*V2N),
+        CURV=new Float64Array(V2N*V2N), EDGE=new Float64Array(V2N*V2N);
+  const d60=Math.round(60/(180/NORI)), d90=Math.round(90/(180/NORI));
+  for(let vy=0;vy<V2N;vy++)for(let vx=0;vx<V2N;vx++){
+    const x0=Math.floor(vx*step), y0=Math.floor(vy*step);
+    const H=new Float64Array(NORI);
+    let tot=0;
+    for(let j=0;j<step;j++)for(let i=0;i<step;i++){
+      const xx=x0+i,yy=y0+j; if(xx>=NC||yy>=NC)continue;
+      for(let o=0;o<NORI;o++){const v=C[o][yy*NC+xx];H[o]+=v;tot+=v;}
+    }
+    EDGE[vy*V2N+vx]=tot;
+    if(tot<thr) continue;
+    for(let o=0;o<NORI;o++) H[o]/=tot;
+    let a60=0,a90=0;
+    for(let o=0;o<NORI;o++){
+      a60+=H[o]*H[(o+d60)%NORI];
+      a90+=H[o]*H[(o+d90)%NORI];
+    }
+    D60[vy*V2N+vx]=a60*tot; D90[vy*V2N+vx]=a90*tot;
+    // curvature: single dominant orientation locally (low entropy) but non-zero energy
+    let mx=0;for(let o=0;o<NORI;o++)mx=Math.max(mx,H[o]);
+    CURV[vy*V2N+vx]=mx*tot;
+  }
+  return {D60,D90,CURV,EDGE};
+}
+function features(V){
+  const sum=a=>a.reduce((x,y)=>x+y,0);
+  const e=sum(Array.from(V.EDGE))||1e-9;
+  return {corner60:sum(Array.from(V.D60))/e, corner90:sum(Array.from(V.D90))/e,
+          curv:sum(Array.from(V.CURV))/e, edge:e};
+}
+
+/* ---------- global orientation statistics ---------- */
+function oriStats(C){
+  const H=new Float64Array(NORI); let tot=0;
+  for(let o=0;o<NORI;o++){let s=0;for(let i=0;i<NC*NC;i++)s+=C[o][i];H[o]=s;tot+=s;}
+  if(tot<=0) return {H,entropy:0,peaks:0};
+  for(let o=0;o<NORI;o++)H[o]/=tot;
+  let e=0;for(let o=0;o<NORI;o++) if(H[o]>0) e-=H[o]*Math.log(H[o]);
+  e/=Math.log(NORI);                       // 0 = one orientation, 1 = uniform
+  let peaks=0;
+  for(let o=0;o<NORI;o++){
+    const a=H[(o-1+NORI)%NORI],b=H[o],c=H[(o+1)%NORI];
+    if(b>a&&b>=c&&b>1.25/NORI) peaks++;
+  }
+  return {H,entropy:e,peaks};
+}
+
+/* ---------- decision layer: 3 units, mutual inhibition ---------- */
+const DEC=['square','triangle','circle'];
+function drives(f){
+  return [ f.corner90*5.0,
+           f.corner60*5.0,
+           Math.max(0,(f.entropy-0.88)/0.12)*0.75 ];
+}
+function classify(f){
+  const d=drives(f);
+  let st=[0,0,0];
+  for(let t=0;t<400;t++){          // settle the competition
+    const nx=[0,0,0];
+    for(let i=0;i<3;i++){
+      let inh=0; for(let j=0;j<3;j++) if(j!==i) inh+=st[j];
+      nx[i]=Math.max(0,Math.min(1,d[i]-0.85*inh));
+    }
+    for(let i=0;i<3;i++) st[i]+=(nx[i]-st[i])*0.08;
+  }
+  let mi=0; for(let i=1;i<3;i++) if(st[i]>st[mi]) mi=i;
+  const sorted=[...st].sort((a,b)=>b-a);
+  return {label:DEC[mi],state:st,drives:d,margin:sorted[0]-sorted[1]};
+}
+function pipeline(kind,opt){
+  const img=drawShape(kind,opt||{});
+  const R=retina(img), L=lgn(R), S=v1simple(L), C=v1complex(S,{pw:2});
+  const V=v2(C), f=features(V), st=oriStats(C);
+  const ff={...f,entropy:st.entropy,peaks:st.peaks};
+  return {img,R,L,S,C,V,f:ff,ori:st,dec:classify(ff)};
+}
+
+(function(){
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const $=id=>document.getElementById(id);
+const CS=getComputedStyle(document.documentElement),cvar=n=>CS.getPropertyValue(n).trim();
+const C={};['RET','LGN','S','CX','V2A','V2B','DEC','ink','faint','idle','muted','good','warn']
+ .forEach(k=>C[k]=cvar('--'+k));
+const FM="'IBM Plex Mono',monospace",FD="'Space Grotesk',sans-serif";
+const TAU=Math.PI*2,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function rgba(h,a){h=h.replace('#','');if(h.length===3)h=h.split('').map(x=>x+x).join('');
+ return`rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;}
+
+/* ---------------- stimulus + static feedforward pass ---------------- */
+const ST={kind:'square',rot:0,size:0.52,noise:0,thick:0};
+const PAR={sur:0.55,sigma:3.0,gamma:0.30,pool:1.4};
+let TGT=null;                       // computed targets for every stage
+function recompute(){
+  rebuildGabors({sigma:PAR.sigma,lambda:4,gamma:PAR.gamma});
+  const img=drawShape(ST.kind,{rot:ST.rot,size:ST.size,noise:ST.noise,thick:ST.thick});
+  const R=retina(img), L=lgn(R,{kSur:PAR.sur});
+  const S=v1simple(L), Cx=v1complex(S,{pw:2,pool:PAR.pool});
+  const V=v2(Cx), f=features(V), st=oriStats(Cx);
+  const ff={...f,entropy:st.entropy,peaks:st.peaks};
+  TGT={img,R,L,S,C:Cx,V,f:ff,ori:st,drv:drives(ff)};
+}
+
+/* ---------------- dynamics: activation cascades with latency ---------------- */
+const STAGES=['retina','lgn','v1s','v1c','v2','dec'];
+const TAUms={retina:16,lgn:14,v1s:14,v1c:18,v2:24,dec:45};
+const LATms={retina:12,lgn:22,v1s:34,v1c:48,v2:66,dec:92};
+let act={},decState=[0,0,0],simT=0,running=false;
+function resetDyn(){STAGES.forEach(s=>act[s]=0);decState=[0,0,0];simT=0;running=true;}
+function stepDyn(ms){
+  if(!running)return;
+  simT+=ms;
+  for(const s of STAGES){
+    const gate=simT>LATms[s]?1:0;
+    act[s]+=(gate-act[s])*(ms/TAUms[s]);
+  }
+  // decision competition, driven only once V2 is up
+  const d=TGT?TGT.drv:[0,0,0];
+  for(let i=0;i<3;i++){
+    let inh=0;for(let j=0;j<3;j++) if(j!==i) inh+=decState[j];
+    const t=clamp(d[i]*act.dec-0.85*inh,0,1);
+    decState[i]+=(t-decState[i])*(ms/TAUms.dec);
+  }
+}
+
+/* ---------------- clocks ---------------- */
+function mkClocks(n){return Array.from({length:n},()=>({ph:Math.random()*TAU,f:0.9+Math.random()*0.2}));}
+const CK={retina:mkClocks(64),lgn:mkClocks(64),v1s:mkClocks(9*NORI),v1c:mkClocks(9*NORI),
+          v2:mkClocks(36),dec:mkClocks(3)};
+function stepClocks(dt,vals){
+  for(const key in CK){
+    const arr=CK[key],v=vals[key]||[];
+    let sx=0,sy=0,n=0;
+    for(let i=0;i<arr.length;i++){const a=v[i]||0;if(a>0.12){sx+=Math.cos(arr[i].ph)*a;sy+=Math.sin(arr[i].ph)*a;n+=a;}}
+    const mph=n>0?Math.atan2(sy/n,sx/n):0;
+    for(let i=0;i<arr.length;i++){
+      const a=v[i]||0;
+      arr[i].ph=(arr[i].ph+(TAU*(1.6+6.5*a)*arr[i].f+7.5*a*Math.sin(mph-arr[i].ph)
+        +(Math.random()-.5)*0.7)*dt+TAU*2)%TAU;
+    }
+  }
+}
+function drawClock(x,y,ph,a,col,sz){
+  const s=.5+.5*Math.sin(ph),on=a>0.10;
+  if(on&&sz>2.4){ctx.shadowColor=col;ctx.shadowBlur=2+s*12*Math.min(1,a*2);}
+  ctx.beginPath();ctx.arc(x,y,sz*(0.60+0.42*s),0,TAU);
+  ctx.fillStyle=on?rgba(col,.16+s*.66*Math.min(1,a*2.2)):rgba(C.idle,.05+s*.07);
+  ctx.fill();ctx.shadowBlur=0;
+  ctx.beginPath();ctx.arc(x,y,sz*(0.60+0.42*s),0,TAU);ctx.lineWidth=.8;
+  ctx.strokeStyle=on?rgba(col,.5+s*.5):rgba(C.idle,.22);ctx.stroke();
+  if(sz>2.6){ctx.beginPath();ctx.moveTo(x,y);
+   ctx.lineTo(x+Math.cos(ph)*sz*1.0,y+Math.sin(ph)*sz*1.0);
+   ctx.strokeStyle=rgba(C.ink,on?.55:.12);ctx.lineWidth=.8;ctx.stroke();}
+}
+
+/* ---------------- layout & rendering ---------------- */
+let W=0,H=0,DPR=1;
+const BANDS=[{k:'retina',x:0.085,lab:'RETINA',sub:'ON / OFF ganglion',col:'RET'},
+             {k:'lgn',x:0.245,lab:'LGN',sub:'relay + surround',col:'LGN'},
+             {k:'v1s',x:0.425,lab:'V1 SIMPLE',sub:'oriented, phase-tuned',col:'S'},
+             {k:'v1c',x:0.605,lab:'V1 COMPLEX',sub:'phase invariant',col:'CX'},
+             {k:'v2',x:0.775,lab:'V2',sub:'angle / corner cells',col:'V2A'},
+             {k:'dec',x:0.925,lab:'DECISION',sub:'competition',col:'DEC'}];
+function resize(){const r=cv.getBoundingClientRect();DPR=Math.min(devicePixelRatio||1,2);
+ W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+
+function sampleMap(map,n,gridN){       // coarse sample of an NxN map to n x n
+  const out=[];const st=gridN/n;
+  for(let j=0;j<n;j++)for(let i=0;i<n;i++){
+    let s=0,c=0;
+    for(let b=0;b<st;b++)for(let a=0;a<st;a++){
+      const x=Math.floor(i*st+a),y=Math.floor(j*st+b);
+      if(x<gridN&&y<gridN){s+=map[y*gridN+x];c++;}}
+    out.push(c?s/c:0);}
+  return out;
+}
+function currentVals(){
+  if(!TGT) return {};
+  const v={};
+  const g=s=>act[s]||0;
+  v.retina=sampleMap(TGT.R.on,8,N).map((x,i)=>Math.min(1,(x+sampleMap(TGT.R.off,8,N)[i])*7*g('retina')));
+  v.lgn=sampleMap(TGT.L.on,8,N).map((x,i)=>Math.min(1,(x+sampleMap(TGT.L.off,8,N)[i])*2.2*g('lgn')));
+  const s3=[],c3=[];
+  const stepC=NC/3;
+  for(let j=0;j<3;j++)for(let i=0;i<3;i++)for(let o=0;o<NORI;o++){
+    let e=0,n=0;
+    for(let b=0;b<stepC;b++)for(let a=0;a<stepC;a++){
+      const x=Math.floor(i*stepC+a),y=Math.floor(j*stepC+b);
+      if(x<NC&&y<NC){e+=TGT.C[o][y*NC+x];n++;}}
+    const val=n?e/n:0;
+    c3.push(Math.min(1,val*9*g('v1c')));
+    s3.push(Math.min(1,val*9*g('v1s')));
+  }
+  v.v1s=s3;v.v1c=c3;
+  const v2v=[];
+  for(let j=0;j<6;j++)for(let i=0;i<6;i++){
+    const x=Math.floor(i*V2N/6),y=Math.floor(j*V2N/6);
+    const idx=y*V2N+x;
+    v2v.push(Math.min(1,(TGT.V.D60[idx]+TGT.V.D90[idx])*14*g('v2')));
+  }
+  v.v2=v2v;
+  v.dec=decState.slice();
+  return v;
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  const vals=currentVals();
+  const yMid=H*0.50;
+  // flow arrows
+  for(let i=0;i<BANDS.length-1;i++){
+    const a=BANDS[i].x*W+W*0.055,b=BANDS[i+1].x*W-W*0.052;
+    const lit=(act[BANDS[i+1].k]||0);
+    ctx.beginPath();ctx.moveTo(a,yMid);ctx.lineTo(b,yMid);
+    ctx.strokeStyle=rgba(C[BANDS[i+1].col],0.06+lit*0.5);ctx.lineWidth=1+lit*2.6;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(b,yMid);ctx.lineTo(b-7,yMid-4);ctx.lineTo(b-7,yMid+4);ctx.closePath();
+    ctx.fillStyle=rgba(C[BANDS[i+1].col],0.15+lit*0.8);ctx.fill();
+  }
+  for(const B of BANDS){
+    const cx=B.x*W, col=C[B.col], a=act[B.k]||0;
+    ctx.textAlign='center';
+    ctx.font='600 10px '+FD;ctx.fillStyle=rgba(C.ink,0.35+a*0.65);
+    ctx.fillText(B.lab,cx,H*0.145);
+    ctx.font='500 8px '+FM;ctx.fillStyle=rgba(col,0.30+a*0.55);
+    ctx.fillText(B.sub,cx,H*0.163);
+    if(B.k==='retina'||B.k==='lgn'){
+      const v=vals[B.k]||[],sz=Math.min(W*0.0075,7),gap=sz*3.1;
+      for(let j=0;j<8;j++)for(let i=0;i<8;i++){
+        const x=cx+(i-3.5)*gap,y=yMid+(j-3.5)*gap;
+        drawClock(x,y,CK[B.k][j*8+i].ph,v[j*8+i]||0,col,sz);}
+    } else if(B.k==='v1s'||B.k==='v1c'){
+      const v=vals[B.k]||[],sz=Math.min(W*0.0052,5);
+      const R0=Math.min(W*0.030,30),gap=R0*2.35;
+      for(let j=0;j<3;j++)for(let i=0;i<3;i++){
+        const ox=cx+(i-1)*gap,oy=yMid+(j-1)*gap;
+        // orientation pinwheel: each clock sits at its preferred angle
+        for(let o=0;o<NORI;o++){
+          const th=o*Math.PI/NORI;
+          const x=ox+Math.cos(th)*R0*0.68,y=oy+Math.sin(th)*R0*0.68;
+          const idx=(j*3+i)*NORI+o;
+          drawClock(x,y,CK[B.k][idx].ph,v[idx]||0,col,sz);
+          const x2=ox-Math.cos(th)*R0*0.68,y2=oy-Math.sin(th)*R0*0.68;
+          drawClock(x2,y2,CK[B.k][idx].ph,v[idx]||0,col,sz*0.82);
+        }
+        ctx.beginPath();ctx.arc(ox,oy,R0*0.30,0,TAU);
+        ctx.strokeStyle=rgba(col,0.10+a*0.16);ctx.lineWidth=1;ctx.stroke();
+      }
+    } else if(B.k==='v2'){
+      const v=vals.v2||[],sz=Math.min(W*0.0072,7),gap=sz*3.4;
+      for(let j=0;j<6;j++)for(let i=0;i<6;i++){
+        const x=cx+(i-2.5)*gap,y=yMid+(j-2.5)*gap;
+        const idx=j*6+i;
+        const xg=Math.floor(i*V2N/6),yg=Math.floor(j*V2N/6),gi=yg*V2N+xg;
+        const c60=TGT?TGT.V.D60[gi]:0,c90=TGT?TGT.V.D90[gi]:0;
+        drawClock(x,y,CK.v2[idx].ph,v[idx]||0,c90>=c60?C.V2A:C.V2B,sz);
+      }
+      ctx.font='500 7.5px '+FM;ctx.textAlign='center';
+      ctx.fillStyle=rgba(C.V2A,.8);ctx.fillText('90° corner',cx,yMid+gap*3.6);
+      ctx.fillStyle=rgba(C.V2B,.8);ctx.fillText('60° corner',cx,yMid+gap*3.6+11);
+    } else {
+      const names=['SQUARE','TRIANGLE','CIRCLE'];
+      const sz=Math.min(W*0.011,11);
+      for(let i=0;i<3;i++){
+        const y=yMid+(i-1)*H*0.16;
+        drawClock(cx,y,CK.dec[i].ph,decState[i],col,sz);
+        ctx.font='600 9px '+FM;ctx.textAlign='center';
+        ctx.fillStyle=rgba(C.ink,0.25+decState[i]*0.75);
+        ctx.fillText(names[i],cx,y+sz*2.9);
+      }
+    }
+  }
+  // stimulus thumbnail
+  if(TGT){
+    const s=Math.min(W*0.10,110),x0=W*0.022,y0=H*0.80;
+    const px=s/N;
+    for(let y=0;y<N;y+=1)for(let x=0;x<N;x+=1){
+      const v=TGT.img[y*N+x];if(v<0.03)continue;
+      ctx.fillStyle=rgba(C.RET,0.12+v*0.75);
+      ctx.fillRect(x0+x*px,y0+y*px,Math.ceil(px),Math.ceil(px));
+    }
+    ctx.strokeStyle=rgba(C.faint,.35);ctx.lineWidth=1;ctx.strokeRect(x0,y0,s,s);
+    ctx.font='500 8px '+FM;ctx.textAlign='left';ctx.fillStyle=rgba(C.muted,.7);
+    ctx.fillText('STIMULUS',x0,y0-5);
+  }
+}
+
+/* ---------------- UI ---------------- */
+const SH=['square','triangle','circle'];
+const shw=$('shapes');
+SH.forEach(k=>{const b=document.createElement('button');b.textContent=k;b.dataset.k=k;
+ b.onclick=()=>{ST.kind=k;[...shw.children].forEach(c=>c.classList.toggle('on',c.dataset.k===k));
+  recompute();resetDyn();};shw.appendChild(b);});
+const decw=$('dec');
+['square','triangle','circle'].forEach((k,i)=>{const d=document.createElement('div');
+ d.className='dr';d.id='dr-'+i;
+ d.innerHTML=`<span>${k}</span><span class="t"><i id="db-${i}" style="background:${C.DEC}"></i></span><span class="v" id="dv-${i}">0.00</span>`;
+ decw.appendChild(d);});
+function bind(id,vid,fmt,set){const el=$(id),vl=$(vid);
+ el.oninput=()=>{const v=parseFloat(el.value);set(v);vl.textContent=fmt(v);recompute();resetDyn();};
+ vl.textContent=fmt(parseFloat(el.value));}
+bind('s-rot','v-rot',v=>(v*180/Math.PI).toFixed(0)+'°',v=>ST.rot=v);
+bind('s-size','v-size',v=>v.toFixed(2),v=>ST.size=v);
+bind('s-noise','v-noise',v=>v.toFixed(2),v=>ST.noise=v);
+bind('s-thick','v-thick',v=>v?('outline '+v):'filled',v=>ST.thick=v);
+bind('s-sur','v-sur',v=>v.toFixed(2),v=>PAR.sur=v);
+bind('s-sig','v-sig',v=>v.toFixed(1),v=>PAR.sigma=v);
+bind('s-gam','v-gam',v=>v.toFixed(2),v=>PAR.gamma=v);
+bind('s-pool','v-pool',v=>v.toFixed(1),v=>PAR.pool=v);
+let SPEED=0.25;
+$('s-sp').oninput=e=>{SPEED=parseFloat(e.target.value);$('v-sp').textContent=SPEED.toFixed(2)+'x';};
+$('b-go').onclick=()=>{recompute();resetDyn();};
+
+function updateUI(){
+  const names=['square','triangle','circle'];
+  let mi=0;for(let i=1;i<3;i++) if(decState[i]>decState[mi]) mi=i;
+  for(let i=0;i<3;i++){
+    $('db-'+i).style.width=(decState[i]*100).toFixed(0)+'%';
+    $('db-'+i).style.background=i===mi&&decState[mi]>0.15?C.good:C.DEC;
+    $('dv-'+i).textContent=decState[i].toFixed(2);
+    $('dr-'+i).classList.toggle('win',i===mi&&decState[mi]>0.15);
+  }
+  const conf=decState[mi]-Math.max(...decState.filter((_,i)=>i!==mi));
+  $('verdict').innerHTML=decState[mi]>0.15
+    ? names[mi].toUpperCase()+'<small>confidence '+conf.toFixed(2)+
+      (names[mi]===ST.kind?' · correct':' · MISCLASSIFIED')+'</small>'
+    : '—<small>accumulating evidence…</small>';
+  if(TGT){
+    const f=TGT.f;
+    $('feat').innerHTML=
+     '<div><span>corner 90° energy</span><b>'+f.corner90.toFixed(4)+'</b></div>'+
+     '<div><span>corner 60° energy</span><b>'+f.corner60.toFixed(4)+'</b></div>'+
+     '<div><span>orientation entropy</span><b>'+f.entropy.toFixed(3)+'</b></div>'+
+     '<div><span>orientation peaks</span><b>'+f.peaks+'</b></div>';
+    let t;
+    if(f.entropy>0.88) t='Orientation energy is <b>near-uniform</b> — no dominant edge directions. That is the circle signature; corner cells stay quiet.';
+    else if(f.corner90>f.corner60) t='Two orientation bands 90° apart, and V2 <b>90° corner cells</b> fire where they meet. Square.';
+    else t='Three orientation bands 60° apart, and V2 <b>60° corner cells</b> fire at the vertices. Triangle.';
+    $('note').innerHTML=t;
+    let mo=0;for(let o=1;o<NORI;o++) if(TGT.ori.H[o]>TGT.ori.H[mo]) mo=o;
+    $('r-ori').textContent=(mo*180/NORI).toFixed(0)+'°';
+    $('r-cor').textContent=(f.corner90>f.corner60?'90°':'60°')+' dominant';
+  }
+  $('r-t').textContent=simT.toFixed(0)+' ms';
+  let cur='–';for(const s of STAGES) if((act[s]||0)>0.5) cur=s;
+  $('r-stage').textContent=cur;
+}
+
+let last=performance.now(),ui=0;
+function frame(now){
+  let dt=(now-last)/1000;last=now;dt=Math.min(dt,0.05);
+  stepDyn(dt*SPEED*1000);
+  const v=currentVals();
+  stepClocks(dt*SPEED*6,v);
+  draw();
+  ui+=dt;if(ui>0.1){ui=0;updateUI();}
+  requestAnimationFrame(frame);
+}
+addEventListener('resize',resize);
+resize();
+[...shw.children][0].classList.add('on');
+recompute();resetDyn();updateUI();
+requestAnimationFrame(frame);
+})();
+</script></body></html>

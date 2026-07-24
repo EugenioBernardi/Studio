@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thalamocortical Sheet — oblique view</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#060911;--panel:rgba(13,19,33,.74);--line:rgba(120,150,200,.14);
+ --ink:#e4ebf7;--muted:#8a99b6;--faint:#4a5670;--idle:#41506e;
+ --E:#ffc861;--E5:#ffa34d;--PV:#ff4d7d;--SOM:#c07bff;--VIP:#4ce0c0;--NGF:#7f9bff;
+ --TC:#56d4ff;--RTN:#3ee6b0;--warn:#ff9d4d;--bad:#ff3b3b;--good:#3ee6b0;
+ --D:'Space Grotesk',system-ui,sans-serif;--M:'IBM Plex Mono',ui-monospace,monospace;}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;font-family:var(--D);color:var(--ink);overflow:hidden;transition:background .8s;
+ background:radial-gradient(1300px 800px at 40% -15%,#0f1a2e 0,transparent 62%),
+ radial-gradient(900px 700px at 90% 115%,#0b1322 0,transparent 58%),var(--bg)}
+body.sz{background:radial-gradient(1200px 900px at 45% 30%,#3a0d10 0,transparent 66%),#0a0406}
+.app{display:grid;grid-template-columns:1fr 352px;height:100vh}
+.stage{position:relative;overflow:hidden;min-width:0}
+#cv{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
+.ttl{position:absolute;top:13px;left:20px;z-index:3;pointer-events:none;max-width:44%}
+.ttl h1{margin:0;font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.ttl .s{margin-top:4px;font-family:var(--M);font-size:9px;color:var(--muted);line-height:1.5}
+.pills{position:absolute;top:11px;right:13px;z-index:3;display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.pill{font-family:var(--M);font-size:8.5px;letter-spacing:.13em;padding:5px 9px;border-radius:20px;opacity:0;transition:.25s}
+.pill.on{opacity:1}
+.p-sz{color:#fff;border:1px solid var(--bad);background:rgba(255,59,59,.4)}
+.p-sl{color:#c9b8ff;border:1px solid rgba(160,140,255,.5);background:rgba(160,140,255,.12)}
+.p-le{color:var(--warn);border:1px solid rgba(255,157,77,.5);background:rgba(255,157,77,.1)}
+.pan{background:linear-gradient(180deg,rgba(10,15,28,.93),rgba(8,12,22,.97));
+ border-left:1px solid var(--line);padding:12px 11px;overflow-y:auto;z-index:4;display:flex;flex-direction:column;gap:9px}
+.pan::-webkit-scrollbar{width:8px}.pan::-webkit-scrollbar-thumb{background:rgba(120,150,200,.18);border-radius:4px}
+.b{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
+.b h2{margin:0 0 8px;font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+ font-weight:600;display:flex;align-items:center;gap:7px}
+.b h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--TC));box-shadow:0 0 8px var(--dot,var(--TC))}
+.pre{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.pre button{border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);
+ font-family:var(--M);font-size:9px;cursor:pointer;padding:7px 3px;border-radius:8px;transition:.15s}
+.pre button:hover{color:var(--ink);border-color:rgba(86,212,255,.45)}
+.pre button.on{background:rgba(86,212,255,.15);color:var(--ink);border-color:rgba(86,212,255,.5)}
+.pre button.ep{border-color:rgba(255,59,59,.3)}
+.pre button.ep:hover,.pre button.ep.on{border-color:var(--bad);background:rgba(255,59,59,.15);color:#ffd0d0}
+.sl{display:flex;align-items:center;gap:7px;margin-top:6px;font-family:var(--M);font-size:8.5px;color:var(--muted)}
+.sl .n{width:84px;flex:none}.sl input{flex:1;accent-color:var(--c,var(--TC));min-width:0}
+.sl .v{width:42px;text-align:right;color:var(--ink);flex:none}
+#lfp{width:100%;height:76px;display:block;border-radius:8px;background:rgba(0,0,0,.32);border:1px solid var(--line)}
+#spec{width:100%;height:58px;display:block;border-radius:8px;background:rgba(0,0,0,.32);border:1px solid var(--line);margin-top:6px}
+.cap{display:flex;justify-content:space-between;font-family:var(--M);font-size:8px;color:var(--faint);margin-top:4px}
+.bands{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.bd{display:grid;grid-template-columns:40px 1fr 30px;gap:5px;align-items:center;font-family:var(--M);font-size:8px;color:var(--muted)}
+.bd .t{height:5px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden}
+.bd .t i{display:block;height:100%;border-radius:3px;transition:width .12s}
+.bd .v{text-align:right;color:var(--ink)}
+.note{font-family:var(--M);font-size:9px;line-height:1.5;color:var(--muted);min-height:38px;margin-top:6px}
+.note b{color:var(--ink)}.note .w{color:var(--warn)}.note .r{color:var(--bad)}
+.rd{position:absolute;left:20px;bottom:11px;z-index:3;font-family:var(--M);font-size:9px;
+ color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;pointer-events:none;max-width:92%}
+.rd b{color:var(--ink);font-weight:600}.rd b.bad{color:var(--bad)}
+.btn{width:100%;border:0;cursor:pointer;font-family:var(--D);font-weight:600;font-size:11.5px;
+ padding:9px;border-radius:10px;margin-top:6px;color:#06121f;
+ background:linear-gradient(180deg,#a9e0ff,#56d4ff);box-shadow:0 6px 16px -8px rgba(86,212,255,.7)}
+.seg{display:flex;background:rgba(0,0,0,.35);border-radius:9px;padding:3px;gap:3px;margin-top:6px}
+.seg button{flex:1;border:0;background:transparent;color:var(--muted);font-family:var(--M);
+ font-size:9px;padding:7px 0;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:rgba(127,184,255,.18);color:var(--ink)}
+.hint{font-family:var(--M);font-size:8px;color:var(--faint);margin-top:5px;text-align:center;line-height:1.5}
+.leg{display:flex;flex-wrap:wrap;gap:5px 9px;margin-top:6px;font-family:var(--M);font-size:8px;color:var(--muted)}
+.leg span{display:flex;align-items:center;gap:4px}
+.leg i{width:8px;height:8px;border-radius:50%;display:block;box-shadow:0 0 6px currentColor}
+@media(max-width:1040px){.app{grid-template-columns:1fr;grid-template-rows:1fr auto}
+ .pan{border-left:0;border-top:1px solid var(--line);max-height:48vh}.rd{display:none}}
+</style></head><body>
+<div class="app">
+ <div class="stage"><canvas id="cv"></canvas>
+  <div class="ttl"><h1>Thalamocortical Sheet — oblique view</h1>
+   <div class="s">Cortical columns on a hexagonal sheet above; thalamic relay nuclei below,
+   with the reticular nucleus as the shell every thalamocortical fibre crosses.<br>
+   Click a column to place a focus. Shift-click to move the electrode.</div></div>
+  <div class="pills">
+   <div class="pill p-sz" id="p-sz">SEIZURE</div>
+   <div class="pill p-sl" id="p-sl">SLOW OSCILLATION</div>
+   <div class="pill p-le" id="p-le">LESION ACTIVE</div></div>
+  <div class="rd"><span>STATE <b id="r-st">wake</b></span><span>PEAK <b id="r-pk">–</b></span>
+   <span>COLUMNS <b id="r-nc">19</b></span><span>FOCUS <b id="r-fc">none</b></span>
+   <span>E23 focus <b id="r-ef">–</b></span><span>surround <b id="r-er">–</b></span>
+   <span>R <b id="r-R">–</b></span></div></div>
+ <aside class="pan">
+  <div class="b" style="--dot:var(--TC)"><h2>Brain state</h2>
+   <div class="pre" id="pre"></div>
+   <label class="sl"><span class="n">Arousal / ACh</span>
+    <input id="s-ar" type="range" min="0" max="1" step="0.01" value="1"><span class="v" id="v-ar">1.00</span></label>
+   <label class="sl" style="--c:var(--good)"><span class="n">Speed</span>
+    <input id="s-sp" type="range" min="0.01" max="0.40" step="0.01" value="0.08"><span class="v" id="v-sp">0.08x</span></label>
+   <div class="seg" role="group" aria-label="sheet size">
+    <button id="m-1" aria-pressed="false">1 ring · 7</button>
+    <button id="m-2" aria-pressed="true">2 rings · 19</button></div>
+   <div class="note" id="note"></div></div>
+  <div class="b" style="--dot:var(--E)"><h2>Local field potential</h2>
+   <canvas id="lfp"></canvas><canvas id="spec"></canvas>
+   <div class="cap"><span id="c-src">electrode: wide field</span><span id="c-pk">–</span></div>
+   <div class="bands" id="bands"></div></div>
+  <div class="b" style="--dot:var(--bad)"><h2>Focal lesion</h2>
+   <label class="sl" style="--c:var(--bad)"><span class="n">KCC2 loss</span>
+    <input id="s-fk" type="range" min="0" max="0.95" step="0.05" value="0"><span class="v" id="v-fk">0%</span></label>
+   <label class="sl" style="--c:var(--PV)"><span class="n">PV survival</span>
+    <input id="s-fp" type="range" min="0.05" max="1" step="0.05" value="1"><span class="v" id="v-fp">100%</span></label>
+   <label class="sl" style="--c:var(--E)"><span class="n">Sprouting</span>
+    <input id="s-fr" type="range" min="1" max="3" step="0.1" value="1"><span class="v" id="v-fr">1.0x</span></label>
+   <div class="hint">applies to the highlighted column only</div></div>
+  <div class="b" style="--dot:var(--SOM)"><h2>Global network</h2>
+   <label class="sl" style="--c:var(--PV)"><span class="n">PV survival</span>
+    <input id="s-pv" type="range" min="0.05" max="1.4" step="0.05" value="1"><span class="v" id="v-pv">100%</span></label>
+   <label class="sl" style="--c:var(--E)"><span class="n">Lateral excit.</span>
+    <input id="s-lat" type="range" min="0" max="6" step="0.1" value="0.55"><span class="v" id="v-lat">0.55</span></label>
+   <label class="sl" style="--c:var(--SOM)"><span class="n">Surround inhib.</span>
+    <input id="s-ls" type="range" min="0" max="0.8" step="0.02" value="0.40"><span class="v" id="v-ls">0.40</span></label>
+   <label class="sl" style="--c:var(--bad)"><span class="n">Global KCC2 loss</span>
+    <input id="s-kcc" type="range" min="0" max="0.9" step="0.02" value="0"><span class="v" id="v-kcc">0%</span></label>
+   <label class="sl" style="--c:var(--NGF)"><span class="n">Thalamic GABA-B</span>
+    <input id="s-gb" type="range" min="0" max="3" step="0.1" value="0"><span class="v" id="v-gb">0.0</span></label>
+   <label class="sl" style="--c:var(--VIP)"><span class="n">VIP drive (ACh)</span>
+    <input id="s-vip" type="range" min="0" max="7" step="0.2" value="3"><span class="v" id="v-vip">3.0</span></label>
+   <label class="sl" style="--c:var(--muted)"><span class="n">View tilt</span>
+    <input id="s-tilt" type="range" min="0.18" max="0.75" step="0.01" value="0.44"><span class="v" id="v-tilt">0.44</span></label>
+   <button class="btn" id="b-rst">Reset to healthy</button>
+   <div class="leg" id="leg"></div></div>
+ </aside></div>
+<script>
+"use strict";
+// Thalamocortical model — second-order PSP kernels (Jansen-Rit / Suffczynski class)
+// + T-type burst mechanism in TC/RTN, Ih spindle waning, GABA-B, adaptation.
+
+let RINGS=2, NCOL=19;
+const DT=0.5;
+const hlen=c=>(Math.abs(c.q)+Math.abs(c.q+c.r)+Math.abs(c.r))/2;
+let HEX=[];
+function hexCoords(n){
+  const o=[];
+  for(let q=-n;q<=n;q++)
+    for(let r=Math.max(-n,-q-n);r<=Math.min(n,-q+n);r++) o.push({q,r});
+  o.sort((a,b)=>{const da=hlen(a),db=hlen(b);
+    if(da!==db)return da-db;
+    return Math.atan2(a.r+a.q/2,a.q)-Math.atan2(b.r+b.q/2,b.q);});
+  return o;
+}
+const hdist=(a,b)=>hlen({q:HEX[a].q-HEX[b].q,r:HEX[a].r-HEX[b].r});                    // ms
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+// synapse kinds: PSP amplitude A (mV) and rate constant a (1/ms)
+const SYN={
+  a :{A: 3.4 , k:1/10 },   // AMPA
+  n :{A: 1.6 , k:1/80 },   // NMDA (slow, voltage-gated below)
+  g :{A:-20.0, k:1/6  },   // GABA-A perisomatic (PV) — fast, gamma
+  G :{A:-20.0, k:1/10 },   // GABA-A on TC (slower decay; sets spindle rate)
+  d :{A:-11.0, k:1/20 },   // GABA-A dendritic (SOM)
+  b :{A:-11.0, k:1/160},   // GABA-B (NGF / RTN) — slow
+};
+const TYPES=['E23','E4','E5','PV','SOM','VIP','NGF','TC','RTN'];
+const SIG={                              // sigmoid: v is mV above rest
+  E23:{v0:6.0,k:1.9,rmax:1},  E4:{v0:6.0,k:1.9,rmax:1},  E5:{v0:5.4,k:2.0,rmax:1},
+  PV :{v0:4.6,k:1.5,rmax:1.5},SOM:{v0:6.6,k:2.2,rmax:1.1},VIP:{v0:6.4,k:2.2,rmax:1.1},
+  NGF:{v0:6.1,k:2.2,rmax:1.0},TC :{v0:5.6,k:1.7,rmax:1.2},RTN:{v0:5.2,k:1.7,rmax:1.3},
+};
+const ADAPT={E23:{g:14,t:400},E4:{g:8,t:400},E5:{g:16,t:450},TC:{g:1.8,t:320}};
+const ACHF=M=>M.achAdapt+(1-M.achAdapt)/(1+Math.exp((M.arousal-M.achMid)/0.09));
+const AD=(T,M)=>({g:ADAPT[T].g*ACHF(M)*M.adapt,t:ADAPT[T].t*M.adTau});
+
+let CELLS=[],IDX={},NN=0;
+function initNet(rings){
+  RINGS=rings; HEX=hexCoords(rings); NCOL=HEX.length;
+  CELLS=[];
+  for(let c=0;c<NCOL;c++) for(const k of TYPES) CELLS.push({id:`${k}_${c}`,type:k,col:c});
+  IDX={}; CELLS.forEach((c,i)=>IDX[c.id]=i);
+  NN=CELLS.length;
+  return {CELLS,IDX,NN,NCOL,HEX};
+}
+initNet(2);
+
+// hex geometry: centre adjacent to all ring; ring i adjacent to i+-1 (mod 6)
+const ADJ=(a,b)=>a!==b&&hdist(a,b)===1;
+const FAR=(a,b)=>a!==b&&hdist(a,b)===2;
+const NADJ=c=>{let n=0;for(let k=0;k<NCOL;k++)if(ADJ(c,k))n++;return n;};
+const NALL=c=>{let n=0;for(let k=0;k<NCOL;k++)if(ADJ(c,k)||FAR(c,k))n++;return n;};
+// focal lesion applies to one column only
+const fk=(M,c)=>(M.focus===c?M.fKcc:0)+M.egabaShift;
+const fp=(M,c)=>M.pv*(M.focus===c?M.fPv:1);
+const fr=(M,c)=>M.rec23*(M.focus===c?M.fRec:1);
+function buildConn(M){
+  const W=[], add=(t,s,w,d,k,stp)=>W.push({t:IDX[t],s:IDX[s],w,d:Math.round(d/DT),k,stp:stp||0});
+  for(let c=0;c<NCOL;c++){
+    const E23=`E23_${c}`,E4=`E4_${c}`,E5=`E5_${c}`,PV=`PV_${c}`,SOM=`SOM_${c}`,
+          VIP=`VIP_${c}`,NGF=`NGF_${c}`,TC=`TC_${c}`,RTN=`RTN_${c}`;
+    add(E4,TC,M.thal_cx*2.60,3,'a');  add(PV,TC,M.thal_cx*1.90,3,'a');
+    add(E23,E4,2.20,1,'a');           add(E5,E23,1.90,1,'a');  add(E23,E5,0.95,1,'a');
+    add(E23,E23,fr(M,c),1,'a');       add(E23,E23,fr(M,c)*1.2,1,'n');
+    add(E5 ,E5 ,M.rec5 ,1,'a');       add(E5 ,E5 ,M.rec5 *1.2,1,'n');
+    add(E4 ,E4 ,0.55,1,'a');
+    add(PV,E23,M.pvE,1,'a'); add(PV,E4,M.pvE*0.66,1,'a'); add(PV,E5,M.pvE*0.86,1,'a');
+    add(E23,PV,fp(M,c)*1.55,1,'g'); add(E4,PV,fp(M,c)*1.05,1,'g'); add(E5,PV,fp(M,c)*1.45,1,'g');
+    add(PV,PV,fp(M,c)*0.70,1,'g');
+    add(SOM,E23,M.wSom,1.5,'a',1); add(SOM,E5,M.wSom*1.15,1.5,'a',1);
+    add(E23,SOM,M.som*1.15,2,'d'); add(E5,SOM,M.som*1.35,2,'d');
+    add(VIP,E23,0.85,1.5,'a'); add(SOM,VIP,M.vip*1.30,2,'d');
+    add(NGF,E23,1.05,2,'a'); add(NGF,E5,0.95,2,'a'); add(NGF,TC,M.wNgfTC,4,'a');
+    add(E23,NGF,M.ngf*0.85,3,'b'); add(E5,NGF,M.ngf*0.80,3,'b');
+    add(RTN,E5,M.cx_rtn*2.70,6,'a'); add(TC,E5,M.cx_tc*1.25,6,'a');
+    add(RTN,TC,M.tc_rtn*M.wTR,4,'a');
+    add(TC,RTN,M.rtn_tc*M.wRT,4,'G');
+    add(TC,RTN,1.0,4,'b');            // GABA-B: spindle -> spike-wave switch
+    add(RTN,RTN,M.rtn_rtn*1.05,2,'g');
+  }
+  // lateral: excitation to adjacent columns, inhibition (via PV) reaching further
+  for(let t=0;t<NCOL;t++){
+    const na=NADJ(t)||1, nl=NALL(t)||1;
+    for(let s2=0;s2<NCOL;s2++){
+      if(ADJ(t,s2)){
+        add(`E23_${t}`,`E23_${s2}`,M.lat/na,3,'a');
+        add(`E5_${t}` ,`E5_${s2}` ,M.lat*0.55/na,3,'a');
+        add(`RTN_${t}`,`RTN_${s2}`,M.rtn_rtn*M.latRTN/na,3,'g');
+        add(`TC_${t}` ,`RTN_${s2}`,M.rtn_tc*M.latRTN*0.8/na,4,'G');
+      }
+      if(ADJ(t,s2)||FAR(t,s2)){
+        // surround inhibition: broader than the excitatory footprint
+        add(`PV_${t}`,`E23_${s2}`,M.latSur/nl,3,'a');
+        add(`SOM_${t}`,`E23_${s2}`,M.latSur*0.45/nl,4,'a',1);
+      }
+    }
+  }
+  return W;
+}
+function defaults(){return{
+  arousal:1, rec23:9.0, rec5:5.0, lat:0.55, latSur:0.40, latRTN:0.15, focus:-1, fKcc:0, fPv:1, fRec:1,
+  pv:1, som:0.35, vip:1, ngf:0.7,
+  thal_cx:1, cx_rtn:0.2, cx_tc:0.3, tc_rtn:1, rtn_tc:1, rtn_rtn:1,
+  gabab:0, gbTh:0.28, gT:1, gH:1, adTau:1, adaptSleep:0, wRT:3.0, wTR:3.5, adapt:1, egabaShift:0, depression:4, adapt:1.4,
+  noise:0.55, drive:1, facMax:3.2, wSom:1.20, wNgfTC:1.20, dVIP:3.0, tcAr:0.25, tcPol:2.0, cxPol:0.0, pvE:0.85, dE:5.2, eAr:0.94, achAdapt:0.0, achMid:0.45, dTC:12.0, dPV:1.2, dRTN:0.5,
+};}
+
+function makeState(seed=7){
+  const rnd=mulberry32(seed);
+  const HL=Math.ceil(24/DT)+2;
+  const S={y:{},z:{},v:new Float64Array(NN),r:new Float64Array(NN),
+    h:new Float64Array(NN),mh:new Float64Array(NN),ca:new Float64Array(NN),
+    ad:new Float64Array(NN),dep:new Float64Array(NN),
+    gbR:new Float64Array(NN),gbS:new Float64Array(NN),fac:new Float64Array(NN),
+    hist:[],hp:0,rnd,t:0};
+  for(const k in SYN){S.y[k]=new Float64Array(NN);S.z[k]=new Float64Array(NN);}
+  for(let i=0;i<NN;i++){S.h[i]=0.3;S.mh[i]=0.1;S.ca[i]=0.05;S.dep[i]=1;S.fac[i]=1;S.v[i]=(rnd()-.5)*2;}
+  for(let k=0;k<HL;k++)S.hist.push(new Float64Array(NN));
+  return S;
+}
+const sg=(v,T)=>{const s=SIG[T];return s.rmax/(1+Math.exp((s.v0-v)/s.k));};
+
+function step(S,M,W,inj){
+  const HL=S.hist.length;
+  const d={a:new Float64Array(NN),n:new Float64Array(NN),g:new Float64Array(NN),
+           G:new Float64Array(NN),dd:new Float64Array(NN),b:new Float64Array(NN)};
+  for(let q=0;q<W.length;q++){
+    const w=W[q];
+    const hp=(S.hp-w.d+HL*2)%HL;
+    const pre=S.hist[hp][w.s]*(w.stp===1?S.fac[w.s]:S.dep[w.s]);
+    if(w.k==='a')d.a[w.t]+=w.w*pre; else if(w.k==='n')d.n[w.t]+=w.w*pre;
+    else if(w.k==='g')d.g[w.t]+=w.w*pre; else if(w.k==='G')d.G[w.t]+=w.w*pre;
+    else if(w.k==='d')d.dd[w.t]+=w.w*pre; else d.b[w.t]+=w.w*pre;
+  }
+  const sleep=1-M.arousal;
+  let lfpE=0,lfpI=0;
+  if(!S.lfpCol)S.lfpCol=new Float64Array(NCOL);
+  const cE=new Float64Array(NCOL),cI=new Float64Array(NCOL);
+  for(let i=0;i<NN;i++){
+    const T=CELLS[i].type;
+    // external drive
+    let ext=0;
+    if(T[0]==='E')      ext=M.drive*M.dE*(M.eAr+(1-M.eAr)*M.arousal);
+    else if(T==='TC')   ext=M.drive*M.dTC*(1-M.tcAr*(1-M.arousal));
+    else if(T==='PV')   ext=M.drive*M.dPV;
+    else if(T==='RTN')  ext=M.drive*M.dRTN;
+    else if(T==='VIP')  ext=M.drive*M.dVIP*(0.20+0.80*M.arousal);
+    if(inj&&inj[CELLS[i].id]) ext+=inj[CELLS[i].id];
+    ext+=(S.rnd()-0.5)*M.noise;
+    // K-leak hyperpolarization with sleep
+    if(T==='TC')  ext-=M.tcPol*sleep;
+    if(T==='RTN') ext-=1.0*sleep;
+    if(T[0]==='E')ext-=M.cxPol*sleep;
+    // second-order PSP kernels
+    for(const k in SYN){
+      const src=(k==='a')?d.a[i]:(k==='n')?d.n[i]:(k==='g')?d.g[i]:(k==='G')?d.G[i]:(k==='d')?d.dd[i]:d.b[i];
+      let A=SYN[k].A, kk=SYN[k].k;
+      if(k==='g'||k==='d'||k==='G') A*= (1 - Math.min(0.95,fk(M,CELLS[i].col)));       // KCC2 loss weakens/reverses GABA
+      if(k==='b'){
+        // GABA-B release requires burst-level presynaptic firing (validated)
+        const bd=Math.max(0,src-M.gbTh), rel=bd*bd*24;
+        S.gbR[i]+=DT*(0.010*rel*(1-S.gbR[i])-0.0045*S.gbR[i]);
+        S.gbS[i]+=DT*(0.0060*S.gbR[i]-0.0020*S.gbS[i]);
+        const s4=Math.pow(S.gbS[i]*3.2,4);
+        S.y[k][i]=-(CELLS[i].type==='TC'?14:9)*M.gabab*(s4/(s4+1));
+        continue;
+      }
+      S.z[k][i]+=DT*(A*kk*kk*src - 2*kk*S.z[k][i] - kk*kk*S.y[k][i]);
+      S.y[k][i]+=DT*S.z[k][i];
+    }
+    // membrane potential (mV above rest)
+    let v=S.y.a[i]+S.y.g[i]+S.y.G[i]+S.y.d[i]+S.y.b[i]+ext;
+    v+=S.y.n[i]/(1+Math.exp(-(v-2)/4));                 // NMDA voltage dependence
+    // adaptation
+    if(ADAPT[T]){
+      const AA=AD(T,M);
+      S.ad[i]+=DT*(S.r[i]-S.ad[i])/AA.t;
+      v-=AA.g*S.ad[i];
+    }
+    // T-type low-threshold Ca: de-inactivation when hyperpolarized, rebound burst
+    if(T==='TC'||T==='RTN'){
+      const hInf=1/(1+Math.exp((v+1.5)/1.6));
+      const tauH=1.6*((T==='TC'?26:18)+(T==='TC'?230:160)/(1+Math.exp((v+1.5)/2.4)));
+      S.h[i]+=DT*(hInf-S.h[i])/tauH;
+      const mInf=1/(1+Math.exp(-(v+3.2)/1.5));
+      const gT=(T==='TC'?9.5:8.0)*M.gT;
+      const burst=gT*mInf*S.h[i];
+      v+=burst;
+      if(T==='TC'){
+        // Ca accumulates during bursts and shifts Ih activation -> spindle waning
+        S.ca[i]+=DT*(-(S.ca[i]-0.05)/260 + burst*0.0016);
+        const shift=5.5*S.ca[i]/(S.ca[i]+0.30);
+        const mhInf=1/(1+Math.exp((v+2.0-shift)/1.8));
+        S.mh[i]+=DT*(mhInf-S.mh[i])/(320+900/(1+Math.exp((v+2)/2.5)));
+        v+=4.2*0.4*M.gH*S.mh[i];
+      }
+    }
+    S.v[i]=v;
+    S.r[i]=sg(v,T);
+    if(T[0]==='E'&&M.depression>0){
+      S.dep[i]+=DT*((1-S.dep[i])/420 - S.r[i]*S.dep[i]*0.0022*M.depression);
+      // facilitating branch (pyramidal -> SOM/Martinotti)
+      S.fac[i]+=DT*(-(S.fac[i]-1)/450 + S.r[i]*(M.facMax-S.fac[i])*0.006);
+    } else {S.dep[i]=1;S.fac[i]=1;}
+    if(T==='E23'||T==='E5'){
+      const we=(T==='E23')?1:0.8;
+      const eC=we*(S.y.a[i]+S.y.n[i]), iC=we*(S.y.g[i]+S.y.G[i]+S.y.d[i]+S.y.b[i]);
+      lfpE+=eC; lfpI+=iC; cE[CELLS[i].col]+=eC; cI[CELLS[i].col]+=iC;
+    }
+  }
+  const nhp=(S.hp+1)%HL;
+  for(let i=0;i<NN;i++)S.hist[nhp][i]=S.r[i];
+  S.hp=nhp;S.t+=DT;
+  for(let c=0;c<NCOL;c++) S.lfpCol[c]=-(cE[c]+0.9*cI[c]);
+  return -(lfpE+0.9*lfpI);        // sink convention
+}
+
+(function(){
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const lc=document.getElementById('lfp'),lx=lc.getContext('2d');
+const scv=document.getElementById('spec'),sx=scv.getContext('2d');
+const $=id=>document.getElementById(id);
+const CS=getComputedStyle(document.documentElement),cvar=n=>CS.getPropertyValue(n).trim();
+const C={};['E','E5','PV','SOM','VIP','NGF','TC','RTN','ink','faint','idle','warn','bad','good','muted']
+ .forEach(k=>C[k]=cvar('--'+k));
+const COL={E23:C.E,E4:C.E,E5:C.E5,PV:C.PV,SOM:C.SOM,VIP:C.VIP,NGF:C.NGF,TC:C.TC,RTN:C.RTN};
+const FM="'IBM Plex Mono',monospace";
+const TAU=Math.PI*2,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+function rgba(h,a){h=h.replace('#','');if(h.length===3)h=h.split('').map(x=>x+x).join('');
+ return`rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;}
+
+let M=defaults(),S=makeState(7),W=buildConn(M);
+let NCLK=2,clk=[];
+function rebuildClocks(){clk=CELLS.map(()=>({ph:Array.from({length:NCLK},()=>Math.random()*TAU),
+ f:Array.from({length:NCLK},(_,i)=>1+(i-(NCLK-1)/2)*0.16),R:0,mph:0}));}
+rebuildClocks();
+const lfp=[];let SPEED=0.08,rmsV=0,elec=-1,TILT=0.44,ebAcc=0;
+
+/* ---------- oblique projection ---------- */
+// cortical stack, offsets in screen px above the sheet plane
+// laminar order, L1 at top: NGF(L1) VIP/E23(L2-3) PV/SOM E4(L4) E5(L5)
+const STACK=[['NGF',0,-102],['VIP',33,-78],['E23',0,-74],['PV',-33,-56],
+             ['SOM',33,-52],['E4',0,-46],['E5',0,-16]];
+const STACK_RISE=102;
+const KCX=1.30, KTH=0.64;   // sheet spread: cortical fan-out vs compact thalamus
+let Wd=0,Hd=0,DPR=1,HS=70,yCx=0,yRt=0,yTh=0,cxX=0,depth=[];
+function planePos(c,yPlane,k){
+  const h=HEX[c],kk=k||1;
+  const x=cxX+HS*1.5*h.q*kk;
+  const y=yPlane+HS*Math.sqrt(3)*(h.r+h.q/2)*TILT*kk;
+  return {x,y};
+}
+function layout(){
+  const R=Math.max(...HEX.map(h=>hlen(h)));
+  const u=Math.sqrt(3)*2*R*TILT;            // sheet extent per unit HS at scale 1
+  const stackU=(STACK_RISE/70)*1.12;
+  const cxU=u*KCX, thU=u*KTH;
+  const sep1U=(cxU+thU)*0.5*1.04+0.30;      // cortex -> reticular shell
+  const sep2U=thU*1.04+0.25;                // shell -> relay nuclei
+  const hsW=Wd*0.82/((3*R+2.6)*KCX);
+  const hsH=Hd*0.88/(stackU+cxU*0.5+sep1U+sep2U+thU*0.5);
+  HS=clamp(Math.min(hsW,hsH),30,150);
+  cxX=Wd*0.46;
+  const total=HS*(stackU+cxU*0.5+sep1U+sep2U+thU*0.5);
+  const top=Math.max(6,(Hd-total)*0.5);
+  yCx=top+HS*stackU+HS*cxU*0.5;
+  yRt=yCx+HS*sep1U;
+  yTh=yRt+HS*sep2U;
+  depth=HEX.map(h=>Math.sqrt(3)*(h.r+h.q/2));
+  const mn=Math.min(...depth),mx=Math.max(...depth);
+  depth=depth.map(v=>mx>mn?(v-mn)/(mx-mn):0.5);
+}
+function resize(){const r=cv.getBoundingClientRect();DPR=Math.min(devicePixelRatio||1,2);
+ Wd=r.width;Hd=r.height;cv.width=Wd*DPR;cv.height=Hd*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);
+ [[lc,lx],[scv,sx]].forEach(([c,x])=>{const b=c.getBoundingClientRect();
+  c.width=Math.max(1,b.width*DPR);c.height=Math.max(1,b.height*DPR);x.setTransform(DPR,0,0,DPR,0,0);});
+ layout();}
+
+/* ---------- clocks ---------- */
+function stepClocks(dt){
+ CELLS.forEach((c,i)=>{const k=clk[i],r=S.r[i];
+  let sx2=0,sy2=0;for(const p of k.ph){sx2+=Math.cos(p);sy2+=Math.sin(p);}
+  k.R=Math.hypot(sx2/NCLK,sy2/NCLK);k.mph=Math.atan2(sy2/NCLK,sx2/NCLK);
+  const pv=S.r[IDX['PV_'+c.col]]*M.pv;
+  const base=2.0+7.5*r,K=9.0*r,shear=(c.type[0]==='E')?5.0*pv:1.0;
+  for(let j=0;j<NCLK;j++)
+   k.ph[j]=(k.ph[j]+(TAU*base*k.f[j]+K*Math.sin(k.mph-k.ph[j])
+    -shear*k.R*Math.sin(k.ph[j]-k.mph)+(Math.random()-.5)*0.8)*dt+TAU*2)%TAU;});}
+
+/* ---------- spectrum ---------- */
+const FR=[];for(let f=1;f<=60;f+=1)FR.push(f);
+const BANDS={slow:[0.5,1],delta:[1,4],theta:[4,8],alpha:[8,13],sigma:[11,16],beta:[13,30],gamma:[30,60]};
+const BC={slow:'#8f7fff',delta:'#7f9bff',theta:'#4ce0c0',alpha:'#3ee6b0',sigma:'#ffc861',beta:'#ffa34d',gamma:'#ff4d7d'};
+let spec={},bands={},peak=0,harm=0;const eBuf=[];
+function analyse(){const n=Math.min(lfp.length,2400);if(n<400)return;
+ const y=lfp.slice(-n),mu=mean(y),d=y.map(v=>v-mu);let tot=0;spec={};
+ for(const f of FR){let re=0,im=0;
+  for(let i=0;i<n;i++){const a=TAU*f*i*DT/1000;re+=d[i]*Math.cos(a);im+=d[i]*Math.sin(a);}
+  spec[f]=(re*re+im*im)/n;tot+=spec[f];}
+ tot=tot||1;bands={};let bp=0;peak=FR[0];
+ for(const b in BANDS){const[lo,hi]=BANDS[b];
+  bands[b]=FR.filter(f=>f>=lo&&f<hi).reduce((s,f)=>s+spec[f],0)/tot;}
+ for(const f of FR)if(spec[f]>bp){bp=spec[f];peak=f;}
+ const h2=spec[Math.min(60,Math.round(peak*2))]||0,h3=spec[Math.min(60,Math.round(peak*3))]||0;
+ harm=bp>0?(h2+h3)/bp:0;
+ rmsV=Math.sqrt(d.reduce((s,v)=>s+v*v,0)/n);}
+
+/* ---------- drawing ---------- */
+function clocks(x,y,i,cc,sz,lab){
+ const k=clk[i],r=S.r[i],act=r>0.10;
+ for(let j=0;j<NCLK;j++){
+  const a=(j/NCLK)*TAU,rad=sz*1.25;
+  const px=x+Math.cos(a)*rad,py=y+Math.sin(a)*rad*0.38;
+  const s=.5+.5*Math.sin(k.ph[j]),cr=sz*(0.62+0.42*s);
+  if(act&&sz>2.2){ctx.shadowColor=cc;ctx.shadowBlur=2+s*13*Math.min(1,r*2);}
+  ctx.beginPath();ctx.arc(px,py,cr,0,TAU);
+  ctx.fillStyle=act?rgba(cc,.18+s*.62*Math.min(1,r*2.2)):rgba(C.idle,.05+s*.09);
+  ctx.fill();ctx.shadowBlur=0;
+  ctx.beginPath();ctx.arc(px,py,cr,0,TAU);ctx.lineWidth=.8;
+  ctx.strokeStyle=act?rgba(cc,.52+s*.48):rgba(C.idle,.26);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(px,py);
+  ctx.lineTo(px+Math.cos(k.ph[j])*(cr+sz*0.5),py+Math.sin(k.ph[j])*(cr+sz*0.5));
+  ctx.strokeStyle=rgba(C.ink,act?.55:.13);ctx.lineWidth=.8;ctx.stroke();}
+ if(k.R>0.62&&act&&sz>3){ctx.beginPath();ctx.ellipse(x,y,sz*2.7,sz*1.5,0,0,TAU);
+  ctx.strokeStyle=rgba(k.R>0.88?C.bad:cc,(k.R-0.58)*0.7);ctx.lineWidth=1;ctx.stroke();}
+ if(lab&&sz>3.6){ctx.textAlign='center';ctx.font='600 '+Math.max(6,sz*0.95)+'px '+FM;
+  ctx.fillStyle=rgba(cc,.9);ctx.fillText(lab,x,y+sz*2.2);}
+}
+function hexTile(x,y,rad,fill,stroke,lw){
+ ctx.beginPath();
+ for(let i=0;i<=6;i++){const a=i*TAU/6;
+  const px=x+Math.cos(a)*rad,py=y+Math.sin(a)*rad*TILT;
+  i?ctx.lineTo(px,py):ctx.moveTo(px,py);}
+ ctx.closePath();
+ if(fill){ctx.fillStyle=fill;ctx.fill();}
+ if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw||1;ctx.stroke();}
+}
+function draw(){
+ ctx.clearRect(0,0,Wd,Hd);
+ const order=[...Array(NCOL).keys()].sort((a,b)=>depth[a]-depth[b]);
+ // ---- thalamocortical fibres, drawn behind everything ----
+ for(const c of order){
+  const pc=planePos(c,yCx,KCX),pr=planePos(c,yRt,KTH),pt=planePos(c,yTh,KTH);
+  const tc=S.r[IDX['TC_'+c]],e5=S.r[IDX['E5_'+c]];
+  ctx.beginPath();ctx.moveTo(pt.x,pt.y);
+  ctx.quadraticCurveTo(pr.x,(pr.y+pt.y)/2,pr.x,pr.y);
+  ctx.strokeStyle=rgba(C.TC,.05+tc*.40);ctx.lineWidth=.7+tc*2.0;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pr.x,pr.y);
+  ctx.quadraticCurveTo(pc.x,(pc.y+pr.y)/2,pc.x,pc.y-8);
+  ctx.strokeStyle=rgba(C.TC,.04+tc*.32);ctx.lineWidth=.7+tc*1.7;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pc.x+3,pc.y-8);
+  ctx.quadraticCurveTo(pr.x+4,(pc.y+pr.y)/2,pr.x+4,pr.y);
+  ctx.strokeStyle=rgba(C.E5,.03+e5*.26);ctx.lineWidth=.6+e5*1.4;ctx.stroke();}
+ // ---- thalamic sheet ----
+ ctx.textAlign='left';ctx.font='600 9px '+FM;
+ ctx.fillStyle=rgba(C.TC,.5);ctx.fillText('THALAMUS · relay nuclei',Wd*0.035,yTh+HS*0.4);
+ ctx.fillStyle=rgba(C.RTN,.55);ctx.fillText('RETICULAR NUCLEUS (shell)',Wd*0.035,yRt+HS*0.15);
+ ctx.fillStyle=rgba(C.E,.5);ctx.fillText('CORTICAL SHEET',Wd*0.035,yCx-HS*0.7);
+ for(const c of order){
+  const p=planePos(c,yTh,KTH),d=depth[c],sc=0.80+0.32*d;
+  hexTile(p.x,p.y,HS*0.60*KTH,rgba(C.TC,.030),rgba(C.TC,.10),1);
+  clocks(p.x,p.y,IDX['TC_'+c],C.TC,HS*0.125*sc,null);}
+ // ---- reticular shell: a translucent surface between thalamus and cortex ----
+ const shellR=HS*KTH*(Math.max(...HEX.map(h=>hlen(h)))+1.05);
+ ctx.beginPath();ctx.ellipse(cxX,yRt,shellR*1.55,shellR*0.66*TILT+HS*0.5,0,0,TAU);
+ ctx.fillStyle=rgba(C.RTN,.035);ctx.fill();
+ ctx.strokeStyle=rgba(C.RTN,.20);ctx.lineWidth=1;ctx.stroke();
+ for(const c of order){
+  const p=planePos(c,yRt,KTH),d=depth[c],sc=0.80+0.32*d;
+  clocks(p.x,p.y,IDX['RTN_'+c],C.RTN,HS*0.120*sc,null);}
+ // ---- cortical sheet ----
+ for(const c of order){
+  const p=planePos(c,yCx,KCX),d=depth[c],sc=0.80+0.32*d;
+  const isF=(M.focus===c),isE=(elec===c);
+  hexTile(p.x,p.y,HS*0.80*KCX,isF?rgba(C.bad,.055):rgba(C.idle,.028),
+    isF?rgba(C.bad,.55):(isE?rgba(C.TC,.40):rgba(C.idle,.13)),isF?1.7:0.9);
+  // intracolumn wiring
+  const gp=t=>{const s2=STACK.find(q=>q[0]===t);return{x:p.x+s2[1]*sc*(HS/70),y:p.y+s2[2]*sc*(HS/70)};};
+  const rr=t=>S.r[IDX[t+'_'+c]];
+  const ln=(a,b,cc,v)=>{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+   ctx.strokeStyle=rgba(cc,0.05+v*0.40);ctx.lineWidth=0.6+v*1.7;ctx.stroke();};
+  ln(gp('E4'),gp('E23'),C.E,rr('E4'));ln(gp('E23'),gp('E5'),C.E,rr('E23'));
+  ln(gp('E23'),gp('PV'),C.PV,rr('PV'));ln(gp('E23'),gp('SOM'),C.SOM,rr('SOM'));
+  ln(gp('SOM'),gp('VIP'),C.VIP,rr('VIP'));ln(gp('E23'),gp('NGF'),C.NGF,rr('NGF'));
+  for(const [type,ox,oy] of STACK){
+   const x=p.x+ox*sc*(HS/70),y=p.y+oy*sc*(HS/70);
+   clocks(x,y,IDX[type+'_'+c],COL[type],HS*0.108*sc,(NCOL<=7||isF)?type:null);}
+  if(isF){ctx.textAlign='center';ctx.font='600 9px '+FM;
+   ctx.fillStyle=rgba(C.bad,.9);ctx.fillText('FOCUS',p.x,p.y+HS*0.55);}}
+ if(seiz){ctx.fillStyle=rgba(C.bad,.05+.035*Math.sin(Date.now()*.008));ctx.fillRect(0,0,Wd,Hd);}
+}
+function drawLFP(){const w=lc.clientWidth,h=lc.clientHeight;if(!w)return;
+ lx.clearRect(0,0,w,h);const mid=h/2;
+ lx.strokeStyle=rgba(C.ink,.15);lx.lineWidth=1;
+ lx.beginPath();lx.moveTo(0,mid);lx.lineTo(w,mid);lx.stroke();
+ const n=Math.min(lfp.length,2400);if(n<4)return;
+ const y=lfp.slice(-n),mu=mean(y);let amp=0.02;
+ for(const v of y)amp=Math.max(amp,Math.abs(v-mu));
+ lx.strokeStyle=seiz?rgba(C.bad,1):(bands.delta>0.45?rgba('#8f7fff',.95):rgba(C.TC,.9));
+ lx.lineWidth=1.4;lx.beginPath();
+ for(let i=0;i<n;i++){const x=i/(n-1)*w,yy=mid-((y[i]-mu)/amp)*(h/2-5);
+  i?lx.lineTo(x,yy):lx.moveTo(x,yy);}
+ lx.stroke();}
+function drawSpec(){const w=scv.clientWidth,h=scv.clientHeight;
+ if(!w||!Object.keys(spec).length)return;
+ sx.clearRect(0,0,w,h);let mx=0;for(const f of FR)mx=Math.max(mx,spec[f]);mx=mx||1;
+ const bw=w/FR.length;
+ FR.forEach((f,i)=>{let col=C.faint;
+  for(const b in BANDS){const[lo,hi]=BANDS[b];if(f>=lo&&f<hi){col=BC[b];break;}}
+  const hh=(spec[f]/mx)*(h-11);
+  sx.fillStyle=rgba(col,.85);sx.fillRect(i*bw,h-hh-2,Math.max(1,bw-0.6),hh);});
+ sx.font='8px '+FM;sx.fillStyle=rgba(C.faint,.9);sx.textAlign='left';
+ [10,20,30,40,50].forEach(f=>{const i=FR.indexOf(f);if(i>=0)sx.fillText(f,i*bw,9);});}
+
+/* ---------- UI ---------- */
+const PRE=[{k:'wake',n:'Wake',m:{arousal:1}},{k:'drowsy',n:'Drowsy',m:{arousal:0.55}},
+ {k:'n2',n:'NREM 2',m:{arousal:0.32}},{k:'n3',n:'NREM 3',m:{arousal:0.08}},
+ {k:'rem',n:'REM-like',m:{arousal:0.88,som:0.6}},
+ {k:'foc',n:'Focal sz',ep:1,m:{arousal:0.32,focus:0,fKcc:0.9,fRec:2.5}},
+ {k:'gen',n:'Generalised',ep:1,m:{arousal:1,egabaShift:0.7}},
+ {k:'tle',n:'Mesial TLE',ep:1,m:{arousal:1,pv:0.30,rec23:20}}];
+const pw=$('pre');
+PRE.forEach(p=>{const b=document.createElement('button');
+ b.textContent=p.n;b.dataset.k=p.k;if(p.ep)b.className='ep';
+ b.onclick=()=>apply(p);pw.appendChild(b);});
+function apply(p){
+ Object.assign(M,defaults(),p.m);   // always reset from validated defaults
+ W=buildConn(M);syncAll();
+ [...pw.children].forEach(b=>b.classList.toggle('on',b.dataset.k===p.k));}
+const bwrap=$('bands');
+Object.keys(BANDS).forEach(b=>{const d=document.createElement('div');d.className='bd';
+ d.innerHTML=`<span>${b}</span><span class="t"><i id="bar-${b}" style="background:${BC[b]}"></i></span><span class="v" id="bv-${b}">0%</span>`;
+ bwrap.appendChild(d);});
+$('leg').innerHTML=['E23','E5','PV','SOM','VIP','NGF','TC','RTN']
+ .map(t=>`<span><i style="background:${COL[t]};color:${COL[t]}"></i>${t}</span>`).join('');
+function syncAll(){
+ $('s-ar').value=M.arousal;$('v-ar').textContent=(+M.arousal).toFixed(2);
+ $('s-fk').value=M.fKcc;$('v-fk').textContent=Math.round(M.fKcc*100)+'%';
+ $('s-fp').value=M.fPv;$('v-fp').textContent=Math.round(M.fPv*100)+'%';
+ $('s-fr').value=M.fRec;$('v-fr').textContent=(+M.fRec).toFixed(1)+'x';
+ $('s-pv').value=M.pv;$('v-pv').textContent=Math.round(M.pv*100)+'%';
+ $('s-lat').value=M.lat;$('v-lat').textContent=(+M.lat).toFixed(2);
+ $('s-ls').value=M.latSur;$('v-ls').textContent=(+M.latSur).toFixed(2);
+ $('s-kcc').value=M.egabaShift;$('v-kcc').textContent=Math.round(M.egabaShift*100)+'%';
+ $('s-gb').value=M.gabab;$('v-gb').textContent=(+M.gabab).toFixed(1);
+ $('s-vip').value=M.dVIP;$('v-vip').textContent=(+M.dVIP).toFixed(1);}
+const bind=(id,f)=>{$(id).oninput=e=>{f(parseFloat(e.target.value));W=buildConn(M);syncAll();
+ [...pw.children].forEach(b=>b.classList.remove('on'));};};
+bind('s-ar',v=>M.arousal=v);bind('s-fk',v=>{M.fKcc=v;if(M.focus<0)M.focus=0;});
+bind('s-fp',v=>{M.fPv=v;if(M.focus<0)M.focus=0;});
+bind('s-fr',v=>{M.fRec=v;if(M.focus<0)M.focus=0;});
+bind('s-pv',v=>M.pv=v);bind('s-lat',v=>M.lat=v);bind('s-ls',v=>M.latSur=v);
+bind('s-kcc',v=>M.egabaShift=v);bind('s-gb',v=>M.gabab=v);bind('s-vip',v=>M.dVIP=v);
+$('s-sp').oninput=e=>{SPEED=parseFloat(e.target.value);$('v-sp').textContent=SPEED.toFixed(2)+'x';};
+$('s-tilt').oninput=e=>{TILT=parseFloat(e.target.value);$('v-tilt').textContent=TILT.toFixed(2);layout();};
+$('b-rst').onclick=()=>apply(PRE[0]);
+function setRings(n){
+ const keep={...M};
+ initNet(n);
+ S=makeState(7);rebuildClocks();
+ M=Object.assign(defaults(),{arousal:keep.arousal,pv:keep.pv,lat:keep.lat,latSur:keep.latSur,
+  egabaShift:keep.egabaShift,gabab:keep.gabab,focus:-1});
+ W=buildConn(M);lfp.length=0;eBuf.length=0;elec=-1;
+ $('m-1').setAttribute('aria-pressed',n===1);$('m-2').setAttribute('aria-pressed',n===2);
+ $('r-nc').textContent=NCOL;$('c-src').textContent='electrode: wide field';
+ layout();syncAll();}
+$('m-1').onclick=()=>setRings(1);$('m-2').onclick=()=>setRings(2);
+cv.addEventListener('click',e=>{const r=cv.getBoundingClientRect();
+ const x=e.clientX-r.left,y=e.clientY-r.top;
+ let best=-1,bd=1e9;
+ for(let c=0;c<NCOL;c++){const p=planePos(c,yCx,KCX);
+  const d=Math.hypot(p.x-x,(p.y-y)/Math.max(0.3,TILT));if(d<bd){bd=d;best=c;}}
+ if(bd<HS*1.1*KCX){
+  if(e.shiftKey){elec=best;$('c-src').textContent='electrode: column '+best;}
+  else{M.focus=(M.focus===best)?-1:best;W=buildConn(M);}}
+ else if(e.shiftKey){elec=-1;$('c-src').textContent='electrode: wide field';}});
+
+let seiz=false,seizT=0;
+function updateUI(){
+ const fc=M.focus>=0?M.focus:0;
+ const ef=S.r[IDX['E23_'+fc]];
+ const sur=mean([...Array(NCOL).keys()].filter(c=>c!==fc).map(c=>S.r[IDX['E23_'+c]]));
+ $('r-ef').textContent=ef.toFixed(2);$('r-er').textContent=sur.toFixed(2);
+ $('r-fc').textContent=M.focus<0?'none':'col '+M.focus;
+ $('r-nc').textContent=NCOL;
+ const R=mean([...Array(NCOL).keys()].map(c=>clk[IDX['E23_'+c]].R));
+ const rE=$('r-R');rE.textContent=R.toFixed(2);rE.className=R>0.88?'bad':'';
+ $('r-pk').textContent=peak?peak.toFixed(0)+' Hz':'–';
+ $('c-pk').textContent='peak '+(peak?peak.toFixed(0):'–')+' Hz';
+ $('r-st').textContent=M.arousal>0.75?'wake':M.arousal>0.45?'drowsy':M.arousal>0.20?'NREM 2':'NREM 3';
+ for(const b in BANDS){const v=bands[b]||0;
+  $('bar-'+b).style.width=(v*100).toFixed(0)+'%';$('bv-'+b).textContent=(v*100).toFixed(0)+'%';}
+ const slow=(bands.slow||0)+(bands.delta||0);
+ $('p-sl').classList.toggle('on',slow>0.45&&!seiz);
+ $('p-sz').classList.toggle('on',seiz);
+ $('p-le').classList.toggle('on',M.pv<0.8||M.egabaShift>0.05||M.gabab>0.05||M.focus>=0);
+ document.body.classList.toggle('sz',seiz);
+ let t;
+ if(seiz)t='<span class="r"><b>Ictal.</b></span> Sustained saturation, no Down states — depolarising block. Watch whether neighbours are recruited or hold their own rhythm.';
+ else if(M.focus>=0&&M.fKcc>0.3)t='<span class="w">Focal KCC2 loss.</span> GABA-A losing its hyperpolarising drive in this column only. Add sprouting to push it over.';
+ else if(M.egabaShift>0.35)t='<span class="w">Global KCC2 loss</span> — inhibition failing across the whole sheet.';
+ else if(slow>0.45)t='<b>Slow oscillation.</b> Adaptation unopposed by ACh; the sheet alternates Up/Down near 1 Hz. One Down→Up transition is a K-complex.';
+ else t='<b>Wake-like.</b> ACh blocks adaptation, cortex holds a persistent Up state, PV feedback gives gamma.';
+ $('note').innerHTML=t;}
+
+let last=performance.now(),carry=0,ui=0,an=0;
+function frame(now){let dt=(now-last)/1000;last=now;dt=Math.min(dt,.05);
+ carry+=dt*SPEED*1000;
+ const n=Math.min(60,Math.floor(carry/DT));carry-=n*DT;
+ for(let i=0;i<n;i++){const g=step(S,M,W,null);
+  lfp.push(elec<0?g:(S.lfpCol?S.lfpCol[elec]:0));
+  // seizure buffer sampled every 25 ms of SIMULATED time, so detection does not
+  // depend on playback speed or frame rate
+  ebAcc+=DT;
+  if(ebAcc>=25){ebAcc=0;
+   let e;
+   if(M.focus>=0) e=S.r[IDX['E23_'+M.focus]];
+   else{let s2=0;for(let c=0;c<NCOL;c++)s2+=S.r[IDX['E23_'+c]];e=s2/NCOL;}
+   eBuf.push(e); if(eBuf.length>80)eBuf.shift();}
+ }
+ if(lfp.length>3000)lfp.splice(0,lfp.length-3000);
+ stepClocks(dt*SPEED*5);
+ // Detection rests on ONE criterion: sustained activity with no Down states.
+ // The "sharp 2-6 Hz complexes" test was removed - spike-wave does not express in
+ // this network (see VALIDATION), so it had no true positives, while the cortical
+ // slow oscillation's sharp Up-state onsets matched it and produced false alarms.
+ const minE=eBuf.length?Math.min(...eBuf):0;
+ const tonic=eBuf.length>=72&&minE>0.80;
+ seizT=tonic?Math.min(1,seizT+dt*1.5):Math.max(0,seizT-dt*0.8);
+ seiz=seizT>0.5;
+ an+=dt;if(an>0.3){an=0;analyse();}
+ draw();drawLFP();drawSpec();
+ ui+=dt;if(ui>0.14){ui=0;updateUI();}
+ requestAnimationFrame(frame);}
+addEventListener('resize',resize);
+resize();apply(PRE[0]);analyse();updateUI();requestAnimationFrame(frame);})();
+</script></body></html>

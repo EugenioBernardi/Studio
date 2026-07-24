@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hippocampus — Indexing, Sparsity &amp; Replay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#060911; --panel:rgba(13,19,33,.74); --line:rgba(120,150,200,.14);
+    --ink:#e4ebf7; --muted:#8a99b6; --faint:#4a5670; --idle:#4d5c7a;
+    --ec:#ffc861; --dg:#4ce0a0; --ca3:#ff7a6b; --ca2:#ffa34d; --ca1:#56d4ff; --sub:#9d8bff;
+    --pv:#ff4d7d; --som:#c07bff; --mossy:#8fe36b;
+    --ach:#4ce0c0; --gabaS:#ff9d4d; --theta:#7fb8ff; --ripple:#ff79c6;
+    --warn:#ff9d4d; --bad:#ff4444; --good:#3ee6b0;
+    --display:'Space Grotesk',system-ui,-apple-system,Segoe UI,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:var(--display);color:var(--ink);overflow:hidden;transition:background .9s;
+    background:radial-gradient(1200px 700px at 25% -10%,#101a2e 0%,transparent 60%),
+      radial-gradient(900px 600px at 100% 110%,#0c1424 0%,transparent 55%),var(--bg)}
+  body.sleep{background:radial-gradient(1200px 700px at 25% -10%,#170f33 0%,transparent 60%),
+      radial-gradient(900px 600px at 100% 110%,#0f0a20 0%,transparent 55%),#050410}
+  body.seiz{background:radial-gradient(1200px 900px at 50% 40%,#3a0d10 0%,transparent 65%),#0a0406}
+  .app{display:grid;grid-template-columns:1fr 376px;height:100vh;width:100vw}
+  .stage{position:relative;min-width:0;overflow:hidden}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .title{position:absolute;top:15px;left:22px;z-index:3;pointer-events:none;max-width:50%}
+  .title h1{margin:0;font-size:15.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase}
+  .title .sub{margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.55}
+  .title em{font-style:normal;color:var(--ca3)}
+  .read{position:absolute;left:22px;bottom:14px;z-index:3;pointer-events:none;font-family:var(--mono);
+    font-size:10px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;max-width:95%}
+  .read b{color:var(--ink);font-weight:600}
+  .read b.hot{color:var(--warn)} .read b.bad{color:var(--bad)} .read b.ok{color:var(--good)}
+  .pills{position:absolute;top:13px;right:14px;z-index:3;display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+  .pill{font-family:var(--mono);font-size:9px;letter-spacing:.13em;padding:5px 10px;border-radius:20px;
+    opacity:0;transition:.25s;pointer-events:none}
+  .pill.on{opacity:1}
+  .p-sleep{color:var(--ripple);border:1px solid rgba(255,121,198,.5);background:rgba(255,121,198,.1)}
+  .p-seiz{color:#fff;border:1px solid var(--bad);background:rgba(255,68,68,.35)}
+  .p-les{color:var(--warn);border:1px solid rgba(255,157,77,.45);background:rgba(255,157,77,.08)}
+  .panel{background:linear-gradient(180deg,rgba(10,15,28,.93),rgba(8,12,22,.97));
+    border-left:1px solid var(--line);padding:15px 14px;overflow-y:auto;z-index:4;
+    display:flex;flex-direction:column;gap:12px}
+  .panel::-webkit-scrollbar{width:8px}
+  .panel::-webkit-scrollbar-thumb{background:rgba(120,150,200,.18);border-radius:4px}
+  .blk{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px}
+  .blk h2{margin:0 0 9px;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;display:flex;align-items:center;gap:7px}
+  .blk h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--ca1));
+    box-shadow:0 0 8px var(--dot,var(--ca1))}
+  .seg{display:flex;background:rgba(0,0,0,.35);border-radius:9px;padding:3px;gap:3px}
+  .seg button{flex:1;border:0;background:transparent;color:var(--muted);font-family:var(--mono);
+    font-size:10.5px;padding:8px 2px;border-radius:6px;cursor:pointer;transition:.18s}
+  .seg button[aria-pressed="true"]{background:rgba(127,184,255,.18);color:var(--ink)}
+  .btn{width:100%;border:0;cursor:pointer;font-family:var(--display);font-weight:600;font-size:12.5px;
+    padding:10px;border-radius:10px;transition:.18s;color:#06121f;margin-top:8px;
+    background:linear-gradient(180deg,#a9e0ff,#56d4ff);box-shadow:0 6px 16px -8px rgba(86,212,255,.7)}
+  .btn:hover{filter:brightness(1.07)} .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.45;cursor:default;box-shadow:none}
+  .btn.pink{background:linear-gradient(180deg,#ffa9dd,#ff79c6);box-shadow:0 6px 16px -8px rgba(255,121,198,.7)}
+  .row{display:flex;gap:6px;margin-top:6px}
+  .ghost{flex:1;border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);
+    font-family:var(--mono);font-size:10.5px;cursor:pointer;padding:8px 3px;border-radius:8px;transition:.18s}
+  .ghost:hover{color:var(--ink);border-color:rgba(86,212,255,.45)}
+  .ghost:disabled{opacity:.4;cursor:default}
+  .sl{display:flex;align-items:center;gap:8px;margin-top:7px;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  .sl .nm{width:86px;flex:none} .sl input{flex:1;accent-color:var(--c,var(--ca1));min-width:0}
+  .sl .vl{width:46px;text-align:right;color:var(--ink);flex:none}
+  .tg{display:flex;align-items:center;gap:9px;padding:5px 3px;cursor:pointer;border-radius:8px;transition:.15s}
+  .tg:hover{background:rgba(255,255,255,.03)}
+  .tg input{position:absolute;opacity:0;width:0;height:0}
+  .sw{width:31px;height:17px;border-radius:20px;background:rgba(255,255,255,.09);position:relative;flex:none;
+    transition:.2s;border:1px solid var(--line)}
+  .sw::after{content:"";position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;
+    background:var(--muted);transition:.2s}
+  .tg input:checked + .sw{background:var(--c,var(--bad));border-color:transparent}
+  .tg input:checked + .sw::after{transform:translateX(14px);background:#06121f}
+  .tg .lb{font-size:11px;color:var(--ink)}
+  .tg .lb small{display:block;font-family:var(--mono);font-size:8.5px;color:var(--faint);margin-top:1px}
+  .concepts{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+  .cpt{border:1px solid var(--line);background:rgba(255,255,255,.02);border-radius:8px;padding:7px 6px;
+    cursor:pointer;transition:.15s;text-align:left;font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .cpt:hover{border-color:currentColor;color:var(--ink)}
+  .cpt.act{color:#06121f;font-weight:600}
+  #lfp{width:100%;height:76px;display:block;border-radius:8px;background:rgba(0,0,0,.3);border:1px solid var(--line)}
+  .cap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8.5px;color:var(--faint);margin-top:5px}
+  .cap b{color:var(--ink);font-weight:500}
+  .bars{display:flex;flex-direction:column;gap:5px}
+  .bar{display:grid;grid-template-columns:42px 1fr 34px;gap:7px;align-items:center;
+    font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  .bar .t{height:5px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden}
+  .bar .t i{display:block;height:100%;border-radius:3px;transition:width .1s}
+  .bar .v{text-align:right;color:var(--ink)}
+  .idx{display:flex;gap:4px;flex-wrap:wrap;min-height:22px}
+  .ichip{font-family:var(--mono);font-size:9.5px;padding:3px 6px;border-radius:5px;border:1px solid currentColor;opacity:.6;transition:.2s}
+  .ichip.on{opacity:1;transform:translateY(-2px)}
+  .empty{font-family:var(--mono);font-size:9.5px;color:var(--faint)}
+  .note{font-family:var(--mono);font-size:10px;line-height:1.5;color:var(--muted);min-height:40px}
+  .note b{color:var(--ink)}
+  @media (max-width:1040px){.app{grid-template-columns:1fr;grid-template-rows:1fr auto}
+    .panel{border-left:0;border-top:1px solid var(--line);max-height:50vh}
+    .title{max-width:70%}.read{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <canvas id="cv"></canvas>
+    <div class="title">
+      <h1>Hippocampus · Index &amp; Replay</h1>
+      <div class="sub">
+        Cortical assemblies carry the content. The hippocampus stores only a sparse
+        <em>index</em> that binds them — and interneurons keep that index from becoming a seizure.
+      </div>
+    </div>
+    <div class="pills">
+      <div class="pill p-seiz" id="pill-seiz">SEIZURE — RUNAWAY SYNCHRONY</div>
+      <div class="pill p-sleep" id="pill-sleep">SLEEP · SHARP-WAVE RIPPLES</div>
+      <div class="pill p-les" id="pill-les">LESION ACTIVE</div>
+    </div>
+    <div class="read">
+      <span>STATE <b id="r-state">explore</b></span>
+      <span>ACh <b id="r-ach">100%</b></span>
+      <span>CA3 ACTIVE <b id="r-sp">–</b></span>
+      <span>CA3 SYNC R <b id="r-sync">–</b></span>
+      <span>θ POWER <b id="r-theta">–</b></span>
+      <span>INDICES <b id="r-idx">0</b></span>
+      <span>RIPPLES <b id="r-swr">0</b></span>
+      <span>REPLAYS <b id="r-rep">0</b></span>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <div class="blk" style="--dot:var(--ripple)">
+      <h2>Behavioural state</h2>
+      <div class="seg" role="group" aria-label="state">
+        <button id="m-exp" aria-pressed="true">Explore</button>
+        <button id="m-qw" aria-pressed="false">Quiet wake</button>
+        <button id="m-sleep" aria-pressed="false">Sleep</button>
+      </div>
+      <button id="b-route" class="btn">▶ Traverse route (encode)</button>
+      <button id="b-swr" class="btn pink">◈ Force sharp-wave ripple</button>
+      <div class="row"><button id="b-reset" class="ghost">↺ Reset</button>
+        <button id="b-clear" class="ghost">✕ Clear input</button></div>
+      <div class="note" id="note"></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--ec)">
+      <h2>Cortical assemblies — cue to recall</h2>
+      <div class="concepts" id="concepts"></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--theta)">
+      <h2>Hippocampal field potential</h2>
+      <canvas id="lfp"></canvas>
+      <div class="cap"><span>θ 5–12 Hz <b id="c-theta">–</b></span><span id="c-mode">theta / LIA</span></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--dg)">
+      <h2>Sparsity by field</h2>
+      <div class="bars" id="bars"></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--ca3)">
+      <h2>CA3 index store</h2>
+      <div class="idx" id="idxwrap"><span class="empty">no indices bound yet</span></div>
+      <div class="cap"><span>each index = sparse CA3 cell set</span><span>Λ = bound assembly</span></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--ach)">
+      <h2>Medial septum / diagonal band</h2>
+      <label class="sl" style="--c:var(--ach)"><span class="nm">Cholinergic</span>
+        <input id="s-ach" type="range" min="0" max="1" step="0.05" value="1">
+        <span class="vl" id="v-ach">100%</span></label>
+      <label class="sl" style="--c:var(--gabaS)"><span class="nm">GABAergic θ</span>
+        <input id="s-theta" type="range" min="0" max="1.4" step="0.05" value="1">
+        <span class="vl" id="v-theta">1.00</span></label>
+      <label class="tg" style="--c:var(--warn)"><input type="checkbox" id="l-ms"><span class="sw"></span>
+        <span class="lb">Lesion MS-DBB<small>abolishes theta; fornix transection</small></span></label>
+    </div>
+
+    <div class="blk" style="--dot:var(--pv)">
+      <h2>Interneurons — the brake on CA3</h2>
+      <label class="sl" style="--c:var(--pv)"><span class="nm">PV basket</span>
+        <input id="s-pv" type="range" min="0" max="1.4" step="0.05" value="1">
+        <span class="vl" id="v-pv">100%</span></label>
+      <label class="sl" style="--c:var(--som)"><span class="nm">SOM / O-LM</span>
+        <input id="s-som" type="range" min="0" max="1.4" step="0.05" value="1">
+        <span class="vl" id="v-som">100%</span></label>
+      <label class="sl" style="--c:var(--mossy)"><span class="nm">Mossy cells</span>
+        <input id="s-mc" type="range" min="0" max="1.2" step="0.05" value="1">
+        <span class="vl" id="v-mc">100%</span></label>
+      <label class="sl" style="--c:var(--ca3)"><span class="nm">CA3 recurrent</span>
+        <input id="s-rec" type="range" min="0.4" max="2" step="0.05" value="1">
+        <span class="vl" id="v-rec">1.00</span></label>
+      <label class="sl" style="--c:var(--dg)"><span class="nm">MF sparsity</span>
+        <input id="s-mf" type="range" min="0.04" max="0.4" step="0.02" value="0.12">
+        <span class="vl" id="v-mf">12%</span></label>
+      <label class="sl"><span class="nm">Speed</span>
+        <input id="s-spd" type="range" min="0.1" max="1.5" step="0.05" value="0.6">
+        <span class="vl" id="v-spd">0.60×</span></label>
+    </div>
+  </aside>
+</div>
+
+<script>
+"use strict";
+(function(){
+  const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  const lfpC=document.getElementById('lfp'), lctx=lfpC.getContext('2d');
+  const $=id=>document.getElementById(id);
+  const CSv=getComputedStyle(document.documentElement), cvar=n=>CSv.getPropertyValue(n).trim();
+  const C={ec:cvar('--ec'),dg:cvar('--dg'),ca3:cvar('--ca3'),ca2:cvar('--ca2'),ca1:cvar('--ca1'),
+    sub:cvar('--sub'),pv:cvar('--pv'),som:cvar('--som'),mossy:cvar('--mossy'),ach:cvar('--ach'),
+    gabaS:cvar('--gabaS'),theta:cvar('--theta'),ripple:cvar('--ripple'),ink:cvar('--ink'),
+    faint:cvar('--faint'),idle:cvar('--idle'),warn:cvar('--warn'),bad:cvar('--bad'),good:cvar('--good')};
+  const FD="'Space Grotesk',system-ui,sans-serif", FM="'IBM Plex Mono',monospace";
+  const TAU=Math.PI*2;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), f=x=>clamp(x,0,1);
+  const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+  function rgba(hex,a){hex=hex.replace('#','');
+    if(hex.length===3)hex=hex.split('').map(x=>x+x).join('');
+    return `rgba(${parseInt(hex.slice(0,2),16)},${parseInt(hex.slice(2,4),16)},${parseInt(hex.slice(4,6),16)},${a})`;}
+  const hsl=(h,a,l=64,s=85)=>`hsla(${h},${s}%,${l}%,${a})`;
+  let RNG=12345; const rnd=()=>{RNG=(RNG*1103515245+12345)&0x7fffffff;return RNG/0x7fffffff;};
+
+  /* ================= validated parameters ================= */
+  const PR={recG:1.35,asym:0.38,bgP:0.5,bgW:0.36,pvW:2.0,somW:1.0,thr:0.20,adapt:0.30,achK:0.78,
+    swrBoost:0.18,swrDisinh:0.35,bgG:1.45,septDep:0.45};
+
+  /* ================= fields ================= */
+  const F={
+    EC :{n:14,col:C.ec ,lab:'EC II / III',sub:'ENTORHINAL'},
+    DG :{n:20,col:C.dg ,lab:'DG',sub:'GRANULE · SPARSE'},
+    CA3:{n:18,col:C.ca3,lab:'CA3',sub:'RECURRENT · AUTO-ASSOC'},
+    CA2:{n:6 ,col:C.ca2,lab:'CA2',sub:'PV-DENSE'},
+    CA1:{n:16,col:C.ca1,lab:'CA1',sub:'COMPARATOR'},
+    SUB:{n:8 ,col:C.sub,lab:'SUB',sub:'OUTPUT'},
+  };
+  const FK=Object.keys(F);
+  FK.forEach(k=>{const q=F[k];
+    q.a=Array(q.n).fill(0); q.ad=Array(q.n).fill(0);
+    q.ph=Array.from({length:q.n},()=>rnd()*TAU);
+    q.w=Array.from({length:q.n},()=>0.9+rnd()*0.22);   // intrinsic clock rates
+    q.PV=0; q.SOM=0; q.R=0; q.mean=0; q.x=[]; q.y=[];
+  });
+  F.DG.MC=0;                                           // hilar mossy cells
+
+  // CA3 recurrent matrix: diffuse collaterals (epileptogenic substrate) + stored indices
+  const NC3=F.CA3.n;
+  const Wbg=Array.from({length:NC3},()=>Array(NC3).fill(0));
+  for(let i=0;i<NC3;i++){
+    let sum=0;
+    for(let j=0;j<NC3;j++) if(i!==j&&rnd()<PR.bgP){Wbg[i][j]=0.6+rnd()*0.8;sum+=Wbg[i][j];}
+    if(sum>0) for(let j=0;j<NC3;j++) Wbg[i][j]*=PR.bgG/sum;   // subcritical while inhibited
+  }
+  const Wpat=Array.from({length:NC3},()=>Array(NC3).fill(0));   // built by learning
+
+  // feedforward projections
+  function proj(nFrom,nTo,p,G){
+    // G = total synaptic weight converging on each postsynaptic cell, so that
+    // drive is set by presynaptic *sparsity* rather than by field size
+    const M=Array.from({length:nTo},()=>Array(nFrom).fill(0));
+    for(let i=0;i<nTo;i++){
+      let sum=0;
+      for(let j=0;j<nFrom;j++) if(rnd()<p){M[i][j]=0.6+rnd()*0.8;sum+=M[i][j];}
+      if(sum>0) for(let j=0;j<nFrom;j++) M[i][j]*=G/sum;
+    }
+    return M;
+  }
+  const PP_DG =proj(F.EC.n,F.DG.n ,0.35,4.6);   // perforant path
+  const PP_CA3=proj(F.EC.n,F.CA3.n,0.18,1.5);
+  const PP_CA1=proj(F.EC.n,F.CA1.n,0.28,3.0);   // temporoammonic
+  let  MF     =proj(F.DG.n,F.CA3.n,0.12,5.2);   // mossy fibres — few, detonator-strength
+  const SC_CA1=proj(F.CA3.n,F.CA1.n,0.32,3.4);  // Schaffer collaterals
+  const CA3_2 =proj(F.CA3.n,F.CA2.n,0.30,3.0);
+  const CA2_1 =proj(F.CA2.n,F.CA1.n,0.35,2.2);
+  const CA1_S =proj(F.CA1.n,F.SUB.n,0.40,3.4);
+  const S_EC  =proj(F.SUB.n,F.EC.n ,0.35,1.8);
+  function rebuildMF(p){ MF=proj(F.DG.n,F.CA3.n,p,5.2); }
+
+  /* ================= cortical assemblies ================= */
+  const CONCEPTS=[
+    {n:'CORRIDOR',h:200},{n:'BLUE DOOR',h:225},{n:'COFFEE',h:30},
+    {n:'ATRIUM',h:150},{n:'STAIRWELL',h:280},{n:'MY DESK',h:330},
+  ];
+  CONCEPTS.forEach((c,i)=>{
+    c.cl=[0,1,2].map(k=>({ph:rnd()*TAU,f:1+(k-1)*.13,x:0,y:0}));
+    c.a=0; c.drive=0;
+    c.ec=[];                                   // its entorhinal projection cells
+    while(c.ec.length<3){const v=Math.floor(rnd()*F.EC.n); if(!c.ec.includes(v)) c.ec.push(v);}
+  });
+
+  /* ================= index store ================= */
+  const indices=[];        // {id,concept,cells:[CA3 ids],hue,strength}
+  const seq=[];            // ordered list of index ids (the route)
+  function bindIndex(ci){
+    // DG pattern-separates; the CA3 cells receiving the strongest mossy-fibre
+    // drive from the active granule cells become this assembly's index
+    const used=new Set(indices.flatMap(x=>x.cells));
+    const score=[];
+    for(let i=0;i<NC3;i++){
+      let mfIn=0; for(let j=0;j<F.DG.n;j++) mfIn+=MF[i][j]*F.DG.a[j];
+      score.push({i,v:mfIn+rnd()*0.05-(used.has(i)?2:0)});
+    }
+    score.sort((a,b)=>b.v-a.v);
+    const cells=score.slice(0,3).map(o=>o.i);
+    const existing=indices.find(x=>x.concept===ci);
+    if(existing) return existing;
+    const idx={id:indices.length+1,concept:ci,cells,hue:CONCEPTS[ci].h,strength:1};
+    indices.push(idx);
+    // Hebbian: bind the index cells to each other
+    for(const i of cells)for(const j of cells) if(i!==j) Wpat[i][j]=PR.recG;
+    // asymmetric link from the previous index in the route
+    if(seq.length){
+      const prev=indices.find(x=>x.id===seq[seq.length-1]);
+      if(prev) for(const i of cells)for(const j of prev.cells) Wpat[i][j]+=PR.asym;
+    }
+    seq.push(idx.id);
+    renderIdx();
+    return idx;
+  }
+
+  /* ================= state ================= */
+  const M={mode:'explore',ach:1,thetaAmp:1,pv:1,som:1,mc:1,recG:1,msLesion:false,mf:0.12};
+  let ms=0, thetaPh=0, swrOn=-1, swrCount=0, replayCount=0, inSWR=false;
+  let cueConcept=null, cueUntil=-1, routeIdx=-1, routeUntil=-1;
+  let replayPtr=0, replayIgnite=null;
+  const lfp=[]; let seizure=false, seizTimer=0;
+
+  const achEff=()=>M.msLesion?Math.min(M.ach,0.25):M.ach;
+  const thetaOn=()=>!M.msLesion&&M.mode!=='sleep';
+
+  /* ================= dynamics (1 ms step) ================= */
+  function step(){
+    const tt=ms/1000;
+    const sAmp=thetaOn()?M.thetaAmp:0;
+    thetaPh=(thetaPh+TAU*8/1000)%TAU;
+    const sG=sAmp*(0.5+0.5*Math.sin(thetaPh));      // septal GABA -> inhibits interneurons
+    const ach=achEff();
+    const achRec=1-PR.achK*ach;
+
+    // sharp-wave ripples: only in the low-ACh state
+    if(M.mode==='sleep'){
+      if(swrOn<0 && rnd()<0.0016) fireSWR();
+      if(swrOn>=0){ inSWR=(ms-swrOn)<90; if(!inSWR&&ms-swrOn>260) swrOn=-1; }
+    } else { inSWR=(swrOn>=0&&ms-swrOn<90); if(swrOn>=0&&ms-swrOn>260) swrOn=-1; }
+
+    // ---- cortical assemblies drive EC ----
+    const ecDrive=Array(F.EC.n).fill(0);
+    CONCEPTS.forEach((c,i)=>{
+      let d=0;
+      if(cueConcept===i && ms<cueUntil) d=0.95;
+      if(routeIdx>=0 && CONCEPTS[routeIdx]===c && ms<routeUntil) d=0.95;
+      c.drive=d;
+      if(d>0) c.ec.forEach(e=>ecDrive[e]=Math.max(ecDrive[e],d));
+    });
+    // hippocampal output re-activates cortex (the index retrieving its content)
+    CONCEPTS.forEach((c,i)=>{
+      const idx=indices.find(x=>x.concept===i);
+      let back=0;
+      if(idx) back=mean(idx.cells.map(k=>F.CA3.a[k]))*0.9*mean(F.SUB.a.map(v=>v))*2.2;
+      c.a+=((Math.max(c.drive,clamp(back,0,1)))-c.a)*0.06;
+    });
+
+    const inh=q=>(PR.pvW*M.pv*q.PV+PR.somW*M.som*q.SOM)*(inSWR?(1-PR.swrDisinh):1);
+    const nx={};
+    // EC
+    nx.EC=F.EC.a.map((v,i)=>{
+      let s=ecDrive[i]+0.30+(rnd()-0.5)*0.05;
+      for(let j=0;j<F.SUB.n;j++) s+=S_EC[i][j]*F.SUB.a[j]*0.5;
+      return f(s-inh(F.EC)*0.5-PR.thr*0.6);
+    });
+    // DG — strong inhibition + mossy-cell drive onto interneurons keeps it very sparse
+    nx.DG=F.DG.a.map((v,i)=>{
+      let s=0; for(let j=0;j<F.EC.n;j++) s+=PP_DG[i][j]*F.EC.a[j];
+      return f(s-inh(F.DG)-PR.adapt*F.DG.ad[i]-PR.thr*1.5);
+    });
+    // CA3 — recurrent collaterals + detonator mossy fibres + direct perforant path
+    nx.CA3=F.CA3.a.map((v,i)=>{
+      let rec=0; for(let j=0;j<NC3;j++) rec+=(Wbg[i][j]+Wpat[i][j]*M.recG)*F.CA3.a[j];
+      let mf=0;  for(let j=0;j<F.DG.n;j++) mf+=MF[i][j]*F.DG.a[j];
+      let pp=0;  for(let j=0;j<F.EC.n;j++) pp+=PP_CA3[i][j]*F.EC.a[j];
+      let ig=0;
+      if(inSWR&&replayIgnite&&replayIgnite.includes(i)&&(ms-swrOn)<25) ig=0.9;
+      return f(rec*achRec+mf+pp+ig+(inSWR?PR.swrBoost:0)
+               -inh(F.CA3)-PR.adapt*F.CA3.ad[i]-PR.thr+(rnd()-0.5)*0.03);
+    });
+    nx.CA2=F.CA2.a.map((v,i)=>{
+      let s=0; for(let j=0;j<NC3;j++) s+=CA3_2[i][j]*F.CA3.a[j];
+      return f(s*achRec+ -inh(F.CA2)*1.4-PR.thr);      // CA2 is unusually PV-dense
+    });
+    nx.CA1=F.CA1.a.map((v,i)=>{
+      let sc=0; for(let j=0;j<NC3;j++) sc+=SC_CA1[i][j]*F.CA3.a[j];
+      let ta=0; for(let j=0;j<F.EC.n;j++) ta+=PP_CA1[i][j]*F.EC.a[j];
+      let c2=0; for(let j=0;j<F.CA2.n;j++) c2+=CA2_1[i][j]*F.CA2.a[j];
+      return f(sc*achRec+ta*0.8+c2+(inSWR?PR.swrBoost:0)
+               -inh(F.CA1)-PR.adapt*F.CA1.ad[i]-PR.thr);
+    });
+    nx.SUB=F.SUB.a.map((v,i)=>{
+      let s=0; for(let j=0;j<F.CA1.n;j++) s+=CA1_S[i][j]*F.CA1.a[j];
+      return f(s-inh(F.SUB)*0.7-PR.thr);
+    });
+
+    // interneurons: feedback from local principal cells, rhythmically released by septal GABA
+    FK.forEach(k=>{
+      const q=F[k], m=mean(q.a);
+      const mcBoost=(k==='DG')?(0.9*M.mc*F.DG.MC):0;
+      const nPV=f(0.30+3.1*m+mcBoost-PR.septDep*sG);
+      const nSOM=f(0.22+1.5*m-PR.septDep*0.7*sG);
+      q.PV+=(nPV-q.PV)/6; q.SOM+=(nSOM-q.SOM)/15;
+    });
+    F.DG.MC+=(f(1.8*mean(F.DG.a))-F.DG.MC)/20;
+
+    FK.forEach(k=>{
+      const q=F[k], n2=nx[k];
+      for(let i=0;i<q.n;i++){ q.a[i]+=(n2[i]-q.a[i])/12; q.ad[i]+=(q.a[i]-q.ad[i])/90; }
+      q.mean=mean(q.a);
+    });
+
+    // LFP: CA1 pyramidal drive minus perisomatic inhibition, plus a ripple carrier
+    const rip=inSWR?0.35*Math.sin(TAU*180*tt):0;
+    lfp.push(F.CA1.mean-0.35*F.CA1.PV+rip);
+    if(lfp.length>1400) lfp.shift();
+    ms++;
+  }
+
+  function fireSWR(){
+    swrOn=ms; swrCount++; inSWR=true;
+    if(seq.length){
+      const first=indices.find(x=>x.id===seq[replayPtr%seq.length]);
+      replayIgnite=first?first.cells:null;
+      replayPtr++; replayCount++;
+    } else replayIgnite=null;
+  }
+
+  /* ================= phase (the clocks) ================= */
+  function stepPhases(dt){
+    const globalDesync=[];
+    FK.forEach(k=>{
+      const q=F[k];
+      // order parameter over active cells
+      let sx=0,sy=0,cnt=0;
+      for(let i=0;i<q.n;i++) if(q.a[i]>0.25){sx+=Math.cos(q.ph[i]);sy+=Math.sin(q.ph[i]);cnt++;}
+      q.R=cnt?Math.hypot(sx/cnt,sy/cnt):0;
+      q.MPH=cnt?Math.atan2(sy/cnt,sx/cnt):0;
+      q.frac=cnt/q.n;
+    });
+    // CA3 phase: bound cells synchronise; feedback inhibition shears global synchrony apart
+    const q=F.CA3;
+    for(let i=0;i<q.n;i++){
+      let coup=0;
+      for(let j=0;j<q.n;j++){
+        if(i===j) continue;
+        const w=(Wbg[i][j]+Wpat[i][j]*M.recG)*q.a[j]*q.a[i];
+        if(w>0.01) coup+=w*3.2*Math.sin(q.ph[j]-q.ph[i]);
+      }
+      // PV-mediated shear: the more of the field is in phase, the harder it pushes apart
+      const shear=5.5*M.pv*q.PV*q.R*q.frac*Math.sin(q.ph[i]-q.MPH);
+      q.ph[i]=(q.ph[i]+(TAU*2.4*q.w[i]+coup-shear+(rnd()-0.5)*0.5)*dt+TAU)%TAU;
+    }
+    FK.filter(k=>k!=='CA3').forEach(k=>{
+      const p=F[k];
+      for(let i=0;i<p.n;i++){
+        const lock=p.a[i]>0.25?2.6:0.2;
+        p.ph[i]=(p.ph[i]+(TAU*2.4*p.w[i]+lock*Math.sin(p.MPH-p.ph[i])
+          -3.0*M.pv*p.PV*p.R*p.frac*Math.sin(p.ph[i]-p.MPH)+(rnd()-0.5)*0.4)*dt+TAU)%TAU;
+      }
+    });
+    CONCEPTS.forEach(c=>{
+      const mx=Math.atan2(mean(c.cl.map(q2=>Math.sin(q2.ph))),mean(c.cl.map(q2=>Math.cos(q2.ph))));
+      c.cl.forEach(k=>{k.ph=(k.ph+(TAU*2.2*k.f+(c.a>0.3?7:0)*Math.sin(mx-k.ph))*dt+TAU)%TAU;});
+    });
+    // seizure detection: hyperactivity AND hypersynchrony in CA3
+    const sz=(F.CA3.frac>0.55&&F.CA3.R>0.75);
+    seizTimer=sz?Math.min(1,seizTimer+dt*2):Math.max(0,seizTimer-dt*1.2);
+    seizure=seizTimer>0.5;
+  }
+
+  /* ================= layout ================= */
+  let W=0,H=0,DPR=1,NR=8;
+  function layout(){
+    NR=clamp(W*0.0062,5.5,9.5);
+    // cortical assemblies across the top
+    CONCEPTS.forEach((c,i)=>{
+      const span=W*0.80, x=W*0.11+span*((i+0.5)/CONCEPTS.length);
+      c.x=x; c.y=H*0.085;
+      c.cl.forEach((k,j)=>{k.x=x+(j-1)*Math.min(20,W*0.014); k.y=c.y;});
+    });
+    // EC band
+    place(F.EC, W*0.12, W*0.72, H*0.245, 0);
+    // hippocampal arc: DG -> CA3 -> CA2 -> CA1 -> SUB
+    place(F.DG , W*0.11, W*0.28, H*0.46, -34);
+    place(F.CA3, W*0.32, W*0.50, H*0.42, -46);
+    place(F.CA2, W*0.535,W*0.60, H*0.455,-18);
+    place(F.CA1, W*0.63, W*0.80, H*0.44, -40);
+    place(F.SUB, W*0.835,W*0.93, H*0.50, -16);
+    F.EC.lx=W*0.42; F.EC.ly=H*0.245;
+  }
+  function place(q,x0,x1,y,bow){
+    q.x=[];q.y=[];
+    for(let i=0;i<q.n;i++){
+      const t=q.n>1?i/(q.n-1):0.5;
+      q.x.push(x0+(x1-x0)*t);
+      q.y.push(y+Math.sin(t*Math.PI)*bow);
+    }
+    q.cx=(x0+x1)/2; q.cy=y+bow*0.6;
+  }
+  function resize(){
+    const r=cv.getBoundingClientRect();
+    DPR=Math.min(window.devicePixelRatio||1,2);
+    W=r.width;H=r.height;
+    cv.width=Math.max(1,W*DPR);cv.height=Math.max(1,H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    const lr=lfpC.getBoundingClientRect();
+    lfpC.width=Math.max(1,lr.width*DPR);lfpC.height=Math.max(1,lr.height*DPR);
+    lctx.setTransform(DPR,0,0,DPR,0,0);
+    layout();
+  }
+
+  /* ================= drawing ================= */
+  function clock(x,y,ph,act,col,r){
+    const s=.5+.5*Math.sin(ph), rr=r*(1+.30*s);
+    if(act){ctx.shadowColor=col;ctx.shadowBlur=4+s*14;}
+    ctx.beginPath();ctx.arc(x,y,rr,0,TAU);
+    ctx.fillStyle=act?rgba(col,.22+s*.6):rgba(C.idle,.05+s*.10);
+    ctx.fill();ctx.shadowBlur=0;
+    ctx.beginPath();ctx.arc(x,y,rr,0,TAU);
+    ctx.lineWidth=1;ctx.strokeStyle=act?rgba(col,.6+s*.4):rgba(C.idle,.28);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x,y);
+    ctx.lineTo(x+Math.cos(ph)*(r+2.5),y+Math.sin(ph)*(r+2.5));
+    ctx.strokeStyle=rgba(C.ink,act?.62:.16);ctx.lineWidth=.9;ctx.stroke();
+  }
+  function bundle(fromQ,toQ,col,alpha,wid,bow){
+    ctx.beginPath();
+    const x1=fromQ.cx,y1=fromQ.cy,x2=toQ.cx,y2=toQ.cy;
+    const mx=(x1+x2)/2,my=(y1+y2)/2,dx=x2-x1,dy=y2-y1,L=Math.hypot(dx,dy)||1;
+    ctx.moveTo(x1,y1);
+    ctx.quadraticCurveTo(mx+(-dy/L)*bow,my+(dx/L)*bow,x2,y2);
+    ctx.strokeStyle=rgba(col,alpha);ctx.lineWidth=wid;ctx.stroke();
+  }
+  function inNode(x,y,v,col,lab,r=13){
+    ctx.beginPath();ctx.arc(x,y,r,0,TAU);
+    ctx.fillStyle=rgba(col,.08+v*.5);ctx.fill();
+    if(v>.2){ctx.shadowColor=col;ctx.shadowBlur=v*16;}
+    ctx.beginPath();ctx.arc(x,y,r,0,TAU);
+    ctx.lineWidth=1.4;ctx.strokeStyle=rgba(col,.45+v*.55);ctx.stroke();ctx.shadowBlur=0;
+    ctx.textAlign='center';ctx.font='600 7.5px '+FM;ctx.fillStyle=rgba(C.ink,.8);
+    ctx.fillText(lab,x,y+2.6);
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // ---- pathway bundles ----
+    const A=(v)=>0.10+v*0.55;
+    bundle(F.EC,F.DG ,C.ec ,A(F.EC.mean),1+F.EC.mean*3,-40);   // perforant path
+    bundle(F.EC,F.CA3,C.ec ,A(F.EC.mean)*.6,1+F.EC.mean*2,-70);
+    bundle(F.EC,F.CA1,C.ec ,A(F.EC.mean)*.7,1+F.EC.mean*2,120); // temporoammonic
+    bundle(F.DG,F.CA3,C.dg ,A(F.DG.mean),1.5+F.DG.mean*4,-26);  // mossy fibres
+    bundle(F.CA3,F.CA2,C.ca3,A(F.CA3.mean),1+F.CA3.mean*3,-16);
+    bundle(F.CA3,F.CA1,C.ca3,A(F.CA3.mean),1+F.CA3.mean*3.4,-40); // Schaffer
+    bundle(F.CA2,F.CA1,C.ca2,A(F.CA2.mean),1+F.CA2.mean*2,-14);
+    bundle(F.CA1,F.SUB,C.ca1,A(F.CA1.mean),1+F.CA1.mean*3,-16);
+    bundle(F.SUB,F.EC ,C.sub,A(F.SUB.mean),1+F.SUB.mean*2.6,150); // return to cortex
+    // CA3 recurrent self-loop
+    const q3=F.CA3, rr=Math.min(60,W*.05);
+    ctx.beginPath();ctx.arc(q3.cx,q3.cy-rr*1.15,rr,0.15*Math.PI,0.85*Math.PI,true);
+    ctx.strokeStyle=rgba(C.ca3,.12+q3.mean*.7+(seizure?.3:0));
+    ctx.lineWidth=1.5+q3.mean*4+(seizure?3:0);ctx.stroke();
+    ctx.textAlign='center';ctx.font='500 8px '+FM;ctx.fillStyle=rgba(C.ca3,.7);
+    ctx.fillText('RECURRENT COLLATERALS',q3.cx,q3.cy-rr*2.25);
+
+    // ---- cortical assemblies ----
+    CONCEPTS.forEach((c,i)=>{
+      const on=c.a>0.3;
+      const bw=Math.min(96,W*0.075);
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(c.x-bw/2,c.y-16,bw,32,9);
+      else ctx.rect(c.x-bw/2,c.y-16,bw,32);
+      ctx.fillStyle=hsl(c.h,on?.14:.04);ctx.fill();
+      ctx.strokeStyle=hsl(c.h,on?.75:.2);ctx.lineWidth=on?1.8:1;ctx.stroke();
+      c.cl.forEach(k=>clock(k.x,k.y,k.ph,on,hsl(c.h,1,66),NR*0.8));
+      ctx.textAlign='center';ctx.font='600 8.5px '+FM;
+      ctx.fillStyle=hsl(c.h,on?1:.55,76);
+      ctx.fillText(c.n,c.x,c.y-21);
+      const idx=indices.find(x=>x.concept===i);
+      if(idx){ctx.font='500 7px '+FM;ctx.fillStyle=rgba(C.ca3,.75);
+        ctx.fillText('Λ'+idx.id,c.x,c.y+25);}
+    });
+
+    // ---- fields ----
+    FK.forEach(k=>{
+      const q=F[k];
+      for(let i=0;i<q.n;i++) clock(q.x[i],q.y[i],q.ph[i],q.a[i]>0.25,q.col,NR);
+      ctx.textAlign='center';
+      ctx.font='600 11px '+FD;ctx.fillStyle=rgba(C.ink,.88);
+      ctx.fillText(q.lab,q.cx,q.cy+34);
+      ctx.font='500 7.5px '+FM;ctx.fillStyle=rgba(q.col,.7);
+      ctx.fillText(q.sub,q.cx,q.cy+45);
+      ctx.font='500 8px '+FM;ctx.fillStyle=rgba((q.frac>0.5&&k==='CA3')?C.bad:C.faint,.95);
+      ctx.fillText((q.frac*100).toFixed(0)+'% active   R='+q.R.toFixed(2),q.cx,q.cy+56);
+      // interneuron nodes attached to the field
+      inNode(q.cx-Math.min(64,W*.05),q.cy-26,q.PV*M.pv,C.pv,'PV',12);
+      inNode(q.cx+Math.min(64,W*.05),q.cy-26,q.SOM*M.som,C.som,'SOM',11);
+      if(k==='DG') inNode(q.cx,q.cy+68,F.DG.MC*M.mc,C.mossy,'MC',11);
+    });
+
+    // ---- medial septum / diagonal band ----
+    const sx=W*0.055, sy=H*0.80;
+    const sG=thetaOn()?M.thetaAmp*(0.5+0.5*Math.sin(thetaPh)):0;
+    ctx.beginPath();ctx.arc(sx,sy,30,0,TAU);
+    ctx.fillStyle=rgba(M.msLesion?C.bad:C.ach,.07+(M.msLesion?0:achEff()*.25));ctx.fill();
+    ctx.lineWidth=2;ctx.strokeStyle=rgba(M.msLesion?C.bad:C.ach,.6);ctx.stroke();
+    // theta hand
+    ctx.beginPath();ctx.moveTo(sx,sy);
+    ctx.lineTo(sx+Math.cos(thetaPh)*26,sy+Math.sin(thetaPh)*26);
+    ctx.strokeStyle=rgba(C.gabaS,thetaOn()?.9:.15);ctx.lineWidth=2.4;ctx.stroke();
+    if(M.msLesion){ctx.beginPath();
+      ctx.moveTo(sx-20,sy-20);ctx.lineTo(sx+20,sy+20);
+      ctx.moveTo(sx+20,sy-20);ctx.lineTo(sx-20,sy+20);
+      ctx.strokeStyle=rgba(C.bad,.85);ctx.lineWidth=2.5;ctx.stroke();}
+    ctx.textAlign='center';ctx.font='600 10px '+FD;ctx.fillStyle=rgba(C.ink,.9);
+    ctx.fillText('MS / DBB',sx,sy+46);
+    ctx.font='500 7.5px '+FM;
+    ctx.fillStyle=rgba(C.ach,.8);ctx.fillText('ACh '+Math.round(achEff()*100)+'%',sx,sy+57);
+    ctx.fillStyle=rgba(C.gabaS,.8);ctx.fillText('GABA→INs θ',sx,sy+67);
+    // septal projections to every field's interneurons
+    FK.forEach(k=>{
+      const q=F[k];
+      ctx.beginPath();ctx.moveTo(sx+28,sy-14);
+      ctx.quadraticCurveTo((sx+q.cx)/2,sy-90,q.cx-Math.min(64,W*.05),q.cy-26+12);
+      ctx.setLineDash([3,4]);
+      ctx.strokeStyle=rgba(C.gabaS,thetaOn()?.10+sG*.35:.05);
+      ctx.lineWidth=1;ctx.stroke();ctx.setLineDash([]);
+    });
+
+    if(inSWR){ctx.fillStyle=rgba(C.ripple,.05);ctx.fillRect(0,0,W,H);}
+    if(seizure){ctx.fillStyle=rgba(C.bad,.06+.04*Math.sin(ms*.25));ctx.fillRect(0,0,W,H);}
+  }
+
+  /* ================= LFP ================= */
+  function thetaPower(){
+    const n=Math.min(lfp.length,1200); if(n<300) return 0;
+    const x=lfp.slice(-n),mu=mean(x),y=x.map(v=>v-mu);
+    let p=0,tot=0;
+    for(let hz=2;hz<=40;hz++){let c=0,s=0;
+      for(let i=0;i<n;i++){const a=TAU*hz*i/1000;c+=y[i]*Math.cos(a);s+=y[i]*Math.sin(a);}
+      const pw=(c*c+s*s)/n;tot+=pw;if(hz>=5&&hz<=12)p+=pw;}
+    return tot>0?p/tot:0;
+  }
+  function drawLFP(){
+    const w=lfpC.clientWidth,h=lfpC.clientHeight; if(!w||!h) return;
+    lctx.clearRect(0,0,w,h);
+    const mid=h/2;
+    lctx.strokeStyle=rgba(C.ink,.18);lctx.lineWidth=1;
+    lctx.beginPath();lctx.moveTo(0,mid);lctx.lineTo(w,mid);lctx.stroke();
+    const n=Math.min(lfp.length,1200); if(n<4) return;
+    const seg=lfp.slice(-n),mu=mean(seg);
+    let amp=0.02; for(const v of seg) amp=Math.max(amp,Math.abs(v-mu));
+    lctx.strokeStyle=seizure?rgba(C.bad,1):(M.mode==='sleep'?rgba(C.ripple,.95):rgba(C.theta,.9));
+    lctx.lineWidth=1.4;lctx.beginPath();
+    for(let i=0;i<n;i++){
+      const x=i/(n-1)*w,y=mid-((seg[i]-mu)/amp)*(h/2-5);
+      i?lctx.lineTo(x,y):lctx.moveTo(x,y);
+    }
+    lctx.stroke();
+    lctx.font='8.5px '+FM;lctx.textAlign='right';
+    lctx.fillStyle=seizure?rgba(C.bad,1):rgba(C.faint,.95);
+    lctx.fillText(seizure?'ICTAL':(M.mode==='sleep'?'LIA + ripples':'theta'),w-4,11);
+  }
+
+  /* ================= UI ================= */
+  const cw=$('concepts');
+  CONCEPTS.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.className='cpt';b.style.color=hsl(c.h,1,72);b.textContent=c.n;
+    b.onclick=()=>{cueConcept=i;cueUntil=ms+700;
+      if(M.mode==='explore') bindIndex(i);};
+    cw.appendChild(b);
+  });
+  const barWrap=$('bars');
+  FK.forEach(k=>{
+    const d=document.createElement('div');
+    d.className='bar';
+    d.innerHTML=`<span>${F[k].lab}</span><span class="t"><i id="bar-${k}"></i></span><span class="v" id="bv-${k}">0%</span>`;
+    barWrap.appendChild(d);
+  });
+  function renderIdx(){
+    const w=$('idxwrap');
+    if(!indices.length){w.innerHTML='<span class="empty">no indices bound yet</span>';return;}
+    w.innerHTML='';
+    indices.forEach(ix=>{
+      const e=document.createElement('span');
+      e.className='ichip';e.style.color=hsl(ix.hue,1,72);
+      const act=mean(ix.cells.map(c=>F.CA3.a[c]))>0.3;
+      if(act) e.classList.add('on');
+      e.textContent='Λ'+ix.id+' {'+ix.cells.join(',')+'}';
+      w.appendChild(e);
+    });
+  }
+  function setMode(m){
+    M.mode=m;
+    ['exp','qw','sleep'].forEach((k,i)=>
+      $('m-'+k).setAttribute('aria-pressed',['explore','quiet','sleep'][i]===m));
+    if(m==='explore'){M.ach=1;}
+    else if(m==='quiet'){M.ach=.5;}
+    else {M.ach=.15;}
+    $('s-ach').value=M.ach; $('v-ach').textContent=Math.round(M.ach*100)+'%';
+    document.body.classList.toggle('sleep',m==='sleep');
+    $('pill-sleep').classList.toggle('on',m==='sleep');
+    $('c-mode').textContent=m==='sleep'?'LIA + sharp-wave ripples':'theta state';
+    $('b-swr').disabled=false;
+    updateNote();
+  }
+  $('m-exp').onclick=()=>setMode('explore');
+  $('m-qw').onclick=()=>setMode('quiet');
+  $('m-sleep').onclick=()=>setMode('sleep');
+  $('b-route').onclick=()=>{ setMode('explore'); routeIdx=0; routeUntil=ms+520; };
+  $('b-swr').onclick=()=>{ fireSWR(); };
+  $('b-clear').onclick=()=>{cueConcept=null;routeIdx=-1;};
+  $('b-reset').onclick=()=>{
+    indices.length=0;seq.length=0;replayPtr=0;replayCount=0;swrCount=0;
+    for(let i=0;i<NC3;i++)for(let j=0;j<NC3;j++) Wpat[i][j]=0;
+    FK.forEach(k=>{const q=F[k];q.a.fill(0);q.ad.fill(0);q.PV=0;q.SOM=0;});
+    F.DG.MC=0;cueConcept=null;routeIdx=-1;lfp.length=0;seizTimer=0;seizure=false;
+    renderIdx();
+  };
+  const bind=(id,vid,fmt,set)=>{const el=$(id),vl=$(vid);
+    const s=()=>{const v=parseFloat(el.value);set(v);vl.textContent=fmt(v);};el.oninput=s;s();};
+  bind('s-ach','v-ach',v=>Math.round(v*100)+'%',v=>M.ach=v);
+  bind('s-theta','v-theta',v=>v.toFixed(2),v=>M.thetaAmp=v);
+  bind('s-pv','v-pv',v=>Math.round(v*100)+'%',v=>M.pv=v);
+  bind('s-som','v-som',v=>Math.round(v*100)+'%',v=>M.som=v);
+  bind('s-mc','v-mc',v=>Math.round(v*100)+'%',v=>M.mc=v);
+  bind('s-rec','v-rec',v=>v.toFixed(2),v=>M.recG=v);
+  bind('s-mf','v-mf',v=>Math.round(v*100)+'%',v=>{M.mf=v;rebuildMF(v);});
+  let SPEED=.6;
+  bind('s-spd','v-spd',v=>v.toFixed(2)+'×',v=>SPEED=v);
+  $('l-ms').onchange=e=>{M.msLesion=e.target.checked;updateNote();};
+
+  function updateNote(){
+    let t;
+    if(seizure) t='<b>Runaway excitation.</b> CA3 recurrent collaterals are recruiting the whole field and locking it in phase. This is what the interneurons were preventing.';
+    else if(M.mode==='sleep') t='Low ACh releases the recurrent collaterals. Ripples ignite a stored index and the chain replays the route — compressed, and back out to cortex.';
+    else if(M.mode==='explore') t='High ACh suppresses recurrent transmission, so CA3 follows its afferents. This is <b>encoding</b>: cue assemblies to bind new indices.';
+    else t='Moderate ACh lets the recurrent net complete patterns. Cue one assembly and its index should reinstate the whole bound set.';
+    if(M.msLesion) t+=' <b>Septum lesioned</b> — theta is gone.';
+    $('note').innerHTML=t;
+  }
+  function updateUI(){
+    $('r-state').textContent=M.mode==='quiet'?'quiet wake':M.mode;
+    $('r-ach').textContent=Math.round(achEff()*100)+'%';
+    const sp=$('r-sp');sp.textContent=(F.CA3.frac*100).toFixed(0)+'%';
+    sp.className=F.CA3.frac>0.5?'bad':(F.CA3.frac>0.05?'ok':'');
+    const sy=$('r-sync');sy.textContent=F.CA3.R.toFixed(2);
+    sy.className=F.CA3.R>0.75?'bad':'';
+    const tp=thetaPower();
+    $('r-theta').textContent=tp.toFixed(2);
+    $('c-theta').textContent=tp.toFixed(2);
+    $('r-idx').textContent=indices.length;
+    $('r-swr').textContent=swrCount;
+    $('r-rep').textContent=replayCount;
+    $('pill-seiz').classList.toggle('on',seizure);
+    document.body.classList.toggle('seiz',seizure);
+    $('pill-les').classList.toggle('on',M.msLesion||M.pv<0.6||M.som<0.6||M.mc<0.6);
+    FK.forEach(k=>{
+      const q=F[k];
+      $('bar-'+k).style.width=(q.frac*100).toFixed(0)+'%';
+      $('bar-'+k).style.background=(k==='CA3'&&q.frac>0.5)?C.bad:q.col;
+      $('bv-'+k).textContent=(q.frac*100).toFixed(0)+'%';
+    });
+    [...cw.children].forEach((b,i)=>b.classList.toggle('act',CONCEPTS[i].a>0.3));
+    renderIdx(); updateNote();
+  }
+
+  /* ================= main loop ================= */
+  let last=performance.now(),carry=0,ui=0;
+  function frame(now){
+    let dt=(now-last)/1000;last=now;dt=Math.min(dt,.05);
+    const sim=dt*SPEED;
+    carry+=sim*1000;
+    const n=Math.min(50,Math.floor(carry));carry-=n;
+    for(let i=0;i<n;i++){
+      // route traversal: step through the assemblies in order while encoding
+      if(routeIdx>=0&&ms>=routeUntil){
+        bindIndex(routeIdx);
+        routeIdx++;
+        if(routeIdx>=CONCEPTS.length){routeIdx=-1;}
+        else routeUntil=ms+520;
+      }
+      step();
+    }
+    stepPhases(sim);
+    draw();drawLFP();
+    ui+=dt;if(ui>.1){ui=0;updateUI();}
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize',resize);
+  resize();setMode('explore');renderIdx();updateUI();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
