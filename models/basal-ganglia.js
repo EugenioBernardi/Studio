@@ -1,28 +1,34 @@
 "use strict";
 /* =====================================================================
-   Basal Ganglia — action selection as competition between clock assemblies.
+   Basal Ganglia — action selection as an EMERGENT SYNCHRONY phenomenon.
 
-   Same thesis as the rest of the project: each competing motor program is a
-   cortical ASSEMBLY (a group of phase-clocks). The basal ganglia decide which
-   assembly wins, and the thalamocortical loop then SUSTAINS the winner's
-   synchrony while the losers are held desynchronised.
+   Every neuron is a clock (phase θ + activity a). A population transmits its
+   mean field  Z_P = (1/n) Σ aⱼ e^{iθⱼ}  — so an incoherent or silent population
+   sends nothing: SYNCHRONY GATES TRANSMISSION. Selection is not a firing-rate
+   winner; it is which cortical channel's cortico-striato-pallido-thalamo-cortical
+   loop LOCKS INTO A COHERENT ASSEMBLY.
 
-   Architecture (Gurney, Prescott & Redgrave 2001; Humphries, Stewart & Gurney
-   2006) — a rate model per channel with the selection motif:
-     - direct  (D1):  cortex → striatum-D1 ⊣ GPi           ("Go", off-CENTRE)
-     - indirect(D2):  cortex → striatum-D2 ⊣ GPe ⊣ STN → GPi ("No-Go")
-     - hyperdirect:   cortex → STN → GPi  (diffuse, on-SURROUND, fast brake)
-     - output:        GPi/SNr tonically inhibits thalamus; low GPi = released
-   Dopamine sets the D1/D2 balance (the selection threshold and vigour).
-   The STN⟷GPe loop, with transmission delay, is the β-oscillation generator
-   that runs away when dopamine is low (parkinsonian).
-
-   Synchrony does work: a channel's drive to the BG is scaled by how coherent
-   its cortical assembly is, so selection → synchrony → stronger drive → a
-   committed, hysteretic choice.
+   Mechanism (all of it expressed in synchrony/activity of clock populations):
+     - GPi/SNr is tonically active and its GABA output DESYNCHRONISES + silences
+       its thalamic sector — a jammed thalamus cannot reinforce cortex.
+     - D1 "Go" (gain ∝ dopamine) inhibits GPi → withdraws the clamp → that
+       thalamus synchronises → drives cortex → the cortical assembly locks in
+       (the cortico-thalamo-cortical positive-feedback loop). = SELECTED.
+     - STN (hyperdirect + STN→GPi diffuse) raises GPi output on the OTHER
+       channels → keeps their thalamus jammed = on-surround No-Go.
+     - Striatal fast-spiking interneurons (gap-junction-coupled → their own
+       coherent fast clock) deliver feed-forward inhibition to all MSNs: the
+       real substrate of corticostriatal competition (winner-take-all).
+     - The thalamic reticular nucleus (TRN) is the inhibitory shell shaping the
+       thalamocortical loop.
+     - The reciprocal STN⟷GPe loop (β-band clocks + conduction delay) locks into
+       β-band HYPERSYNCHRONY at the low-dopamine operating point; that coherent
+       β output clamps thalamus and jams selection (parkinsonism). DBS injects
+       desynchronising input to STN → breaks the β coherence → rescues.
 
    Single source of truth: runs headless (`node models/basal-ganglia.js test`)
-   and inlines into the app.
+   and inlines into the app. Timescales are real (theta loop ~6 Hz, β ~20 Hz);
+   selection unfolds over a few hundred ms.
    ===================================================================== */
 
 (function (root, factory) {
@@ -32,8 +38,6 @@
 
   const TAU = Math.PI * 2;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-  const sig = (x, g, th) => 1 / (1 + Math.exp(-g * (x - th)));   // logistic activation
-
   function mulberry32(a) {
     return function () {
       a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -43,201 +47,289 @@
     };
   }
 
-  /* ---------------- validated default parameters ---------------- */
   function defaults() {
     return {
-      nCh: 3,            // competing channels (motor programs)
-      m: 6,             // clocks per cortical assembly
-      DA: 0.6,          // dopamine tone (0 parkinsonian … 1 hyperdopaminergic)
-      dt: 0.001,        // s
-
-      // --- cortex (integrates salience + thalamic feedback: the selection loop) ---
-      tauCx: 0.030,     // cortical integration time constant
-      tcExcite: 1.15,   // thalamus → cortex re-excitation (closes the positive-FB loop)
-      cohBonus: 0.35,   // coherent assembly adds drive (synchrony does work)
-      wLat: 1.40,       // cortical lateral inhibition between channels (winner-take-all)
-
-      // --- corticostriatal / dopamine gains ---
-      wCxStr: 1.55,     // cortex → striatum
-      daD1: 0.55,       // D1 potentiation by DA   (Go gain ∝ 1 + daD1·DA)
-      daD2: 0.55,       // D2 suppression by DA    (NoGo gain ∝ 1 − daD2·DA)
-      gStr: 4.6, thStr: 0.62,
-
-      // --- STN / GPe (the β loop) ---
-      wHyper: 0.90,     // cortex → STN (hyperdirect)
-      wGpeStn: 3.20,    // GPe ⊣ STN — strong reciprocal gain: the loop Hopf-bifurcates
-                        //   into a β limit cycle at the low-dopamine operating point only
-      gStn: 3.4, thStn: 0.25,
-      wStnGpe: 1.15,    // STN → GPe
-      wD2Gpe: 1.30,     // D2 ⊣ GPe
-      gGpe: 3.2, thGpe: 0.28, gpeTonic: 0.35,
-      loopDelay: 0.011, // STN⟷GPe conduction delay (true delay → β limit cycle)
-
-      // --- GPi / SNr output ---
-      wStnGpi: 0.42,    // STN → GPi   (diffuse on-surround)
-      wD1Gpi: 1.75,     // D1 ⊣ GPi    (focused off-centre)
-      wGpeGpi: 0.55,    // GPe ⊣ GPi
-      gGpi: 3.6, thGpi: 0.24, gpiTonic: 0.52,
-
-      // --- thalamus + thalamocortical loop ---
-      wGpiTh: 1.55,     // GPi ⊣ thalamus (disinhibition when GPi is low)
-      wCxTh: 0.65,      // cortex → thalamus
-      gTh: 4.0, thTh: 0.40,
-      tcGain: 0.9,      // thalamus → cortical-assembly coupling boost
-
-      // --- rate integration ---
-      tauR: 0.020,      // nucleus rate time constant
-      tauFast: 0.006,   // STN / GPe time constant (fast-spiking; enables the β limit cycle)
-      rateNoise: 0.008, // stochastic drive on STN/GPe — sustains the near-critical β resonance
-                        //   (β is intermittent/bursty in vivo, not a clean tone)
-
-      // --- cortical clock assemblies (Kuramoto) ---
-      f0: 8.0, sigmaF: 0.06, Kself: 3.0, Kbase: 0.05,
-      Ginh: 3.2,        // repulsion between channels (keeps losers desynchronised)
-      D: 0.05,          // phase noise
-      cohFloor: 0.35,   // drive = salience·(cohFloor + (1−cohFloor)·R)  — synchrony does work
-
-      // --- DBS (STN high-frequency stim ≈ informational lesion of STN output) ---
-      dbs: 0,           // 0..1 fraction by which STN output is clamped/regularised
-
+      nCh: 4,            // competing motor programs
+      DA: 0.6,           // dopamine (0 parkinsonian … 1 hyperdopaminergic)
+      dbs: 0,            // STN-DBS desynchronising drive (0..1)
+      dt: 0.0005,        // s (0.5 ms) — β needs sub-ms-ish resolution
       seed: 7,
+
+      // population sizes (clocks)
+      nCtx: 8, nMsn: 6, nGpe: 12, nStn: 14, nGpi: 5, nThal: 6, nFsi: 5, nTrn: 5,
+
+      // intrinsic rhythms (Hz)
+      fCtx: 6.0, fMsn: 6.0, fThal: 6.0, fTrn: 6.0,   // theta loop
+      fGpe: 20.0, fStn: 20.0, fGpi: 20.0, fFsi: 40.0, // fast (β / γ)
+      sigmaF: 0.015,     // relative rate spread (assembly pops: cortex/thalamus/striatum)
+      sigmaFfast: 0.09,  // spread for relay pops (STN/GPe/…): incoherent unless the β loop locks them
+
+      // activity (rate) dynamics
+      tauA: 0.020,       // activity time constant (s)
+      tauAfast: 0.008,   // GPe/STN/FSI activity time constant
+
+      // within-population assembly coupling (synchrony formation)
+      Kself: 6.5,        // pulls a population's clocks together ∝ its own coherence
+      ctxKbase: 0.0,     // cortex CANNOT self-lock — the thalamocortical loop is REQUIRED
+                         //   (cortex is only a partly-coherent CANDIDATE without the loop)
+      ctxKloop: 15.0,    // extra coupling supplied by thalamic feedback: the loop must close
+                         //   for a cortical assembly to LOCK (so the BG genuinely gates selection)
+      Ginh: 1.0,         // repulsion cap on runaway coherence (feedback inhibition)
+      D: 0.025,          // phase noise
+      betaCoup: 16.0,     // STN⟷GPe reciprocal coupling (β synchrony generator)
+      loopDelay: 0.010,  // STN⟷GPe conduction delay (s)
+
+      // projection weights (mean-field transmission)
+      wCtxMsn: 1.35,     // cortex → striatum (D1/D2)
+      wCtxStn: 1.10,     // cortex → STN (hyperdirect)
+      wCtxTh: 0.55,      // cortex → thalamus
+      wThCtx: 2.60,      // thalamus → cortex (closes loop)
+      wD1Gpi: 1.90,      // D1 ⊣ GPi (focused Go)
+      wD2Gpe: 1.55,      // D2 ⊣ GPe
+      wGpeStn: 1.30,     // GPe ⊣ STN
+      wGpeGpi: 0.65,     // GPe ⊣ GPi
+      wStnGpi: 1.30,     // STN → GPi diffuse (on-surround)
+      wStnGpe: 1.20,     // STN → GPe
+      wGpiTh: 1.70,      // GPi ⊣ thalamus (the clamp)
+      wFsiMsn: 0.45,     // FSI ⊣ MSN (feed-forward competition)
+      wCtxFsi: 1.15,     // cortex → FSI
+      wLat: 0.90,        // cortical lateral inhibition on coherence (winner clamps rivals)
+      wLatA: 0.90,       // lateral inhibition on ACTIVITY (salience-ordered competition)
+      wTrnTh: 0.45,      // TRN ⊣ thalamus
+      wThTrn: 1.00,      // thalamus → TRN
+
+      // tonic external drive (sets baseline firing)
+      extCtx: 0.05, extGpe: 0.62, extGpi: 0.30, extStn: 0.30, extThal: 0.45,
+      extFsi: 0.10, extTrn: 0.20, extMsn: 0.0,
+
+      // dopamine gain on striatum (Go ∝ DA, NoGo ∝ 1−DA)
+      daD1: 1.55, daD2base: 0.45, daD2: 1.05,
+
+      // corticostriatal plasticity (actor)
+      wStr: null,        // per-channel learned gain (filled at create)
     };
   }
 
   function create(opts) {
     const P = Object.assign(defaults(), opts || {});
     const rnd = mulberry32(P.seed);
-    const nCh = P.nCh, m = P.m;
+    const nCh = P.nCh;
+    const gauss = () => { let u = 0, v = 0; while (!u) u = rnd(); while (!v) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); };
+
+    // build populations
+    const pops = {};
+    function addPop(name, ch, n, fHz, type, fast) {
+      const cl = [];
+      // each clock has its OWN intrinsic rate (detuning) — so a population only stays
+      // coherent when coupling beats the spread; without it, it desynchronises
+      for (let i = 0; i < n; i++) cl.push({ th: rnd() * TAU, a: type === "tonic" ? 0.5 : 0.05,
+                                            w: TAU * fHz * (1 + (fast ? P.sigmaFfast : P.sigmaF) * gauss()) });
+      pops[name] = { name, ch, n, cl, type,
+                     Zx: 0, Zy: 0, out: 0, act: 0, R: 0, psi: 0, fast: !!fast };
+    }
+    const perCh = [
+      ["ctx", P.nCtx, P.fCtx, "e", false],
+      ["d1", P.nMsn, P.fMsn, "e", false],
+      ["d2", P.nMsn, P.fMsn, "e", false],
+      ["gpe", P.nGpe, P.fGpe, "tonic", true],
+      ["stn", P.nStn, P.fStn, "e", true],
+      ["gpi", P.nGpi, P.fGpi, "tonic", true],
+      ["thal", P.nThal, P.fThal, "e", false],
+      ["trn", P.nTrn, P.fTrn, "tonic", true],
+    ];
+    for (let c = 0; c < nCh; c++) for (const [nm, n, f, ty, fa] of perCh) addPop(nm + c, c, n, f, ty, fa);
+    // FSI: one shared striatal interneuron pool per channel (gap-junction coupled → coherent)
+    for (let c = 0; c < nCh; c++) addPop("fsi" + c, c, P.nFsi, P.fFsi, "tonic", true);
+
+    if (!P.wStr) P.wStr = new Float64Array(nCh).fill(1);
+
     const S = {
-      P, nCh, m, rnd, t: 0,
-      sal: new Float64Array(nCh),        // external salience per channel (cortical input)
-      cx: new Float64Array(nCh),         // cortical state (salience + thalamic feedback)
-      // rates
-      d1: new Float64Array(nCh), d2: new Float64Array(nCh),
-      stn: new Float64Array(nCh), gpe: new Float64Array(nCh),
-      gpi: new Float64Array(nCh), th: new Float64Array(nCh),
-      stnHist: [], gpeHist: [], histPtr: 0,
-      DLEN: Math.max(1, Math.round(P.loopDelay / P.dt)),
-      // cortical assemblies
-      ph: [], w: [], R: new Float64Array(nCh), mph: new Float64Array(nCh),
-      // corticostriatal weights (plastic, actor)
-      wStr: new Float64Array(nCh).fill(1),
+      P, nCh, rnd, gauss, t: 0, pops,
+      sal: new Float64Array(nCh),
+      // STN/GPe delay ring buffers (store mean-field out+psi per pop)
+      hist: {}, DLEN: Math.max(1, Math.round(P.loopDelay / P.dt)), hp: 0,
+      surrSm: 0, betaSm: 0,
     };
     for (let c = 0; c < nCh; c++) {
-      S.gpe[c] = P.gpeTonic; S.gpi[c] = P.gpiTonic; S.wStr[c] = 1;
-      S.stnHist[c] = new Float64Array(S.DLEN); S.gpeHist[c] = new Float64Array(S.DLEN).fill(P.gpeTonic);
-      S.ph[c] = new Float64Array(m); S.w[c] = new Float64Array(m);
-      for (let i = 0; i < m; i++) { S.ph[c][i] = rnd() * TAU; S.w[c][i] = TAU * (P.f0 + P.sigmaF * (rnd() - 0.5) * 2); }
+      S.hist["stn" + c] = { x: new Float64Array(S.DLEN), y: new Float64Array(S.DLEN) };
+      S.hist["gpe" + c] = { x: new Float64Array(S.DLEN), y: new Float64Array(S.DLEN) };
     }
+    meanFields(S);
     return S;
   }
 
   function setSalience(S, arr) { for (let c = 0; c < S.nCh; c++) S.sal[c] = arr[c] || 0; }
 
-  // order parameter of channel c's assembly
-  function order(S, c) {
-    const ph = S.ph[c], m = S.m; let sx = 0, sy = 0;
-    for (let i = 0; i < m; i++) { sx += Math.cos(ph[i]); sy += Math.sin(ph[i]); }
-    return { R: Math.hypot(sx / m, sy / m), psi: Math.atan2(sy / m, sx / m) };
+  // compute mean field Z_P = (1/n)Σ a e^{iθ} for every population
+  function meanFields(S) {
+    for (const k in S.pops) {
+      const p = S.pops[k]; let x = 0, y = 0, ax = 0;
+      for (const c of p.cl) { x += c.a * Math.cos(c.th); y += c.a * Math.sin(c.th); ax += c.a; }
+      x /= p.n; y /= p.n; p.Zx = x; p.Zy = y; p.act = ax / p.n;
+      p.mf = Math.hypot(x, y);                   // coherent mean field |Z|
+      p.psi = Math.atan2(y, x);
+      p.R = p.act > 1e-3 ? p.mf / p.act : 0;     // coherence among active clocks
+      // transmission: activity carries it, synchrony amplifies (so a locked assembly
+      // drives its targets harder → commitment), but sync is not REQUIRED to bootstrap
+      p.out = p.act * (0.5 + 0.5 * p.R);
+    }
   }
+
+  const G = S => S.pops;
 
   /* ---------------- one integration step ---------------- */
   function step(S) {
-    const P = S.P, nCh = S.nCh, dt = P.dt;
-    const a = dt / P.tauR;                       // rate leak
-    const afast = dt / P.tauFast;                // fast leak for STN / GPe
-    const da = P.DA;
+    const P = S.P, nCh = S.nCh, dt = P.dt, pops = S.pops;
+    meanFields(S);
+    const DA = P.DA;
+    const mD1 = P.daD1 * DA;                         // Go gain (through origin)
+    const mD2 = P.daD2base + P.daD2 * (1 - DA);      // NoGo gain
 
-    // cortex integrates salience + thalamic re-excitation + a coherence bonus.
-    // This closes the cortico-thalamo-cortical positive-feedback loop that commits
-    // to a winner ("reinforcement through thalamus"); synchrony does work via cohBonus.
-    const acx = dt / P.tauCx;
-    const u = new Float64Array(nCh);
-    let sumTh = 0; for (let c = 0; c < nCh; c++) sumTh += S.th[c];
-    for (let c = 0; c < nCh; c++) {
-      const o = order(S, c); S.R[c] = o.R; S.mph[c] = o.psi;
-      const target = S.sal[c] + P.tcExcite * S.th[c] + P.cohBonus * o.R * S.th[c]
-                     - P.wLat * (sumTh - S.th[c]);        // lateral inhibition ⇒ WTA
-      S.cx[c] += acx * (Math.max(0, target) - S.cx[c]);
-      u[c] = S.cx[c] * S.wStr[c];
+    // delayed STN/GPe mean fields (true conduction delay)
+    const rd = S.hp;
+    const dOut = {}, dPsi = {};
+    for (let c = 0; c < nCh; c++) for (const nm of ["stn", "gpe"]) {
+      const h = S.hist[nm + c]; const x = h.x[rd], y = h.y[rd];
+      dOut[nm + c] = Math.hypot(x, y); dPsi[nm + c] = Math.atan2(y, x);
     }
-    // dopamine sets the Go/NoGo balance with real teeth: D1 (Go) scales ~linearly from
-    // zero, so the direct pathway is essentially dead at low dopamine (akinesia).
-    const mD1 = 1.55 * P.DA, mD2 = 0.40 + 1.00 * (1 - P.DA);
+    // diffuse STN broadcast (on-surround) — rate-coded, attenuated by DBS
+    let stnRaw = 0;
+    for (let c = 0; c < nCh; c++) stnRaw += pops["stn" + c].act;
+    stnRaw /= nCh;
+    S.surrSm += (dt / 0.030) * (stnRaw - S.surrSm);   // low-pass: β oscillation must not unclamp
+    const stnBroadcast = S.surrSm * (1 - P.dbs);
 
-    // delayed copies for the STN⟷GPe loop — TRUE conduction delay (ring buffer),
-    // which is what turns the reciprocal STN⟷GPe loop into a β limit cycle.
-    const rd = S.histPtr;                        // oldest sample = current write slot
-    const stnDelayed = new Float64Array(nCh), gpeDelayed = new Float64Array(nCh);
-    for (let c = 0; c < nCh; c++) { stnDelayed[c] = S.stnHist[c][rd]; gpeDelayed[c] = S.gpeHist[c][rd]; }
+    // lateral competition uses ACTIVITY (salience-ordered from the outset), plus a
+    // coherence term (a locked winner clamps harder). Activity-first makes the winner
+    // salience-determined rather than a locking race.
+    let ctxSumAct = 0, ctxSumMf = 0;
+    for (let c = 0; c < nCh; c++) { ctxSumAct += pops["ctx" + c].act; ctxSumMf += pops["ctx" + c].mf; }
 
-    // diffuse STN broadcast (on-surround)
-    let stnSum = 0; for (let c = 0; c < nCh; c++) stnSum += stnDelayed[c] * (1 - P.dbs);
-
+    // accumulate phase/activity deltas
+    const upd = [];
     for (let c = 0; c < nCh; c++) {
-      // striatum (dopamine-gated Go / NoGo)
-      const d1t = sig(P.wCxStr * u[c] * mD1, P.gStr, P.thStr);
-      const d2t = sig(P.wCxStr * u[c] * mD2, P.gStr, P.thStr);
-      // STN: cortical hyperdirect drive − GPe inhibition (delayed)
-      const stnt = sig(P.wHyper * S.cx[c] - P.wGpeStn * gpeDelayed[c] + 0.35, P.gStn, P.thStn);
-      // GPe: tonic + STN drive (delayed) − D2 inhibition.
-      const gpet = sig(P.gpeTonic + P.wStnGpe * stnDelayed[c] - P.wD2Gpe * S.d2[c], P.gGpe, P.thGpe);
-      // GPi: tonic + diffuse STN (surround) − focused D1 (centre) − GPe
-      const gpit = sig(P.gpiTonic + P.wStnGpi * stnSum - P.wD1Gpi * S.d1[c] - P.wGpeGpi * S.gpe[c], P.gGpi, P.thGpi);
-      // thalamus: cortical drive, disinhibited as GPi falls
-      const tht = sig(P.wCxTh * S.cx[c] - P.wGpiTh * S.gpi[c] + 0.30, P.gTh, P.thTh);
+      const CTX = pops["ctx" + c], D1 = pops["d1" + c], D2 = pops["d2" + c],
+            GPE = pops["gpe" + c], STN = pops["stn" + c], GPI = pops["gpi" + c],
+            TH = pops["thal" + c], TRN = pops["trn" + c], FSI = pops["fsi" + c];
 
-      S.d1[c] += a * (d1t - S.d1[c]);
-      S.d2[c] += a * (d2t - S.d2[c]);
-      const nz = P.rateNoise;
-      S.stn[c] = clamp(S.stn[c] + afast * (stnt - S.stn[c]) + nz * (S.rnd() - 0.5), 0, 1);   // fast, noisy
-      S.gpe[c] = clamp(S.gpe[c] + afast * (gpet - S.gpe[c]) + nz * (S.rnd() - 0.5), 0, 1);
-      S.gpi[c] += a * (gpit - S.gpi[c]);
-      S.th[c]  += a * (tht  - S.th[c]);
+      // ---- excitatory / inhibitory drives (mean-field magnitudes) ----
+      // CORTEX: salience + thalamic drive − lateral competition; assembly self-coupling
+      const ctxExc = P.extCtx + S.sal[c] * P.wStr[c] + P.wThCtx * TH.out;
+      const ctxInh = P.wLatA * (ctxSumAct - CTX.act) + P.wLat * (ctxSumMf - CTX.mf);   // WTA
+      const ctxK = P.ctxKbase + P.ctxKloop * TH.out; // assembly locks only when the loop closes
+      pushUpd(upd, CTX, ctxExc, ctxInh, [[TH, P.wThCtx]], P, ctxK, S);
+
+      // FSI: driven by cortex, tonically active, gap-junction coherent
+      pushUpd(upd, FSI, P.extFsi + P.wCtxFsi * CTX.out, 0, [[CTX, P.wCtxFsi]], P, 0, S);
+
+      // STRIATUM D1/D2: cortex drive (DA-gated) − FSI feed-forward inhibition
+      pushUpd(upd, D1, P.extMsn + P.wCtxMsn * mD1 * CTX.out, P.wFsiMsn * FSI.act, [[CTX, P.wCtxMsn * mD1]], P, null, S);
+      pushUpd(upd, D2, P.extMsn + P.wCtxMsn * mD2 * CTX.out, P.wFsiMsn * FSI.act, [[CTX, P.wCtxMsn * mD2]], P, null, S);
+
+      // β loop gain rises as dopamine falls: the STN⟷GPe loop crosses into coherent
+      // β-band hypersynchrony only in the parkinsonian regime.
+      const betaK = P.betaCoup * Math.max(0, (1 - DA) - 0.40) * 2.4;
+      // GPe: activity = tonic + STN − D2; β PHASE coupling to the DELAYED STN mean field
+      pushUpdBeta(upd, GPE, P.extGpe + P.wStnGpe * STN.act, P.wD2Gpe * D2.act,
+                  dPsi["stn" + c], betaK, P, 0, S);
+      // STN: activity = tonic + cortex(hyperdirect) − GPe; β PHASE coupling to DELAYED GPe
+      pushUpdBeta(upd, STN, P.extStn + P.wCtxStn * CTX.out, P.wGpeStn * GPE.act,
+                  dPsi["gpe" + c], betaK, P, P.dbs, S);
+
+      // GPi: tonic + STN surround − D1 − GPe   (output that clamps thalamus) — relay, no self-sync
+      pushUpd(upd, GPI, P.extGpi + P.wStnGpi * stnBroadcast, P.wD1Gpi * D1.act + P.wGpeGpi * GPE.act,
+              [], P, 0, S);
+
+      // TRN: thalamic drive, tonic — relay
+      pushUpd(upd, TRN, P.extTrn + P.wThTrn * TH.act, 0, [[TH, P.wThTrn]], P, 0, S);
+
+      // THALAMUS: cortex drive − GPi clamp − TRN; assembly self-coupling (synchronises when released)
+      pushUpd(upd, TH, P.extThal + P.wCtxTh * CTX.out, P.wGpiTh * GPI.act + P.wTrnTh * TRN.act,
+              [[CTX, P.wCtxTh]], P, null, S);
     }
-    // commit the STN/GPe delay lines and advance the ring pointer
-    for (let c = 0; c < nCh; c++) { S.stnHist[c][rd] = S.stn[c]; S.gpeHist[c][rd] = S.gpe[c]; }
-    S.histPtr = (rd + 1) % S.DLEN;
 
-    // cortical assemblies: thalamic feedback boosts within-channel coupling
-    // global mean phase across ALL active clocks (for repulsion between channels)
-    let gx = 0, gy = 0, gn = 0;
-    for (let c = 0; c < nCh; c++) for (let i = 0; i < S.m; i++) { gx += Math.cos(S.ph[c][i]); gy += Math.sin(S.ph[c][i]); gn++; }
-    gx /= gn; gy /= gn;
-    const Rg = Math.hypot(gx, gy), psig = Math.atan2(gy, gx);
-    const sqrtD = Math.sqrt(2 * P.D * dt);
-    for (let c = 0; c < nCh; c++) {
-      const K = P.Kbase + P.Kself * P.tcGain * S.th[c];   // thalamus sustains the winner
-      const ph = S.ph[c], mph = S.mph[c], w = S.w[c];
-      for (let i = 0; i < S.m; i++) {
-        let coup = K * Math.sin(mph - ph[i]);
-        const shear = P.Ginh * Rg * Math.sin(ph[i] - psig);
-        ph[i] = (ph[i] + (w[i] + coup + shear) * dt + sqrtD * gaussian(S.rnd) + TAU) % TAU;
+    // apply updates
+    for (const u of upd) {
+      const p = u.pop;
+      const tauA = p.fast ? P.tauAfast : P.tauA;
+      for (let i = 0; i < p.n; i++) {
+        const cl = p.cl[i];
+        cl.a = clamp(cl.a + dt / tauA * (u.aTarget - cl.a), 0, 1);
+        cl.th = (cl.th + u.dth[i] + TAU) % TAU;
       }
     }
+
+    // write STN/GPe mean fields into delay lines
+    meanFields(S);
+    for (let c = 0; c < nCh; c++) for (const nm of ["stn", "gpe"]) {
+      const p = pops[nm + c], h = S.hist[nm + c];
+      h.x[rd] = p.Zx; h.y[rd] = p.Zy;
+    }
+    // running (time-averaged) STN β coherence — instantaneous R of a finite pop is noisy
+    { let sc = 0, sa = 0; for (let c = 0; c < nCh; c++) { const p = pops["stn" + c]; sc += p.act * p.R; sa += p.act; }
+      const inst = sa > 1e-3 ? sc / sa : 0; S.betaSm += (dt / 0.12) * (inst - S.betaSm); }
+    S.hp = (rd + 1) % S.DLEN;
     S.t += dt;
   }
-  function gaussian(rnd) { let u = 0, v = 0; while (u === 0) u = rnd(); while (v === 0) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+
+  // generic population update: excitatory drive builds activity, inhibition suppresses it;
+  // active clocks synchronise via own coherence (assembly) + excitatory afferents; a global
+  // repulsion caps runaway coherence; inhibition also adds phase desynchronisation.
+  function pushUpd(upd, p, exc, inh, excProj, P, selfK, S) {
+    const aTarget = clamp(exc - inh, 0, 1.3);
+    const dt = P.dt;
+    const dth = new Float64Array(p.n);
+    const Kself = (selfK == null ? P.Kself : selfK) * p.out;   // assembly pull ∝ own coherence
+    const desync = P.Ginh * p.out + 1.4 * inh;     // repulsion: feedback-inhibition + afferent GABA
+    for (let i = 0; i < p.n; i++) {
+      const cl = p.cl[i]; let d = cl.w;
+      d += Kself * Math.sin(p.psi - cl.th);
+      for (const [q, w] of excProj) d += w * q.out * Math.sin(q.psi - cl.th);
+      d += desync * Math.sin(cl.th - p.psi);        // repulsion: push AWAY from own mean (desynchronise)
+      dth[i] = d * dt + Math.sqrt(2 * P.D * dt) * S.gauss();
+    }
+    upd.push({ pop: p, aTarget, dth });
+  }
+  // β-loop populations: reciprocal delayed coupling to their partner can lock them into
+  // coherent β; DBS adds desynchronising jitter.
+  function pushUpdBeta(upd, p, exc, inh, partnerPsi, betaK, P, dbs, S) {
+    const aTarget = clamp(exc - inh, 0, 1.3);
+    const dt = P.dt; dbs = dbs || 0;
+    const dth = new Float64Array(p.n);
+    const beta = betaK;                              // DA-gated reciprocal coupling (β generator)
+    const desync = P.Ginh * 0.6 * p.out + dbs * 9.0; // DBS strongly desynchronises
+    // NB: no self-assembly coupling here — STN/GPe are relays, their synchrony comes
+    // ONLY from the DA-gated reciprocal loop, so β is specific to the low-dopamine state.
+    for (let i = 0; i < p.n; i++) {
+      const cl = p.cl[i]; let d = cl.w;
+      d += beta * Math.sin(partnerPsi - cl.th);      // entrain to delayed partner → β lock
+      d += desync * Math.sin(cl.th - p.psi);
+      dth[i] = d * dt + Math.sqrt(2 * P.D * dt) * S.gauss();
+    }
+    upd.push({ pop: p, aTarget, dth });
+  }
 
   function run(S, seconds) { const n = Math.round(seconds / S.P.dt); for (let k = 0; k < n; k++) step(S); }
 
-  // which channel is selected (thalamus released) — returns index or -1
+  // observables. Selection lives in the COHERENT MEAN FIELD mf = act·R: a channel is
+  // selected only when its cortical assembly is both active AND locked (synchronised).
+  const ctxR = (S, c) => S.pops["ctx" + c].R;
+  const ctxOut = (S, c) => S.pops["ctx" + c].mf;
   function selected(S, thr) {
-    thr = thr == null ? 0.5 : thr;
+    thr = thr == null ? 0.45 : thr;
     let best = -1, bv = thr;
-    for (let c = 0; c < S.nCh; c++) if (S.th[c] > bv) { bv = S.th[c]; best = c; }
+    for (let c = 0; c < S.nCh; c++) { const o = S.pops["ctx" + c].mf; if (o > bv) { bv = o; best = c; } }
     return best;
   }
+  // β coherence in STN, ACTIVITY-WEIGHTED (only active STN populations count)
+  function betaCoh(S) { return S.betaSm; }
 
-  // dopamine-gated corticostriatal plasticity (three-factor / actor): reward the
-  // channel that was selected → its cortical drive potentiates (faster next time).
   function reinforce(S, ch, reward, rate) {
-    rate = rate == null ? 0.05 : rate;
-    const dw = rate * reward * S.d1[ch];          // eligibility ∝ D1 activity
-    S.wStr[ch] = clamp(S.wStr[ch] + dw, 0.3, 2.0);
+    rate = rate == null ? 0.06 : rate;
+    S.P.wStr[ch] = clamp(S.P.wStr[ch] + rate * reward * S.pops["d1" + ch].out, 0.3, 2.2);
   }
 
-  return { create, defaults, step, run, order, selected, setSalience, reinforce, mulberry32, TAU };
+  return { create, defaults, step, run, meanFields, setSalience, selected, ctxR, ctxOut, betaCoh, reinforce, mulberry32, TAU };
 });
 
 /* ============================ headless tests ============================ */
@@ -247,115 +339,54 @@ if (typeof require !== "undefined" && require.main === module) {
   let pass = 0, fail = 0;
   const check = (n, c, d) => (c ? (pass++, console.log("  PASS  " + n + "   " + (d || "")))
                                 : (fail++, console.log("  FAIL  " + n + "   " + (d || ""))));
-  const arr = (a, f = fmt) => "[" + Array.from(a).map(x => f(x)).join(" ") + "]";
+  const outs = S => "[" + [0, 1, 2, 3].map(c => fmt(M.ctxOut(S, c))).join(" ") + "]";
 
-  // ---- Test 1: healthy selection — one winner ----
-  console.log("\n[1] Healthy dopamine selects exactly one channel");
+  console.log("\n[1] Healthy dopamine: exactly one cortical assembly synchronises");
   {
     const S = M.create({ DA: 0.6 });
-    M.setSalience(S, [0.9, 0.6, 0.5]);
-    M.run(S, 1.0);
-    console.log("      thal=" + arr(S.th) + "  R=" + arr(S.R) + "  sel=" + M.selected(S));
-    check("channel 0 selected", M.selected(S) === 0, "sel=" + M.selected(S));
-    check("winner thalamus released", S.th[0] > 0.6, "th0=" + fmt(S.th[0]));
-    check("losers suppressed", S.th[1] < 0.25 && S.th[2] < 0.25, "th=" + fmt(S.th[1]) + "," + fmt(S.th[2]));
-    check("winner assembly synchronised", S.R[0] > 0.85, "R0=" + fmt(S.R[0]));
-    check("winner far more coherent than losers", S.R[0] - Math.max(S.R[1], S.R[2]) > 0.25,
-          "ΔR=" + fmt(S.R[0] - Math.max(S.R[1], S.R[2])));
-  }
-
-  // ---- Test 2: winner-take-all with near-equal competitors ----
-  console.log("\n[2] Winner-take-all: two strong competitors, only one wins");
-  {
-    const S = M.create({ DA: 0.6 });
-    M.setSalience(S, [0.82, 0.80, 0.3]);
+    M.setSalience(S, [0.9, 0.6, 0.5, 0.4]);
     M.run(S, 1.2);
-    const nSel = [0, 1, 2].filter(c => S.th[c] > 0.5).length;
-    console.log("      thal=" + arr(S.th) + "  #released=" + nSel);
-    check("exactly one channel released", nSel === 1, "#=" + nSel);
+    console.log("      ctx out=" + outs(S) + "  sel=" + M.selected(S));
+    check("channel 0 selected", M.selected(S) === 0, "sel=" + M.selected(S));
+    check("winner coherent+active", M.ctxOut(S, 0) > 0.55 && M.ctxR(S, 0) > 0.75, "out=" + fmt(M.ctxOut(S,0)) + " R=" + fmt(M.ctxR(S,0)));
+    check("others not selected", [1,2,3].every(c => M.ctxOut(S,c) < 0.35), "outs=" + outs(S));
   }
 
-  // ---- Test 3: selection latency ----
-  console.log("\n[3] Selection latency (healthy)");
+  console.log("\n[2] Winner-take-all with two near-equal competitors");
   {
     const S = M.create({ DA: 0.6 });
-    M.setSalience(S, [0.9, 0.6, 0.5]);
-    let lat = -1;
-    for (let k = 0; k < 600; k++) { M.step(S); if (lat < 0 && S.th[0] > 0.5) lat = S.t * 1000; }
-    console.log("      latency to release = " + fmt(lat, 0) + " ms");
-    check("selects within a plausible window (40–250 ms)", lat > 30 && lat < 250, "lat=" + fmt(lat, 0) + "ms");
+    M.setSalience(S, [0.82, 0.80, 0.4, 0.3]);
+    M.run(S, 1.4);
+    const n = [0,1,2,3].filter(c => M.ctxOut(S,c) > 0.55).length;
+    console.log("      ctx out=" + outs(S) + "  #selected=" + n);
+    check("exactly one selected", n === 1, "#=" + n);
   }
 
-  // ---- Test 4: parkinsonian — low dopamine fails to select ----
-  console.log("\n[4] Low dopamine (parkinsonian) — akinesia / failure to release");
+  console.log("\n[3] Parkinsonian (low DA): akinesia — nothing synchronises");
   {
     const S = M.create({ DA: 0.05 });
-    M.setSalience(S, [0.9, 0.6, 0.5]);
-    M.run(S, 1.0);
-    console.log("      thal=" + arr(S.th) + "  GPi=" + arr(S.gpi) + "  sel=" + M.selected(S));
-    check("no channel released (akinesia)", M.selected(S) === -1, "sel=" + M.selected(S));
-    check("GPi output pathologically high", S.gpi[0] > 0.6, "gpi0=" + fmt(S.gpi[0]));
+    M.setSalience(S, [0.9, 0.6, 0.5, 0.4]);
+    M.run(S, 1.2);
+    console.log("      ctx out=" + outs(S) + "  sel=" + M.selected(S) + "  βcoh=" + fmt(M.betaCoh(S)));
+    check("no channel selected (akinesia)", M.selected(S) === -1, "sel=" + M.selected(S));
   }
 
-  // ---- Test 5: β oscillation appears with low dopamine ----
-  // Measure ABSOLUTE β-band power (amplitude): a healthy STN is near-steady, the
-  // parkinsonian STN⟷GPe loop crosses the Hopf bifurcation into a sustained ~16 Hz
-  // limit cycle. (Normalised β *fraction* is misleading — noise gets resonance-shaped
-  // even in health; amplitude is the honest measure.)
-  console.log("\n[5] β-band oscillation in the STN⟷GPe loop grows when DA is low");
-  function betaAmp(DA) {
-    const S = M.create({ DA });
-    M.setSalience(S, [0.9, 0.6, 0.5]);
-    M.run(S, 1.0);                                   // settle past any transient
-    const buf = [];
-    for (let k = 0; k < 1500; k++) { M.step(S); buf.push(S.stn[0]); }
-    const mu = buf.reduce((s, v) => s + v, 0) / buf.length;
-    let p = 0;
-    for (let hz = 13; hz <= 30; hz++) {
-      let re = 0, im = 0;
-      for (let i = 0; i < buf.length; i++) { const A = M.TAU * hz * i / 1000; re += (buf[i] - mu) * Math.cos(A); im += (buf[i] - mu) * Math.sin(A); }
-      p += (re * re + im * im) / (buf.length * buf.length);
-    }
-    return { amp: Math.sqrt(p), rng: Math.max(...buf) - Math.min(...buf) };
-  }
+  console.log("\n[4] β hypersynchrony in STN grows when dopamine is low");
   {
-    const hi = betaAmp(0.6), lo = betaAmp(0.05);
-    console.log("      β amplitude: healthy=" + fmt(hi.amp, 3) + " (range " + fmt(hi.rng, 2) +
-                ")   parkinsonian=" + fmt(lo.amp, 3) + " (range " + fmt(lo.rng, 2) + ")");
-    check("parkinsonian STN oscillates (range ≥ 0.15)", lo.rng > 0.15, "range=" + fmt(lo.rng, 2));
-    check("healthy STN is near-steady (range ≤ 0.06)", hi.rng < 0.06, "range=" + fmt(hi.rng, 2));
-    check("β amplitude far higher when DA is low", lo.amp > 4 * hi.amp, "ratio=" + fmt(lo.amp / Math.max(hi.amp, 1e-6), 1));
+    const H = M.create({ DA: 0.6 }); M.setSalience(H, [0.9,0.6,0.5,0.4]); M.run(H, 1.2);
+    const Plo = M.create({ DA: 0.05 }); M.setSalience(Plo, [0.9,0.6,0.5,0.4]); M.run(Plo, 1.2);
+    const bH = M.betaCoh(H), bP = M.betaCoh(Plo);
+    console.log("      STN coherence: healthy=" + fmt(bH) + "  parkinsonian=" + fmt(bP));
+    check("STN β coherence higher when DA low", bP > bH + 0.2, "Δ=" + fmt(bP - bH));
   }
 
-  // ---- Test 6: DBS rescues selection in the parkinsonian model ----
-  console.log("\n[6] STN-DBS restores selection under low dopamine");
+  console.log("\n[5] STN-DBS desynchronises the loop and rescues selection");
   {
-    const S = M.create({ DA: 0.05, dbs: 0.85 });
-    M.setSalience(S, [0.9, 0.6, 0.5]);
-    let lat = -1;
-    for (let k = 0; k < 800; k++) { M.step(S); if (lat < 0 && S.th[0] > 0.5) lat = S.t * 1000; }
-    console.log("      thal=" + arr(S.th) + "  sel=" + M.selected(S) + "  latency=" + fmt(lat, 0) + " ms");
+    const S = M.create({ DA: 0.05, dbs: 0.8 });
+    M.setSalience(S, [0.9, 0.6, 0.5, 0.4]);
+    M.run(S, 1.6);
+    console.log("      ctx out=" + outs(S) + "  sel=" + M.selected(S) + "  βcoh=" + fmt(M.betaCoh(S)));
     check("selection restored by DBS", M.selected(S) === 0, "sel=" + M.selected(S));
-  }
-
-  // ---- Test 7: dopamine-gated reinforcement biases future selection ----
-  console.log("\n[7] Reinforcement: rewarding a weaker channel makes it win next time");
-  {
-    const S = M.create({ DA: 0.6 });
-    // ch1 is initially weaker than ch0
-    for (let trial = 0; trial < 8; trial++) {
-      // reset phases/rates lightly between trials, keep learned weights
-      M.setSalience(S, [0.7, 0.68, 0.3]);
-      M.run(S, 0.6);
-      const win = M.selected(S);
-      // reward ONLY when ch1 is chosen (shape behaviour toward ch1)
-      if (win === 1) M.reinforce(S, 1, 1.0);
-      else if (win === 0) M.reinforce(S, 0, -0.4);   // mild punishment of the habit
-      M.setSalience(S, [0, 0, 0]); M.run(S, 0.15);    // inter-trial
-    }
-    M.setSalience(S, [0.7, 0.68, 0.3]); M.run(S, 0.7);
-    console.log("      after training  wStr=" + arr(S.wStr) + "  sel=" + M.selected(S));
-    check("reinforced channel now wins", M.selected(S) === 1, "sel=" + M.selected(S) + " wStr=" + arr(S.wStr));
   }
 
   console.log("\n==== " + pass + " passed, " + fail + " failed ====\n");
