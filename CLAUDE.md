@@ -95,18 +95,25 @@ entrain a rotating clock. Open: retroactive interference is real (a new engram w
 one); fixed assembly size; no asymmetric/STDP (β-offset) rule yet — that would write *directed*
 assemblies (sequences), the bridge to replay and chronotaxis. Full record: `docs/ASSEMBLY-VALIDATION.md`.
 
-**Basal Ganglia — action selection** (`apps/basal-ganglia.html`, model `models/basal-ganglia.js`) —
-the *new* clock-paradigm build (distinct from the deprioritised inlined `basal-ganglia-selection.html`).
-Competing motor programs are cortical **assemblies**; canonical off-centre (D1⊣GPi) / on-surround
-(STN→GPi) selection with a **cortico-thalamo-cortical positive-feedback loop** (thalamus sustains the
-winner's synchrony — the "reinforcement through thalamus") plus cortical lateral inhibition for WTA.
-Dopamine gates Go/NoGo (D1 gain ∝ DA); the delayed **STN⟷GPe loop Hopf-bifurcates into a ~16 Hz β
-limit cycle at low dopamine only**. Validated 14/14 headless, robust over 8 seeds: healthy selects
-one at ~62 ms; low DA → akinesia (GPi ~0.92 everywhere); β amplitude ≈42× higher parkinsonian;
-STN-DBS rescues; dopamine-gated reinforcement biases future choice. Three things not to remove:
-**cortical lateral inhibition** (WTA brake on the positive loop), **through-origin DA gate on D1**
-(else no akinesia), and the **true STN⟷GPe delay** (a first-order lag only damps — β needs a real
-limit cycle, measured by amplitude not normalised fraction). Full record: `docs/BASAL-GANGLIA-VALIDATION.md`.
+**Basal Ganglia — selection by synchrony** (`apps/basal-ganglia.html`, model `models/basal-ganglia.js`) —
+a **mean-field oscillator network** (rebuilt from a rejected rate model — the author wanted true
+clocks, a watchable timescale, and real corticostriatal/thalamocortical structure). Every neuron is
+a clock (phase + activity); a population transmits its coherent mean field, so **synchrony gates
+transmission** and selection *is* which cortical channel's cortico-striato-pallido-thalamo-cortical
+loop **locks into a coherent assembly**. Cortex **cannot self-lock** — the thalamocortical loop is
+required, so the BG genuinely gate selection. Richer anatomy: striatal **FSI** feed-forward
+inhibition, **TRN** shell, prototypic GPe, D1/D2. Dopamine gates Go/NoGo; the delayed **STN⟷GPe loop
+locks into β-band HYPERSYNCHRONY at low dopamine only** (real synchrony, not a rate wiggle); DBS
+desynchronises to rescue. Validated 7/7 headless; robust 10/10 seeds for selection & akinesia, β
+higher in PD 10/10. Watchable: selection unfolds over ~0.5–0.9 s.
+Six things not to re-derive (all cost real tuning, see `docs/BASAL-GANGLIA-VALIDATION.md`):
+transmission = **activity·(0.5+0.5R)** (pure-synchrony transmission deadlocks bootstrap); the
+**desync repulsion sign** (`+` = apart; `−` silently synchronises everything → no akinesia);
+**ctxKbase = 0** (else cortex self-locks over ~1 s and false-selects at low DA); lateral inhibition
+on **activity** not coherence (else a noise race picks the wrong winner); relay nuclei have **no
+self-assembly coupling + larger spread** (else β isn't DA-specific); and **low-pass the STN surround**
+(β oscillation would otherwise unclamp the thalamus). The deprioritised inlined
+`basal-ganglia-selection.html` is unrelated and untouched.
 
 **Metastable Chronotaxis** (`metastable-chronotaxis.html`) — 15-clock cortical pool;
 assemblies are *dynamic coalitions* drawn from it, not fixed boxes. Kuramoto coupling

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Basal Ganglia — Action Selection</title>
+<title>Basal Ganglia — Selection by Synchrony</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
     --bg:#060911; --panel:rgba(13,19,33,.74); --line:rgba(120,150,200,.14);
     --ink:#e4ebf7; --muted:#8a99b6; --faint:#4a5670; --idle:#3f4d68;
     --cx:#ffc861; --d1:#3ee6b0; --d2:#ff7a6b; --stn:#ff4d7d; --gpe:#c07bff;
-    --gpi:#ff9d4d; --th:#56d4ff; --da:#4ce0c0;
+    --gpi:#ff9d4d; --th:#56d4ff; --da:#4ce0c0; --fsi:#8fb8ff; --trn:#9d8bff;
     --good:#3ee6b0; --warn:#ff9d4d; --bad:#ff4d7d;
     --display:'Space Grotesk',system-ui,-apple-system,Segoe UI,sans-serif;
     --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -21,14 +21,14 @@
   body{margin:0;font-family:var(--display);color:var(--ink);overflow:hidden;transition:background .7s;
     background:radial-gradient(1200px 700px at 25% -10%,#101a2e 0%,transparent 60%),
       radial-gradient(900px 600px at 100% 110%,#0c1424 0%,transparent 55%),var(--bg)}
-  body.pd{background:radial-gradient(1200px 800px at 40% 20%,#2a1533 0%,transparent 62%),#0a0614}
-  .app{display:grid;grid-template-columns:1fr 380px;height:100vh;width:100vw}
+  body.pd{background:radial-gradient(1200px 800px at 45% 25%,#2a1030 0%,transparent 62%),#0a0612}
+  .app{display:grid;grid-template-columns:1fr 384px;height:100vh;width:100vw}
   .stage{position:relative;min-width:0;overflow:hidden}
   #cv{position:absolute;inset:0;width:100%;height:100%;display:block}
-  .title{position:absolute;top:15px;left:22px;z-index:3;pointer-events:none;max-width:52%}
-  .title h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.15em;text-transform:uppercase}
+  .title{position:absolute;top:15px;left:22px;z-index:3;pointer-events:none;max-width:56%}
+  .title h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
   .title .sub{margin-top:5px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.6}
-  .title em{font-style:normal;color:var(--d1)}
+  .title em{font-style:normal;color:var(--th)} .title b.g{color:var(--d1);font-weight:600}
   .read{position:absolute;left:22px;bottom:14px;z-index:3;pointer-events:none;font-family:var(--mono);
     font-size:10px;color:var(--muted);display:flex;gap:15px;flex-wrap:wrap;max-width:94%}
   .read b{color:var(--ink);font-weight:600}
@@ -54,8 +54,8 @@
   .pre button.on{background:rgba(86,212,255,.15);color:var(--ink);border-color:rgba(86,212,255,.5)}
   .pre button.pdp{border-color:rgba(255,77,125,.35)}
   .pre button.pdp:hover,.pre button.pdp.on{border-color:var(--bad);background:rgba(255,77,125,.15);color:#ffd0dc}
-  .note{font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--muted);min-height:54px;margin-top:9px}
-  .note b{color:var(--ink)} .note em{font-style:normal;color:var(--d1)} .note .w{color:var(--warn)}
+  .note{font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--muted);min-height:56px;margin-top:9px}
+  .note b{color:var(--ink)} .note em{font-style:normal;color:var(--th)} .note .w{color:var(--warn)} .note .g{color:var(--d1)}
   .ch{display:grid;grid-template-columns:58px 1fr 30px auto;gap:8px;align-items:center;margin-top:8px}
   .ch .nm{font-family:var(--mono);font-size:10px;font-weight:600;display:flex;align-items:center;gap:6px}
   .ch .nm i{width:8px;height:8px;border-radius:50%;display:block;box-shadow:0 0 6px currentColor}
@@ -73,8 +73,6 @@
   .bar .t{height:6px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden}
   .bar .t i{display:block;height:100%;border-radius:3px;transition:width .12s}
   .bar .v{text-align:right;color:var(--ink)}
-  #beta{width:100%;height:52px;display:block;border-radius:8px;background:rgba(0,0,0,.3);border:1px solid var(--line)}
-  .cap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8.5px;color:var(--faint);margin-top:5px}
   @media (max-width:1040px){.app{grid-template-columns:1fr;grid-template-rows:1fr auto}
     .panel{border-left:0;border-top:1px solid var(--line);max-height:52vh}
     .title{max-width:70%}.read{display:none}}
@@ -85,20 +83,19 @@
   <div class="stage">
     <canvas id="cv"></canvas>
     <div class="title">
-      <h1>Basal Ganglia · Action Selection</h1>
+      <h1>Basal Ganglia · Selection by Synchrony</h1>
       <div class="sub">
-        Competing motor programs are cortical <em>assemblies</em>. The basal ganglia release
-        exactly one — off-centre <em>Go</em> (D1⊣GPi) against on-surround <em>No-Go</em>
-        (STN→GPi) — and the thalamus sustains the winner's synchrony. Dopamine sets the balance.
+        Every neuron is a clock. A motor program is <em>selected</em> when its
+        cortico-striato-pallido-thalamo-cortical loop <em>locks into synchrony</em> — GPi's tonic
+        output jams the losing thalami, and <b class="g">D1 "Go"</b> withdraws that clamp for the winner.
       </div>
     </div>
-    <div class="pill pd" id="pill-pd">PARKINSONIAN · β-LOCKED</div>
+    <div class="pill pd" id="pill-pd">PARKINSONIAN · β-HYPERSYNCHRONY</div>
     <div class="read">
       <span>DA <b id="r-da">–</b></span>
       <span>selected <b id="r-sel" class="ok">–</b></span>
-      <span>latency <b id="r-lat">–</b></span>
-      <span>β power <b id="r-beta">–</b></span>
       <span>winner R <b id="r-R">–</b></span>
+      <span>STN β sync <b id="r-beta">–</b></span>
     </div>
   </div>
 
@@ -116,18 +113,28 @@
     <div class="blk" style="--dot:var(--cx)">
       <h2>Motor programs — cortical salience</h2>
       <div id="channels"></div>
-      <div class="cap"><span>drag to propose an action · Reward biases learning</span><span>wStr = learned value</span></div>
     </div>
 
     <div class="blk" style="--dot:var(--th)">
-      <h2>Thalamic release (selection)</h2>
+      <h2>Cortical assembly coherence (selection)</h2>
       <div class="bars" id="bars"></div>
     </div>
 
     <div class="blk" style="--dot:var(--stn)">
-      <h2>STN β oscillation</h2>
-      <canvas id="beta"></canvas>
-      <div class="cap"><span id="beta-lab">subthalamic rate</span><span id="beta-val">β –</span></div>
+      <h2>Legend</h2>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.7">
+        Each disc is a neuron-clock; a population that <b style="color:var(--ink)">locks in phase</b> transmits,
+        an incoherent one is silent. Halo = assembly coherence.<br>
+        <span style="color:var(--cx)">■</span> cortex
+        <span style="color:var(--d1)">■</span> D1/Go
+        <span style="color:var(--d2)">■</span> D2/NoGo
+        <span style="color:var(--fsi)">■</span> FSI
+        <span style="color:var(--gpe)">■</span> GPe
+        <span style="color:var(--stn)">■</span> STN
+        <span style="color:var(--gpi)">■</span> GPi
+        <span style="color:var(--trn)">■</span> TRN
+        <span style="color:var(--th)">■</span> thalamus
+      </div>
     </div>
   </aside>
 </div>
@@ -142,173 +149,120 @@
 (function(){
   const M = window.BasalGanglia;
   const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-  const betaC=document.getElementById('beta'), bctx=betaC.getContext('2d');
   const $=id=>document.getElementById(id);
   const CSv=getComputedStyle(document.documentElement), cvar=n=>CSv.getPropertyValue(n).trim();
   const C={cx:cvar('--cx'),d1:cvar('--d1'),d2:cvar('--d2'),stn:cvar('--stn'),gpe:cvar('--gpe'),
-    gpi:cvar('--gpi'),th:cvar('--th'),da:cvar('--da'),ink:cvar('--ink'),faint:cvar('--faint'),
-    idle:cvar('--idle'),muted:cvar('--muted'),good:cvar('--good'),warn:cvar('--warn'),bad:cvar('--bad')};
-  const FD="'Space Grotesk',system-ui,sans-serif", FM="'IBM Plex Mono',monospace";
+    gpi:cvar('--gpi'),th:cvar('--th'),da:cvar('--da'),fsi:cvar('--fsi'),trn:cvar('--trn'),
+    ink:cvar('--ink'),faint:cvar('--faint'),idle:cvar('--idle'),muted:cvar('--muted'),
+    good:cvar('--good'),warn:cvar('--warn'),bad:cvar('--bad')};
+  const FM="'IBM Plex Mono',monospace";
   const TAU=Math.PI*2, clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   function rgba(hex,a){hex=hex.replace('#','');
     if(hex.length===3)hex=hex.split('').map(x=>x+x).join('');
     return `rgba(${parseInt(hex.slice(0,2),16)},${parseInt(hex.slice(2,4),16)},${parseInt(hex.slice(4,6),16)},${a})`;}
 
-  const NCH=3;
-  const S = M.create({ nCh:NCH, m:6, DA:0.6 });
-  const CH=[{nm:'REACH',col:C.d1},{nm:'GRASP',col:C.th},{nm:'LOOK',col:C.gpe}];
-  const St={ speed:1, t:0, latency:-1, selAt:-1 };
+  const NCH=4;
+  const S = M.create({ nCh:NCH });
+  const CH=[{nm:'REACH'},{nm:'GRASP'},{nm:'LOOK'},{nm:'STEP'}];
+  const chHue=[C.cx,C.th,C.gpe,C.d1];      // per-channel accent for the cortex label
+  const St={ speed:1, t:0 };
+  M.setSalience(S,[0.9,0.6,0.5,0.4]);
 
-  M.setSalience(S,[0.9,0.6,0.5]);
-
-  /* ---- nuclei layout: rows (dorsoventral), channels = columns ---- */
+  // nucleus rows (dorsoventral). x2 shifts the second of a pair right of channel centre.
   const ROWS=[
-    {k:'cx', lab:'CORTEX', sub:'motor programs', col:C.cx, y:0.16, assembly:true},
-    {k:'d1', lab:'STR D1', sub:'direct · Go', col:C.d1, y:0.30},
-    {k:'d2', lab:'STR D2', sub:'indirect · NoGo', col:C.d2, y:0.30, x2:true},
-    {k:'gpe',lab:'GPe', sub:'', col:C.gpe, y:0.46, x2:true},
-    {k:'stn',lab:'STN', sub:'hyperdirect', col:C.stn, y:0.46},
-    {k:'gpi',lab:'GPi / SNr', sub:'output', col:C.gpi, y:0.64},
-    {k:'th', lab:'THALAMUS', sub:'release', col:C.th, y:0.82},
+    {k:'ctx', lab:'CORTEX',    col:C.cx,  y:0.17, assembly:true},
+    {k:'fsi', lab:'FSI',       col:C.fsi, y:0.265, dx:-0.052, sz:0.6, laby:-0.02},
+    {k:'d1',  lab:'D1 · Go',   col:C.d1,  y:0.30, dx:0.0},
+    {k:'d2',  lab:'D2 · NoGo', col:C.d2,  y:0.30, dx:0.052, laby:0.02},
+    {k:'gpe', lab:'GPe',       col:C.gpe, y:0.45, dx:0.052},
+    {k:'stn', lab:'STN',       col:C.stn, y:0.45, dx:-0.052, beta:true},
+    {k:'gpi', lab:'GPi/SNr',   col:C.gpi, y:0.60},
+    {k:'trn', lab:'TRN',       col:C.trn, y:0.74, dx:-0.05, sz:0.6},
+    {k:'thal',lab:'THALAMUS',  col:C.th,  y:0.76, assembly:true},
   ];
 
   let W=0,H=0,DPR=1;
-  function chX(c){ return W*(0.22 + 0.56*(NCH===1?0.5:c/(NCH-1))); }
+  function chX(c){ return W*(0.20 + 0.58*(c/(NCH-1))); }
   function resize(){
     const r=cv.getBoundingClientRect();
     DPR=Math.min(window.devicePixelRatio||1,2);
     W=r.width;H=r.height;
     cv.width=Math.max(1,W*DPR);cv.height=Math.max(1,H*DPR);
     ctx.setTransform(DPR,0,0,DPR,0,0);
-    const br=betaC.getBoundingClientRect();
-    betaC.width=Math.max(1,br.width*DPR);betaC.height=Math.max(1,br.height*DPR);
-    bctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  function popPos(row,c){ return { x: chX(c) + (row.dx||0)*W, y: H*row.y }; }
+
+  // draw a population of clocks as a small cluster; coherence shown by halo + alignment
+  function drawPop(row,c){
+    const p=S.pops[row.k+c]; if(!p) return;
+    const pos=popPos(row,c);
+    const col=row.col, base=Math.min(W*0.0075,7)*(row.sz||1);
+    const sel=(M.selected(S)===c);
+    // coherence halo
+    if(p.mf>0.15){
+      ctx.beginPath();ctx.arc(pos.x,pos.y,base*2.6+p.mf*base*2.4,0,TAU);
+      ctx.strokeStyle=rgba(row.beta?C.bad:col,(p.R-0.2)*0.5*Math.min(1,p.act*2));
+      ctx.lineWidth=1.2;ctx.stroke();
+    }
+    // clocks in a small ring
+    const n=p.n, rr=base*(1.6+Math.min(1.4,n*0.12));
+    for(let i=0;i<n;i++){
+      const cl=p.cl[i];
+      const ang=-TAU/4 + i*TAU/n;
+      const x=pos.x+Math.cos(ang)*rr, y=pos.y+Math.sin(ang)*rr;
+      const s=.5+.5*Math.sin(cl.th), on=cl.a>0.12;
+      const cr=base*(0.42+0.4*s)*(0.5+0.7*Math.min(1,cl.a));
+      if(on){ctx.shadowColor=col;ctx.shadowBlur=2+s*8*Math.min(1,cl.a*2);}
+      ctx.beginPath();ctx.arc(x,y,Math.max(0.6,cr),0,TAU);
+      ctx.fillStyle=on?rgba(col,.18+s*.6*Math.min(1,cl.a*2)):rgba(C.idle,.05+s*.08);
+      ctx.fill();ctx.shadowBlur=0;
+      // phase hand
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(cl.th)*cr*1.6,y+Math.sin(cl.th)*cr*1.6);
+      ctx.strokeStyle=rgba(C.ink,on?.5:.12);ctx.lineWidth=.7;ctx.stroke();
+    }
+    // label + selected marker
+    if(row.assembly){
+      ctx.textAlign='center';ctx.font='600 9px '+FM;
+      ctx.fillStyle=rgba(sel&&row.k==='ctx'?C.good:col,.55+p.mf*.45);
+      ctx.fillText(row.k==='ctx'?CH[c].nm:('TH'+(c+1)), pos.x, pos.y-rr-8);
+      if(sel&&row.k==='ctx'){ctx.font='500 7.5px '+FM;ctx.fillStyle=rgba(C.good,.9);
+        ctx.fillText('◄ SELECTED', pos.x, pos.y+rr+15);}
+    }
   }
 
-  function nodePos(row,c){
-    let x=chX(c);
-    if(row.x2) x += W*0.048;               // split D2/GPe slightly right of D1/STN
-    else if(row.k==='d1'||row.k==='stn') x -= W*0.048;
-    return {x, y:H*row.y};
-  }
-  function rateOf(k,c){ return S[k]? S[k][c] : 0; }
-
-  function clock(x,y,ph,act,col,r){
-    const s=.5+.5*Math.sin(ph), rr=r*(0.7+0.4*s);
-    if(act){ctx.shadowColor=col;ctx.shadowBlur=3+s*10;}
-    ctx.beginPath();ctx.arc(x,y,rr,0,TAU);
-    ctx.fillStyle=act?rgba(col,.22+s*.6):rgba(C.idle,.06+s*.10);ctx.fill();ctx.shadowBlur=0;
-    ctx.beginPath();ctx.arc(x,y,rr,0,TAU);ctx.lineWidth=.8;
-    ctx.strokeStyle=act?rgba(col,.6+s*.4):rgba(C.idle,.3);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(ph)*r*0.9,y+Math.sin(ph)*r*0.9);
-    ctx.strokeStyle=rgba(C.ink,act?.65:.16);ctx.lineWidth=.8;ctx.stroke();
-  }
-  // terminal: 'glut' arrow, 'gaba' bar, 'dop' diamond
-  function conn(a,b,col,act,kind){
+  function conn(a,b,col,w){
     ctx.beginPath();ctx.moveTo(a.x,a.y);
-    const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
-    ctx.quadraticCurveTo(mx,my,b.x,b.y);
-    ctx.strokeStyle=rgba(col,0.06+act*0.5);ctx.lineWidth=0.6+act*2.2;ctx.stroke();
-    const ang=Math.atan2(b.y-a.y,b.x-a.x), ex=b.x-Math.cos(ang)*8, ey=b.y-Math.sin(ang)*8;
-    ctx.fillStyle=rgba(col,0.2+act*0.7); ctx.strokeStyle=ctx.fillStyle;
-    if(kind==='gaba'){ ctx.lineWidth=2.2; ctx.beginPath();
-      ctx.moveTo(ex-Math.sin(ang)*5,ey+Math.cos(ang)*5);ctx.lineTo(ex+Math.sin(ang)*5,ey-Math.cos(ang)*5);ctx.stroke(); }
-    else { ctx.beginPath();ctx.moveTo(b.x,b.y);
-      ctx.lineTo(b.x-Math.cos(ang-0.5)*8,b.y-Math.sin(ang-0.5)*8);
-      ctx.lineTo(b.x-Math.cos(ang+0.5)*8,b.y-Math.sin(ang+0.5)*8);ctx.closePath();ctx.fill(); }
-  }
-  function node(x,y,v,col,lab,sub){
-    const r=Math.min(W*0.017,17);
-    ctx.beginPath();ctx.arc(x,y,r,0,TAU);
-    ctx.fillStyle=rgba(col,.08+v*.55);ctx.fill();
-    if(v>.2){ctx.shadowColor=col;ctx.shadowBlur=v*16;}
-    ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.lineWidth=1.4;
-    ctx.strokeStyle=rgba(col,.4+v*.6);ctx.stroke();ctx.shadowBlur=0;
-    ctx.textAlign='center';ctx.font='600 8px '+FM;ctx.fillStyle=rgba(C.ink,.85);
-    ctx.fillText((v).toFixed(2),x,y+3);
-    return r;
+    ctx.quadraticCurveTo((a.x+b.x)/2,(a.y+b.y)/2,b.x,b.y);
+    ctx.strokeStyle=rgba(col,0.04+w*0.35);ctx.lineWidth=0.5+w*1.6;ctx.stroke();
   }
 
   function draw(){
     ctx.clearRect(0,0,W,H);
-    const sel=M.selected(S);
-    // ---- connections (drawn behind) ----
+    // connections (behind)
     for(let c=0;c<NCH;c++){
-      const cx=nodePos(ROWS[0],c), d1=nodePos(ROWS[1],c), d2=nodePos(ROWS[2],c),
-            gpe=nodePos(ROWS[3],c), stn=nodePos(ROWS[4],c), gpi=nodePos(ROWS[5],c), th=nodePos(ROWS[6],c);
-      const A=k=>rateOf(k,c);
-      conn(cx,d1,C.cx,S.cx[c],'glut'); conn(cx,d2,C.cx,S.cx[c],'glut');
-      conn(cx,stn,C.cx,S.cx[c],'glut');                 // hyperdirect
-      conn(d1,gpi,C.d1,A('d1'),'gaba');                 // direct Go
-      conn(d2,gpe,C.d2,A('d2'),'gaba');
-      conn(gpe,stn,C.gpe,A('gpe'),'gaba');
-      conn(gpe,gpi,C.gpe,A('gpe'),'gaba');
-      conn(gpi,th,C.gpi,A('gpi'),'gaba');               // tonic inhibition of thalamus
-      conn(th,cx,C.th,A('th'),'glut');                  // thalamocortical loop
-      // STN diffuse to ALL GPi (on-surround)
-      for(let c2=0;c2<NCH;c2++){ const gpi2=nodePos(ROWS[5],c2);
-        conn(stn,gpi2,C.stn,A('stn')*(1-S.P.dbs),'glut'); }
+      const P=k=>popPos(ROWS.find(r=>r.k===k),c);
+      const A=k=>S.pops[k+c];
+      conn(P('ctx'),P('d1'),C.cx,A('ctx').out); conn(P('ctx'),P('d2'),C.cx,A('ctx').out);
+      conn(P('ctx'),P('fsi'),C.cx,A('ctx').out); conn(P('ctx'),P('stn'),C.cx,A('ctx').out);
+      conn(P('d1'),P('gpi'),C.d1,A('d1').act);
+      conn(P('d2'),P('gpe'),C.d2,A('d2').act);
+      conn(P('gpe'),P('stn'),C.gpe,A('gpe').act); conn(P('gpe'),P('gpi'),C.gpe,A('gpe').act);
+      conn(P('gpi'),P('thal'),C.gpi,A('gpi').act);
+      conn(P('thal'),P('ctx'),C.th,A('thal').out);   // loop back
+      conn(P('thal'),P('trn'),C.trn,A('thal').out);
+      // STN diffuse surround to all GPi
+      for(let c2=0;c2<NCH;c2++) conn(P('stn'),popPos(ROWS.find(r=>r.k==='gpi'),c2),C.stn,A('stn').act*(1-S.P.dbs)*0.5);
     }
-    // ---- SNc dopamine node projecting to striatum ----
-    const snc={x:W*0.06,y:H*0.30};
-    ctx.beginPath();ctx.arc(snc.x,snc.y,13,0,TAU);
-    ctx.fillStyle=rgba(C.da,.08+S.P.DA*.4);ctx.fill();
-    ctx.lineWidth=1.4;ctx.strokeStyle=rgba(C.da,.5);ctx.stroke();
-    ctx.textAlign='center';ctx.font='600 8px '+FM;ctx.fillStyle=rgba(C.da,.9);
-    ctx.fillText('SNc',snc.x,snc.y+3);ctx.fillText('DA '+S.P.DA.toFixed(2),snc.x,snc.y+24);
-    for(let c=0;c<NCH;c++){ const d1=nodePos(ROWS[1],c);
-      ctx.beginPath();ctx.moveTo(snc.x+12,snc.y);ctx.quadraticCurveTo((snc.x+d1.x)/2,snc.y-30,d1.x-14,d1.y);
-      ctx.setLineDash([2,3]);ctx.strokeStyle=rgba(C.da,.1+S.P.DA*.3);ctx.lineWidth=1;ctx.stroke();ctx.setLineDash([]); }
-
-    // ---- nodes ----
+    // populations
+    for(const row of ROWS) for(let c=0;c<NCH;c++) drawPop(row,c);
+    // row labels
     for(const row of ROWS){
-      for(let c=0;c<NCH;c++){
-        const p=nodePos(row,c);
-        if(row.assembly){
-          // cortical assembly: ring of clocks, halo shows coherence R
-          const R=S.R[c], mph=S.mph[c];
-          const on=(sel===c);
-          const rr=Math.min(W*0.02,20);
-          if(R>0.4){ ctx.beginPath();ctx.arc(p.x,p.y,rr*1.7,0,TAU);
-            ctx.strokeStyle=rgba(CH[c].col,(R-0.35)*0.6);ctx.lineWidth=1.4;ctx.stroke(); }
-          for(let i=0;i<S.m;i++){ const a=-TAU/4+i*TAU/S.m;
-            clock(p.x+Math.cos(a)*rr,p.y+Math.sin(a)*rr,S.ph[c][i],on||R>0.5,CH[c].col,Math.min(W*0.004,4)); }
-          ctx.textAlign='center';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(CH[c].col,on?1:.6);
-          ctx.fillText(CH[c].nm,p.x,p.y-rr-8);
-          if(on){ ctx.font='500 7.5px '+FM;ctx.fillStyle=rgba(C.good,.9);ctx.fillText('SELECTED',p.x,p.y+rr+16); }
-        } else {
-          node(p.x,p.y,rateOf(row.k,c),row.col);
-        }
-      }
-      // row label at left
-      const yy=H*row.y;
-      ctx.textAlign='left';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(row.col,.75);
-      ctx.fillText(row.lab, W*0.015, yy+3);
-      if(row.sub){ ctx.font='500 7px '+FM;ctx.fillStyle=rgba(C.faint,.8);ctx.fillText(row.sub,W*0.015,yy+13); }
+      ctx.textAlign='left';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(row.col,.7);
+      ctx.fillText(row.lab, W*0.015, H*(row.y+(row.laby||0))+3);
     }
-  }
-
-  /* ---- β spectrum panel ---- */
-  const stnBuf=[]; let betaFrac=0;   // betaFrac here = β oscillation AMPLITUDE (honest measure)
-  function pushBeta(){ stnBuf.push(S.stn[0]); if(stnBuf.length>1200) stnBuf.shift(); }
-  function computeBeta(){
-    const n=Math.min(stnBuf.length,600); if(n<200){betaFrac=0;return;}
-    const y=stnBuf.slice(-n), mu=y.reduce((s,v)=>s+v,0)/n;
-    let p=0;                          // absolute 13–30 Hz power → amplitude
-    for(let hz=13;hz<=30;hz++){ let re=0,im=0;
-      for(let i=0;i<n;i++){const A=TAU*hz*i/1000; re+=(y[i]-mu)*Math.cos(A); im+=(y[i]-mu)*Math.sin(A);}
-      p+=(re*re+im*im)/(n*n); }
-    betaFrac=Math.min(1, Math.sqrt(p)*11);   // scaled to ~0..1 for the readout
-  }
-  function drawBeta(){
-    const w=betaC.clientWidth,h=betaC.clientHeight; if(!w) return;
-    bctx.clearRect(0,0,w,h);
-    const n=Math.min(stnBuf.length,300); if(n<4) return;
-    const y=stnBuf.slice(-n), mn=Math.min(...y), mx=Math.max(...y), rng=Math.max(0.02,mx-mn);
-    bctx.strokeStyle=betaFrac>0.4?rgba(C.bad,1):rgba(C.stn,.85);bctx.lineWidth=1.4;bctx.beginPath();
-    for(let i=0;i<n;i++){ const x=i/(n-1)*w, yy=h-6-((y[i]-mn)/rng)*(h-12);
-      i?bctx.lineTo(x,yy):bctx.moveTo(x,yy); }
-    bctx.stroke();
+    // SNc dopamine badge (kept clear of the striatal row labels)
+    ctx.textAlign='left';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(C.da,.85);
+    ctx.fillText('SNc · DA '+S.P.DA.toFixed(2), W*0.015, H*0.385);
   }
 
   /* ---------------- UI ---------------- */
@@ -326,33 +280,31 @@
     $('s-da').value=S.P.DA; $('v-da').textContent=S.P.DA.toFixed(2);
     $('s-dbs').value=S.P.dbs; $('v-dbs').textContent=S.P.dbs>0?S.P.dbs.toFixed(2):'off';
     [...pw.children].forEach(b=>b.classList.toggle('on',b.dataset.k===p.k));
-    St.latency=-1; St.selAt=-1;
     updateNote();
   }
   const chWrap=$('channels');
   CH.forEach((c,i)=>{
     const row=document.createElement('div');row.className='ch';
-    row.innerHTML=`<span class="nm"><i style="color:${c.col};background:${c.col}"></i>${c.nm}</span>`+
-      `<input type="range" min="0" max="1" step="0.02" value="${[0.9,0.6,0.5][i]}" data-ch="${i}">`+
-      `<span class="vl" id="sv-${i}">${[0.9,0.6,0.5][i].toFixed(2)}</span>`+
+    row.innerHTML=`<span class="nm"><i style="color:${chHue[i]};background:${chHue[i]}"></i>${c.nm}</span>`+
+      `<input type="range" min="0" max="1" step="0.02" value="${[0.9,0.6,0.5,0.4][i]}" data-ch="${i}">`+
+      `<span class="vl" id="sv-${i}">${[0.9,0.6,0.5,0.4][i].toFixed(2)}</span>`+
       `<button class="rw" data-rw="${i}">⇧ Reward</button>`;
     chWrap.appendChild(row);
   });
   chWrap.addEventListener('input',e=>{
     const ch=e.target.getAttribute('data-ch'); if(ch==null)return;
     S.sal[+ch]=parseFloat(e.target.value); $('sv-'+ch).textContent=(+e.target.value).toFixed(2);
-    St.latency=-1; St.selAt=-1;
   });
   chWrap.addEventListener('click',e=>{
     const rw=e.target.getAttribute('data-rw'); if(rw==null)return;
-    M.reinforce(S,+rw,1.0,0.12);   // deliver a reward to that channel
+    M.reinforce(S,+rw,1.0,0.15);
   });
   const barWrap=$('bars');
   CH.forEach((c,i)=>{const d=document.createElement('div');d.className='bar';
-    d.innerHTML=`<span style="color:${c.col}">${c.nm}</span><span class="t"><i id="tb-${i}" style="background:${c.col}"></i></span><span class="v" id="tv-${i}">.00</span>`;
+    d.innerHTML=`<span style="color:${chHue[i]}">${c.nm}</span><span class="t"><i id="cb-${i}" style="background:${chHue[i]}"></i></span><span class="v" id="cv-${i}">.00</span>`;
     barWrap.appendChild(d);});
   const bind=(id,vid,fmt,set)=>{const el=$(id),vl=$(vid);
-    const f=()=>{const v=parseFloat(el.value);set(v);vl.textContent=fmt(v);};el.oninput=()=>{f();St.latency=-1;St.selAt=-1;[...pw.children].forEach(b=>b.classList.remove('on'));};f();};
+    const f=()=>{const v=parseFloat(el.value);set(v);vl.textContent=fmt(v);};el.oninput=()=>{f();[...pw.children].forEach(b=>b.classList.remove('on'));updateNote();};f();};
   bind('s-da','v-da',v=>v.toFixed(2),v=>S.P.DA=v);
   bind('s-dbs','v-dbs',v=>v>0?v.toFixed(2):'off',v=>S.P.dbs=v);
 
@@ -361,10 +313,10 @@
     document.body.classList.toggle('pd',pd&&S.P.dbs<0.3);
     $('pill-pd').classList.toggle('on',pd&&S.P.dbs<0.3);
     let t;
-    if(pd&&S.P.dbs>0.3) t='<b>DBS.</b> High-frequency STN stimulation regularises the pathological output — the on-surround is quenched, GPi falls, and selection is <em>restored</em> despite low dopamine.';
-    else if(pd) t='<b>Parkinsonian.</b> Dopamine is gone: the direct (Go) pathway is dead, GPi stays high on every channel — <span class="w">akinesia</span>. The STN⟷GPe loop is <span class="w">β-locked</span>.';
-    else if(S.P.DA>0.8) t='<b>Hyperdopaminergic.</b> The Go pathway is over-facilitated — selection is fast and can become impulsive (weak channels break through).';
-    else t='<b>Healthy.</b> One motor program wins: its D1 shuts off its own GPi (Go) while its STN raises GPi on the others (No-Go). The thalamus then <em>sustains</em> the winner\'s synchrony.';
+    if(pd&&S.P.dbs>0.3) t='<b>DBS.</b> High-frequency STN stimulation <em>desynchronises</em> the pathological β loop; the surround relaxes, a thalamus can lock again, and selection is <b class="g">restored</b>.';
+    else if(pd) t='<b>Parkinsonian.</b> No dopamine: <b class="g">Go</b> is dead, every GPi jams its thalamus, and the STN⟷GPe loop collapses into <span class="w">β-hypersynchrony</span> — <span class="w">akinesia</span>. Nothing locks.';
+    else if(S.P.DA>0.8) t='<b>Hyperdopaminergic.</b> Go is over-facilitated; selection is fast and weak programs can break through (impulsivity).';
+    else t='<b>Healthy.</b> The strongest program\'s D1 shuts off its own GPi; its thalamus and cortex <em>lock into synchrony</em> while the STN surround keeps the rivals scattered.';
     $('note').innerHTML=t;
   }
 
@@ -372,26 +324,20 @@
     const sel=M.selected(S);
     $('r-da').textContent=S.P.DA.toFixed(2);
     const rs=$('r-sel'); rs.textContent=sel<0?'none':CH[sel].nm; rs.className=sel<0?'bad':'ok';
-    $('r-lat').textContent=St.latency<0?'—':St.latency.toFixed(0)+' ms';
-    const rb=$('r-beta'); rb.textContent=betaFrac.toFixed(2); rb.className=betaFrac>0.4?'bad':'';
-    $('r-R').textContent=sel<0?'—':S.R[sel].toFixed(2);
-    CH.forEach((c,i)=>{ $('tb-'+i).style.width=(S.th[i]*100).toFixed(0)+'%';
-      $('tv-'+i).textContent=S.th[i].toFixed(2); });
-    $('beta-val').textContent='β '+betaFrac.toFixed(2);
-    $('beta-lab').textContent=betaFrac>0.4?'STN — pathological β':'subthalamic rate';
+    $('r-R').textContent=sel<0?'—':S.pops['ctx'+sel].R.toFixed(2);
+    const bc=M.betaCoh(S); const rb=$('r-beta'); rb.textContent=bc.toFixed(2); rb.className=bc>0.45?'bad':'';
+    CH.forEach((c,i)=>{ const mf=S.pops['ctx'+i].mf;
+      $('cb-'+i).style.width=(mf*100).toFixed(0)+'%'; $('cv-'+i).textContent=mf.toFixed(2); });
   }
 
   /* ---------------- main loop ---------------- */
-  let last=performance.now(), carry=0, ui=0, betaTick=0;
+  let last=performance.now(), carry=0, ui=0;
   function frame(now){
     let dt=(now-last)/1000; last=now; dt=Math.min(dt,0.05);
     carry+=dt*St.speed;
-    let steps=Math.min(80,Math.round(carry/S.P.dt)); carry-=steps*S.P.dt;
-    for(let s=0;s<steps;s++){ M.step(S); St.t+=S.P.dt; pushBeta();
-      if(St.selAt<0 && M.selected(S)>=0){ St.selAt=St.t; St.latency=St.t*1000 - (St.lastReset||0); }
-    }
-    computeBeta();
-    draw(); drawBeta();
+    let steps=Math.min(90,Math.round(carry/S.P.dt)); carry-=steps*S.P.dt;
+    for(let s=0;s<steps;s++){ M.step(S); St.t+=S.P.dt; }
+    draw();
     ui+=dt; if(ui>0.1){ui=0;updateUI();}
     requestAnimationFrame(frame);
   }
@@ -402,12 +348,11 @@
   /* ---------- in-app verification (reproduces the headless numbers) ---------- */
   (function verify(){
     try{
-      const T=M.create({seed:7,DA:0.6}); M.setSalience(T,[0.9,0.6,0.5]); M.run(T,1.0);
-      const selH=M.selected(T), rH=T.R[0];
-      const P=M.create({seed:7,DA:0.05}); M.setSalience(P,[0.9,0.6,0.5]); M.run(P,0.9);
-      const selP=M.selected(P);
-      const ok = selH===0 && rH>0.85 && selP===-1;
-      console.log(`[verify] healthy sel=${selH} R=${rH.toFixed(3)} | parkinsonian sel=${selP} → ${ok?'PASS':'FAIL'}`);
+      const T=M.create({seed:7,DA:0.6}); M.setSalience(T,[0.9,0.6,0.5,0.4]); M.run(T,1.4);
+      const selH=M.selected(T), rH=T.pops.ctx0.R;
+      const Pk=M.create({seed:7,DA:0.05}); M.setSalience(Pk,[0.9,0.6,0.5,0.4]); M.run(Pk,1.4);
+      const ok = selH===0 && rH>0.85 && M.selected(Pk)===-1;
+      console.log(`[verify] healthy sel=${selH} R=${rH.toFixed(3)} | parkinsonian sel=${M.selected(Pk)} → ${ok?'PASS':'FAIL'}`);
     }catch(e){ console.error('[verify] error', e); }
   })();
 })();

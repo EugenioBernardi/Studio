@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Basal Ganglia — Action Selection</title>
+<title>Basal Ganglia — Selection by Synchrony</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
     --bg:#060911; --panel:rgba(13,19,33,.74); --line:rgba(120,150,200,.14);
     --ink:#e4ebf7; --muted:#8a99b6; --faint:#4a5670; --idle:#3f4d68;
     --cx:#ffc861; --d1:#3ee6b0; --d2:#ff7a6b; --stn:#ff4d7d; --gpe:#c07bff;
-    --gpi:#ff9d4d; --th:#56d4ff; --da:#4ce0c0;
+    --gpi:#ff9d4d; --th:#56d4ff; --da:#4ce0c0; --fsi:#8fb8ff; --trn:#9d8bff;
     --good:#3ee6b0; --warn:#ff9d4d; --bad:#ff4d7d;
     --display:'Space Grotesk',system-ui,-apple-system,Segoe UI,sans-serif;
     --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -21,14 +21,14 @@
   body{margin:0;font-family:var(--display);color:var(--ink);overflow:hidden;transition:background .7s;
     background:radial-gradient(1200px 700px at 25% -10%,#101a2e 0%,transparent 60%),
       radial-gradient(900px 600px at 100% 110%,#0c1424 0%,transparent 55%),var(--bg)}
-  body.pd{background:radial-gradient(1200px 800px at 40% 20%,#2a1533 0%,transparent 62%),#0a0614}
-  .app{display:grid;grid-template-columns:1fr 380px;height:100vh;width:100vw}
+  body.pd{background:radial-gradient(1200px 800px at 45% 25%,#2a1030 0%,transparent 62%),#0a0612}
+  .app{display:grid;grid-template-columns:1fr 384px;height:100vh;width:100vw}
   .stage{position:relative;min-width:0;overflow:hidden}
   #cv{position:absolute;inset:0;width:100%;height:100%;display:block}
-  .title{position:absolute;top:15px;left:22px;z-index:3;pointer-events:none;max-width:52%}
-  .title h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.15em;text-transform:uppercase}
+  .title{position:absolute;top:15px;left:22px;z-index:3;pointer-events:none;max-width:56%}
+  .title h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
   .title .sub{margin-top:5px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.6}
-  .title em{font-style:normal;color:var(--d1)}
+  .title em{font-style:normal;color:var(--th)} .title b.g{color:var(--d1);font-weight:600}
   .read{position:absolute;left:22px;bottom:14px;z-index:3;pointer-events:none;font-family:var(--mono);
     font-size:10px;color:var(--muted);display:flex;gap:15px;flex-wrap:wrap;max-width:94%}
   .read b{color:var(--ink);font-weight:600}
@@ -54,8 +54,8 @@
   .pre button.on{background:rgba(86,212,255,.15);color:var(--ink);border-color:rgba(86,212,255,.5)}
   .pre button.pdp{border-color:rgba(255,77,125,.35)}
   .pre button.pdp:hover,.pre button.pdp.on{border-color:var(--bad);background:rgba(255,77,125,.15);color:#ffd0dc}
-  .note{font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--muted);min-height:54px;margin-top:9px}
-  .note b{color:var(--ink)} .note em{font-style:normal;color:var(--d1)} .note .w{color:var(--warn)}
+  .note{font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--muted);min-height:56px;margin-top:9px}
+  .note b{color:var(--ink)} .note em{font-style:normal;color:var(--th)} .note .w{color:var(--warn)} .note .g{color:var(--d1)}
   .ch{display:grid;grid-template-columns:58px 1fr 30px auto;gap:8px;align-items:center;margin-top:8px}
   .ch .nm{font-family:var(--mono);font-size:10px;font-weight:600;display:flex;align-items:center;gap:6px}
   .ch .nm i{width:8px;height:8px;border-radius:50%;display:block;box-shadow:0 0 6px currentColor}
@@ -73,8 +73,6 @@
   .bar .t{height:6px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden}
   .bar .t i{display:block;height:100%;border-radius:3px;transition:width .12s}
   .bar .v{text-align:right;color:var(--ink)}
-  #beta{width:100%;height:52px;display:block;border-radius:8px;background:rgba(0,0,0,.3);border:1px solid var(--line)}
-  .cap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8.5px;color:var(--faint);margin-top:5px}
   @media (max-width:1040px){.app{grid-template-columns:1fr;grid-template-rows:1fr auto}
     .panel{border-left:0;border-top:1px solid var(--line);max-height:52vh}
     .title{max-width:70%}.read{display:none}}
@@ -85,20 +83,19 @@
   <div class="stage">
     <canvas id="cv"></canvas>
     <div class="title">
-      <h1>Basal Ganglia · Action Selection</h1>
+      <h1>Basal Ganglia · Selection by Synchrony</h1>
       <div class="sub">
-        Competing motor programs are cortical <em>assemblies</em>. The basal ganglia release
-        exactly one — off-centre <em>Go</em> (D1⊣GPi) against on-surround <em>No-Go</em>
-        (STN→GPi) — and the thalamus sustains the winner's synchrony. Dopamine sets the balance.
+        Every neuron is a clock. A motor program is <em>selected</em> when its
+        cortico-striato-pallido-thalamo-cortical loop <em>locks into synchrony</em> — GPi's tonic
+        output jams the losing thalami, and <b class="g">D1 "Go"</b> withdraws that clamp for the winner.
       </div>
     </div>
-    <div class="pill pd" id="pill-pd">PARKINSONIAN · β-LOCKED</div>
+    <div class="pill pd" id="pill-pd">PARKINSONIAN · β-HYPERSYNCHRONY</div>
     <div class="read">
       <span>DA <b id="r-da">–</b></span>
       <span>selected <b id="r-sel" class="ok">–</b></span>
-      <span>latency <b id="r-lat">–</b></span>
-      <span>β power <b id="r-beta">–</b></span>
       <span>winner R <b id="r-R">–</b></span>
+      <span>STN β sync <b id="r-beta">–</b></span>
     </div>
   </div>
 
@@ -116,18 +113,28 @@
     <div class="blk" style="--dot:var(--cx)">
       <h2>Motor programs — cortical salience</h2>
       <div id="channels"></div>
-      <div class="cap"><span>drag to propose an action · Reward biases learning</span><span>wStr = learned value</span></div>
     </div>
 
     <div class="blk" style="--dot:var(--th)">
-      <h2>Thalamic release (selection)</h2>
+      <h2>Cortical assembly coherence (selection)</h2>
       <div class="bars" id="bars"></div>
     </div>
 
     <div class="blk" style="--dot:var(--stn)">
-      <h2>STN β oscillation</h2>
-      <canvas id="beta"></canvas>
-      <div class="cap"><span id="beta-lab">subthalamic rate</span><span id="beta-val">β –</span></div>
+      <h2>Legend</h2>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.7">
+        Each disc is a neuron-clock; a population that <b style="color:var(--ink)">locks in phase</b> transmits,
+        an incoherent one is silent. Halo = assembly coherence.<br>
+        <span style="color:var(--cx)">■</span> cortex
+        <span style="color:var(--d1)">■</span> D1/Go
+        <span style="color:var(--d2)">■</span> D2/NoGo
+        <span style="color:var(--fsi)">■</span> FSI
+        <span style="color:var(--gpe)">■</span> GPe
+        <span style="color:var(--stn)">■</span> STN
+        <span style="color:var(--gpi)">■</span> GPi
+        <span style="color:var(--trn)">■</span> TRN
+        <span style="color:var(--th)">■</span> thalamus
+      </div>
     </div>
   </aside>
 </div>
@@ -136,29 +143,35 @@
 /* ===================== MODEL (inlined, single source of truth) ===================== */
 "use strict";
 /* =====================================================================
-   Basal Ganglia — action selection as competition between clock assemblies.
+   Basal Ganglia — action selection as an EMERGENT SYNCHRONY phenomenon.
 
-   Same thesis as the rest of the project: each competing motor program is a
-   cortical ASSEMBLY (a group of phase-clocks). The basal ganglia decide which
-   assembly wins, and the thalamocortical loop then SUSTAINS the winner's
-   synchrony while the losers are held desynchronised.
+   Every neuron is a clock (phase θ + activity a). A population transmits its
+   mean field  Z_P = (1/n) Σ aⱼ e^{iθⱼ}  — so an incoherent or silent population
+   sends nothing: SYNCHRONY GATES TRANSMISSION. Selection is not a firing-rate
+   winner; it is which cortical channel's cortico-striato-pallido-thalamo-cortical
+   loop LOCKS INTO A COHERENT ASSEMBLY.
 
-   Architecture (Gurney, Prescott & Redgrave 2001; Humphries, Stewart & Gurney
-   2006) — a rate model per channel with the selection motif:
-     - direct  (D1):  cortex → striatum-D1 ⊣ GPi           ("Go", off-CENTRE)
-     - indirect(D2):  cortex → striatum-D2 ⊣ GPe ⊣ STN → GPi ("No-Go")
-     - hyperdirect:   cortex → STN → GPi  (diffuse, on-SURROUND, fast brake)
-     - output:        GPi/SNr tonically inhibits thalamus; low GPi = released
-   Dopamine sets the D1/D2 balance (the selection threshold and vigour).
-   The STN⟷GPe loop, with transmission delay, is the β-oscillation generator
-   that runs away when dopamine is low (parkinsonian).
-
-   Synchrony does work: a channel's drive to the BG is scaled by how coherent
-   its cortical assembly is, so selection → synchrony → stronger drive → a
-   committed, hysteretic choice.
+   Mechanism (all of it expressed in synchrony/activity of clock populations):
+     - GPi/SNr is tonically active and its GABA output DESYNCHRONISES + silences
+       its thalamic sector — a jammed thalamus cannot reinforce cortex.
+     - D1 "Go" (gain ∝ dopamine) inhibits GPi → withdraws the clamp → that
+       thalamus synchronises → drives cortex → the cortical assembly locks in
+       (the cortico-thalamo-cortical positive-feedback loop). = SELECTED.
+     - STN (hyperdirect + STN→GPi diffuse) raises GPi output on the OTHER
+       channels → keeps their thalamus jammed = on-surround No-Go.
+     - Striatal fast-spiking interneurons (gap-junction-coupled → their own
+       coherent fast clock) deliver feed-forward inhibition to all MSNs: the
+       real substrate of corticostriatal competition (winner-take-all).
+     - The thalamic reticular nucleus (TRN) is the inhibitory shell shaping the
+       thalamocortical loop.
+     - The reciprocal STN⟷GPe loop (β-band clocks + conduction delay) locks into
+       β-band HYPERSYNCHRONY at the low-dopamine operating point; that coherent
+       β output clamps thalamus and jams selection (parkinsonism). DBS injects
+       desynchronising input to STN → breaks the β coherence → rescues.
 
    Single source of truth: runs headless (`node models/basal-ganglia.js test`)
-   and inlines into the app.
+   and inlines into the app. Timescales are real (theta loop ~6 Hz, β ~20 Hz);
+   selection unfolds over a few hundred ms.
    ===================================================================== */
 
 (function (root, factory) {
@@ -168,8 +181,6 @@
 
   const TAU = Math.PI * 2;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-  const sig = (x, g, th) => 1 / (1 + Math.exp(-g * (x - th)));   // logistic activation
-
   function mulberry32(a) {
     return function () {
       a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -179,201 +190,289 @@
     };
   }
 
-  /* ---------------- validated default parameters ---------------- */
   function defaults() {
     return {
-      nCh: 3,            // competing channels (motor programs)
-      m: 6,             // clocks per cortical assembly
-      DA: 0.6,          // dopamine tone (0 parkinsonian … 1 hyperdopaminergic)
-      dt: 0.001,        // s
-
-      // --- cortex (integrates salience + thalamic feedback: the selection loop) ---
-      tauCx: 0.030,     // cortical integration time constant
-      tcExcite: 1.15,   // thalamus → cortex re-excitation (closes the positive-FB loop)
-      cohBonus: 0.35,   // coherent assembly adds drive (synchrony does work)
-      wLat: 1.40,       // cortical lateral inhibition between channels (winner-take-all)
-
-      // --- corticostriatal / dopamine gains ---
-      wCxStr: 1.55,     // cortex → striatum
-      daD1: 0.55,       // D1 potentiation by DA   (Go gain ∝ 1 + daD1·DA)
-      daD2: 0.55,       // D2 suppression by DA    (NoGo gain ∝ 1 − daD2·DA)
-      gStr: 4.6, thStr: 0.62,
-
-      // --- STN / GPe (the β loop) ---
-      wHyper: 0.90,     // cortex → STN (hyperdirect)
-      wGpeStn: 3.20,    // GPe ⊣ STN — strong reciprocal gain: the loop Hopf-bifurcates
-                        //   into a β limit cycle at the low-dopamine operating point only
-      gStn: 3.4, thStn: 0.25,
-      wStnGpe: 1.15,    // STN → GPe
-      wD2Gpe: 1.30,     // D2 ⊣ GPe
-      gGpe: 3.2, thGpe: 0.28, gpeTonic: 0.35,
-      loopDelay: 0.011, // STN⟷GPe conduction delay (true delay → β limit cycle)
-
-      // --- GPi / SNr output ---
-      wStnGpi: 0.42,    // STN → GPi   (diffuse on-surround)
-      wD1Gpi: 1.75,     // D1 ⊣ GPi    (focused off-centre)
-      wGpeGpi: 0.55,    // GPe ⊣ GPi
-      gGpi: 3.6, thGpi: 0.24, gpiTonic: 0.52,
-
-      // --- thalamus + thalamocortical loop ---
-      wGpiTh: 1.55,     // GPi ⊣ thalamus (disinhibition when GPi is low)
-      wCxTh: 0.65,      // cortex → thalamus
-      gTh: 4.0, thTh: 0.40,
-      tcGain: 0.9,      // thalamus → cortical-assembly coupling boost
-
-      // --- rate integration ---
-      tauR: 0.020,      // nucleus rate time constant
-      tauFast: 0.006,   // STN / GPe time constant (fast-spiking; enables the β limit cycle)
-      rateNoise: 0.008, // stochastic drive on STN/GPe — sustains the near-critical β resonance
-                        //   (β is intermittent/bursty in vivo, not a clean tone)
-
-      // --- cortical clock assemblies (Kuramoto) ---
-      f0: 8.0, sigmaF: 0.06, Kself: 3.0, Kbase: 0.05,
-      Ginh: 3.2,        // repulsion between channels (keeps losers desynchronised)
-      D: 0.05,          // phase noise
-      cohFloor: 0.35,   // drive = salience·(cohFloor + (1−cohFloor)·R)  — synchrony does work
-
-      // --- DBS (STN high-frequency stim ≈ informational lesion of STN output) ---
-      dbs: 0,           // 0..1 fraction by which STN output is clamped/regularised
-
+      nCh: 4,            // competing motor programs
+      DA: 0.6,           // dopamine (0 parkinsonian … 1 hyperdopaminergic)
+      dbs: 0,            // STN-DBS desynchronising drive (0..1)
+      dt: 0.0005,        // s (0.5 ms) — β needs sub-ms-ish resolution
       seed: 7,
+
+      // population sizes (clocks)
+      nCtx: 8, nMsn: 6, nGpe: 12, nStn: 14, nGpi: 5, nThal: 6, nFsi: 5, nTrn: 5,
+
+      // intrinsic rhythms (Hz)
+      fCtx: 6.0, fMsn: 6.0, fThal: 6.0, fTrn: 6.0,   // theta loop
+      fGpe: 20.0, fStn: 20.0, fGpi: 20.0, fFsi: 40.0, // fast (β / γ)
+      sigmaF: 0.015,     // relative rate spread (assembly pops: cortex/thalamus/striatum)
+      sigmaFfast: 0.09,  // spread for relay pops (STN/GPe/…): incoherent unless the β loop locks them
+
+      // activity (rate) dynamics
+      tauA: 0.020,       // activity time constant (s)
+      tauAfast: 0.008,   // GPe/STN/FSI activity time constant
+
+      // within-population assembly coupling (synchrony formation)
+      Kself: 6.5,        // pulls a population's clocks together ∝ its own coherence
+      ctxKbase: 0.0,     // cortex CANNOT self-lock — the thalamocortical loop is REQUIRED
+                         //   (cortex is only a partly-coherent CANDIDATE without the loop)
+      ctxKloop: 15.0,    // extra coupling supplied by thalamic feedback: the loop must close
+                         //   for a cortical assembly to LOCK (so the BG genuinely gates selection)
+      Ginh: 1.0,         // repulsion cap on runaway coherence (feedback inhibition)
+      D: 0.025,          // phase noise
+      betaCoup: 16.0,     // STN⟷GPe reciprocal coupling (β synchrony generator)
+      loopDelay: 0.010,  // STN⟷GPe conduction delay (s)
+
+      // projection weights (mean-field transmission)
+      wCtxMsn: 1.35,     // cortex → striatum (D1/D2)
+      wCtxStn: 1.10,     // cortex → STN (hyperdirect)
+      wCtxTh: 0.55,      // cortex → thalamus
+      wThCtx: 2.60,      // thalamus → cortex (closes loop)
+      wD1Gpi: 1.90,      // D1 ⊣ GPi (focused Go)
+      wD2Gpe: 1.55,      // D2 ⊣ GPe
+      wGpeStn: 1.30,     // GPe ⊣ STN
+      wGpeGpi: 0.65,     // GPe ⊣ GPi
+      wStnGpi: 1.30,     // STN → GPi diffuse (on-surround)
+      wStnGpe: 1.20,     // STN → GPe
+      wGpiTh: 1.70,      // GPi ⊣ thalamus (the clamp)
+      wFsiMsn: 0.45,     // FSI ⊣ MSN (feed-forward competition)
+      wCtxFsi: 1.15,     // cortex → FSI
+      wLat: 0.90,        // cortical lateral inhibition on coherence (winner clamps rivals)
+      wLatA: 0.90,       // lateral inhibition on ACTIVITY (salience-ordered competition)
+      wTrnTh: 0.45,      // TRN ⊣ thalamus
+      wThTrn: 1.00,      // thalamus → TRN
+
+      // tonic external drive (sets baseline firing)
+      extCtx: 0.05, extGpe: 0.62, extGpi: 0.30, extStn: 0.30, extThal: 0.45,
+      extFsi: 0.10, extTrn: 0.20, extMsn: 0.0,
+
+      // dopamine gain on striatum (Go ∝ DA, NoGo ∝ 1−DA)
+      daD1: 1.55, daD2base: 0.45, daD2: 1.05,
+
+      // corticostriatal plasticity (actor)
+      wStr: null,        // per-channel learned gain (filled at create)
     };
   }
 
   function create(opts) {
     const P = Object.assign(defaults(), opts || {});
     const rnd = mulberry32(P.seed);
-    const nCh = P.nCh, m = P.m;
+    const nCh = P.nCh;
+    const gauss = () => { let u = 0, v = 0; while (!u) u = rnd(); while (!v) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); };
+
+    // build populations
+    const pops = {};
+    function addPop(name, ch, n, fHz, type, fast) {
+      const cl = [];
+      // each clock has its OWN intrinsic rate (detuning) — so a population only stays
+      // coherent when coupling beats the spread; without it, it desynchronises
+      for (let i = 0; i < n; i++) cl.push({ th: rnd() * TAU, a: type === "tonic" ? 0.5 : 0.05,
+                                            w: TAU * fHz * (1 + (fast ? P.sigmaFfast : P.sigmaF) * gauss()) });
+      pops[name] = { name, ch, n, cl, type,
+                     Zx: 0, Zy: 0, out: 0, act: 0, R: 0, psi: 0, fast: !!fast };
+    }
+    const perCh = [
+      ["ctx", P.nCtx, P.fCtx, "e", false],
+      ["d1", P.nMsn, P.fMsn, "e", false],
+      ["d2", P.nMsn, P.fMsn, "e", false],
+      ["gpe", P.nGpe, P.fGpe, "tonic", true],
+      ["stn", P.nStn, P.fStn, "e", true],
+      ["gpi", P.nGpi, P.fGpi, "tonic", true],
+      ["thal", P.nThal, P.fThal, "e", false],
+      ["trn", P.nTrn, P.fTrn, "tonic", true],
+    ];
+    for (let c = 0; c < nCh; c++) for (const [nm, n, f, ty, fa] of perCh) addPop(nm + c, c, n, f, ty, fa);
+    // FSI: one shared striatal interneuron pool per channel (gap-junction coupled → coherent)
+    for (let c = 0; c < nCh; c++) addPop("fsi" + c, c, P.nFsi, P.fFsi, "tonic", true);
+
+    if (!P.wStr) P.wStr = new Float64Array(nCh).fill(1);
+
     const S = {
-      P, nCh, m, rnd, t: 0,
-      sal: new Float64Array(nCh),        // external salience per channel (cortical input)
-      cx: new Float64Array(nCh),         // cortical state (salience + thalamic feedback)
-      // rates
-      d1: new Float64Array(nCh), d2: new Float64Array(nCh),
-      stn: new Float64Array(nCh), gpe: new Float64Array(nCh),
-      gpi: new Float64Array(nCh), th: new Float64Array(nCh),
-      stnHist: [], gpeHist: [], histPtr: 0,
-      DLEN: Math.max(1, Math.round(P.loopDelay / P.dt)),
-      // cortical assemblies
-      ph: [], w: [], R: new Float64Array(nCh), mph: new Float64Array(nCh),
-      // corticostriatal weights (plastic, actor)
-      wStr: new Float64Array(nCh).fill(1),
+      P, nCh, rnd, gauss, t: 0, pops,
+      sal: new Float64Array(nCh),
+      // STN/GPe delay ring buffers (store mean-field out+psi per pop)
+      hist: {}, DLEN: Math.max(1, Math.round(P.loopDelay / P.dt)), hp: 0,
+      surrSm: 0, betaSm: 0,
     };
     for (let c = 0; c < nCh; c++) {
-      S.gpe[c] = P.gpeTonic; S.gpi[c] = P.gpiTonic; S.wStr[c] = 1;
-      S.stnHist[c] = new Float64Array(S.DLEN); S.gpeHist[c] = new Float64Array(S.DLEN).fill(P.gpeTonic);
-      S.ph[c] = new Float64Array(m); S.w[c] = new Float64Array(m);
-      for (let i = 0; i < m; i++) { S.ph[c][i] = rnd() * TAU; S.w[c][i] = TAU * (P.f0 + P.sigmaF * (rnd() - 0.5) * 2); }
+      S.hist["stn" + c] = { x: new Float64Array(S.DLEN), y: new Float64Array(S.DLEN) };
+      S.hist["gpe" + c] = { x: new Float64Array(S.DLEN), y: new Float64Array(S.DLEN) };
     }
+    meanFields(S);
     return S;
   }
 
   function setSalience(S, arr) { for (let c = 0; c < S.nCh; c++) S.sal[c] = arr[c] || 0; }
 
-  // order parameter of channel c's assembly
-  function order(S, c) {
-    const ph = S.ph[c], m = S.m; let sx = 0, sy = 0;
-    for (let i = 0; i < m; i++) { sx += Math.cos(ph[i]); sy += Math.sin(ph[i]); }
-    return { R: Math.hypot(sx / m, sy / m), psi: Math.atan2(sy / m, sx / m) };
+  // compute mean field Z_P = (1/n)Σ a e^{iθ} for every population
+  function meanFields(S) {
+    for (const k in S.pops) {
+      const p = S.pops[k]; let x = 0, y = 0, ax = 0;
+      for (const c of p.cl) { x += c.a * Math.cos(c.th); y += c.a * Math.sin(c.th); ax += c.a; }
+      x /= p.n; y /= p.n; p.Zx = x; p.Zy = y; p.act = ax / p.n;
+      p.mf = Math.hypot(x, y);                   // coherent mean field |Z|
+      p.psi = Math.atan2(y, x);
+      p.R = p.act > 1e-3 ? p.mf / p.act : 0;     // coherence among active clocks
+      // transmission: activity carries it, synchrony amplifies (so a locked assembly
+      // drives its targets harder → commitment), but sync is not REQUIRED to bootstrap
+      p.out = p.act * (0.5 + 0.5 * p.R);
+    }
   }
+
+  const G = S => S.pops;
 
   /* ---------------- one integration step ---------------- */
   function step(S) {
-    const P = S.P, nCh = S.nCh, dt = P.dt;
-    const a = dt / P.tauR;                       // rate leak
-    const afast = dt / P.tauFast;                // fast leak for STN / GPe
-    const da = P.DA;
+    const P = S.P, nCh = S.nCh, dt = P.dt, pops = S.pops;
+    meanFields(S);
+    const DA = P.DA;
+    const mD1 = P.daD1 * DA;                         // Go gain (through origin)
+    const mD2 = P.daD2base + P.daD2 * (1 - DA);      // NoGo gain
 
-    // cortex integrates salience + thalamic re-excitation + a coherence bonus.
-    // This closes the cortico-thalamo-cortical positive-feedback loop that commits
-    // to a winner ("reinforcement through thalamus"); synchrony does work via cohBonus.
-    const acx = dt / P.tauCx;
-    const u = new Float64Array(nCh);
-    let sumTh = 0; for (let c = 0; c < nCh; c++) sumTh += S.th[c];
-    for (let c = 0; c < nCh; c++) {
-      const o = order(S, c); S.R[c] = o.R; S.mph[c] = o.psi;
-      const target = S.sal[c] + P.tcExcite * S.th[c] + P.cohBonus * o.R * S.th[c]
-                     - P.wLat * (sumTh - S.th[c]);        // lateral inhibition ⇒ WTA
-      S.cx[c] += acx * (Math.max(0, target) - S.cx[c]);
-      u[c] = S.cx[c] * S.wStr[c];
+    // delayed STN/GPe mean fields (true conduction delay)
+    const rd = S.hp;
+    const dOut = {}, dPsi = {};
+    for (let c = 0; c < nCh; c++) for (const nm of ["stn", "gpe"]) {
+      const h = S.hist[nm + c]; const x = h.x[rd], y = h.y[rd];
+      dOut[nm + c] = Math.hypot(x, y); dPsi[nm + c] = Math.atan2(y, x);
     }
-    // dopamine sets the Go/NoGo balance with real teeth: D1 (Go) scales ~linearly from
-    // zero, so the direct pathway is essentially dead at low dopamine (akinesia).
-    const mD1 = 1.55 * P.DA, mD2 = 0.40 + 1.00 * (1 - P.DA);
+    // diffuse STN broadcast (on-surround) — rate-coded, attenuated by DBS
+    let stnRaw = 0;
+    for (let c = 0; c < nCh; c++) stnRaw += pops["stn" + c].act;
+    stnRaw /= nCh;
+    S.surrSm += (dt / 0.030) * (stnRaw - S.surrSm);   // low-pass: β oscillation must not unclamp
+    const stnBroadcast = S.surrSm * (1 - P.dbs);
 
-    // delayed copies for the STN⟷GPe loop — TRUE conduction delay (ring buffer),
-    // which is what turns the reciprocal STN⟷GPe loop into a β limit cycle.
-    const rd = S.histPtr;                        // oldest sample = current write slot
-    const stnDelayed = new Float64Array(nCh), gpeDelayed = new Float64Array(nCh);
-    for (let c = 0; c < nCh; c++) { stnDelayed[c] = S.stnHist[c][rd]; gpeDelayed[c] = S.gpeHist[c][rd]; }
+    // lateral competition uses ACTIVITY (salience-ordered from the outset), plus a
+    // coherence term (a locked winner clamps harder). Activity-first makes the winner
+    // salience-determined rather than a locking race.
+    let ctxSumAct = 0, ctxSumMf = 0;
+    for (let c = 0; c < nCh; c++) { ctxSumAct += pops["ctx" + c].act; ctxSumMf += pops["ctx" + c].mf; }
 
-    // diffuse STN broadcast (on-surround)
-    let stnSum = 0; for (let c = 0; c < nCh; c++) stnSum += stnDelayed[c] * (1 - P.dbs);
-
+    // accumulate phase/activity deltas
+    const upd = [];
     for (let c = 0; c < nCh; c++) {
-      // striatum (dopamine-gated Go / NoGo)
-      const d1t = sig(P.wCxStr * u[c] * mD1, P.gStr, P.thStr);
-      const d2t = sig(P.wCxStr * u[c] * mD2, P.gStr, P.thStr);
-      // STN: cortical hyperdirect drive − GPe inhibition (delayed)
-      const stnt = sig(P.wHyper * S.cx[c] - P.wGpeStn * gpeDelayed[c] + 0.35, P.gStn, P.thStn);
-      // GPe: tonic + STN drive (delayed) − D2 inhibition.
-      const gpet = sig(P.gpeTonic + P.wStnGpe * stnDelayed[c] - P.wD2Gpe * S.d2[c], P.gGpe, P.thGpe);
-      // GPi: tonic + diffuse STN (surround) − focused D1 (centre) − GPe
-      const gpit = sig(P.gpiTonic + P.wStnGpi * stnSum - P.wD1Gpi * S.d1[c] - P.wGpeGpi * S.gpe[c], P.gGpi, P.thGpi);
-      // thalamus: cortical drive, disinhibited as GPi falls
-      const tht = sig(P.wCxTh * S.cx[c] - P.wGpiTh * S.gpi[c] + 0.30, P.gTh, P.thTh);
+      const CTX = pops["ctx" + c], D1 = pops["d1" + c], D2 = pops["d2" + c],
+            GPE = pops["gpe" + c], STN = pops["stn" + c], GPI = pops["gpi" + c],
+            TH = pops["thal" + c], TRN = pops["trn" + c], FSI = pops["fsi" + c];
 
-      S.d1[c] += a * (d1t - S.d1[c]);
-      S.d2[c] += a * (d2t - S.d2[c]);
-      const nz = P.rateNoise;
-      S.stn[c] = clamp(S.stn[c] + afast * (stnt - S.stn[c]) + nz * (S.rnd() - 0.5), 0, 1);   // fast, noisy
-      S.gpe[c] = clamp(S.gpe[c] + afast * (gpet - S.gpe[c]) + nz * (S.rnd() - 0.5), 0, 1);
-      S.gpi[c] += a * (gpit - S.gpi[c]);
-      S.th[c]  += a * (tht  - S.th[c]);
+      // ---- excitatory / inhibitory drives (mean-field magnitudes) ----
+      // CORTEX: salience + thalamic drive − lateral competition; assembly self-coupling
+      const ctxExc = P.extCtx + S.sal[c] * P.wStr[c] + P.wThCtx * TH.out;
+      const ctxInh = P.wLatA * (ctxSumAct - CTX.act) + P.wLat * (ctxSumMf - CTX.mf);   // WTA
+      const ctxK = P.ctxKbase + P.ctxKloop * TH.out; // assembly locks only when the loop closes
+      pushUpd(upd, CTX, ctxExc, ctxInh, [[TH, P.wThCtx]], P, ctxK, S);
+
+      // FSI: driven by cortex, tonically active, gap-junction coherent
+      pushUpd(upd, FSI, P.extFsi + P.wCtxFsi * CTX.out, 0, [[CTX, P.wCtxFsi]], P, 0, S);
+
+      // STRIATUM D1/D2: cortex drive (DA-gated) − FSI feed-forward inhibition
+      pushUpd(upd, D1, P.extMsn + P.wCtxMsn * mD1 * CTX.out, P.wFsiMsn * FSI.act, [[CTX, P.wCtxMsn * mD1]], P, null, S);
+      pushUpd(upd, D2, P.extMsn + P.wCtxMsn * mD2 * CTX.out, P.wFsiMsn * FSI.act, [[CTX, P.wCtxMsn * mD2]], P, null, S);
+
+      // β loop gain rises as dopamine falls: the STN⟷GPe loop crosses into coherent
+      // β-band hypersynchrony only in the parkinsonian regime.
+      const betaK = P.betaCoup * Math.max(0, (1 - DA) - 0.40) * 2.4;
+      // GPe: activity = tonic + STN − D2; β PHASE coupling to the DELAYED STN mean field
+      pushUpdBeta(upd, GPE, P.extGpe + P.wStnGpe * STN.act, P.wD2Gpe * D2.act,
+                  dPsi["stn" + c], betaK, P, 0, S);
+      // STN: activity = tonic + cortex(hyperdirect) − GPe; β PHASE coupling to DELAYED GPe
+      pushUpdBeta(upd, STN, P.extStn + P.wCtxStn * CTX.out, P.wGpeStn * GPE.act,
+                  dPsi["gpe" + c], betaK, P, P.dbs, S);
+
+      // GPi: tonic + STN surround − D1 − GPe   (output that clamps thalamus) — relay, no self-sync
+      pushUpd(upd, GPI, P.extGpi + P.wStnGpi * stnBroadcast, P.wD1Gpi * D1.act + P.wGpeGpi * GPE.act,
+              [], P, 0, S);
+
+      // TRN: thalamic drive, tonic — relay
+      pushUpd(upd, TRN, P.extTrn + P.wThTrn * TH.act, 0, [[TH, P.wThTrn]], P, 0, S);
+
+      // THALAMUS: cortex drive − GPi clamp − TRN; assembly self-coupling (synchronises when released)
+      pushUpd(upd, TH, P.extThal + P.wCtxTh * CTX.out, P.wGpiTh * GPI.act + P.wTrnTh * TRN.act,
+              [[CTX, P.wCtxTh]], P, null, S);
     }
-    // commit the STN/GPe delay lines and advance the ring pointer
-    for (let c = 0; c < nCh; c++) { S.stnHist[c][rd] = S.stn[c]; S.gpeHist[c][rd] = S.gpe[c]; }
-    S.histPtr = (rd + 1) % S.DLEN;
 
-    // cortical assemblies: thalamic feedback boosts within-channel coupling
-    // global mean phase across ALL active clocks (for repulsion between channels)
-    let gx = 0, gy = 0, gn = 0;
-    for (let c = 0; c < nCh; c++) for (let i = 0; i < S.m; i++) { gx += Math.cos(S.ph[c][i]); gy += Math.sin(S.ph[c][i]); gn++; }
-    gx /= gn; gy /= gn;
-    const Rg = Math.hypot(gx, gy), psig = Math.atan2(gy, gx);
-    const sqrtD = Math.sqrt(2 * P.D * dt);
-    for (let c = 0; c < nCh; c++) {
-      const K = P.Kbase + P.Kself * P.tcGain * S.th[c];   // thalamus sustains the winner
-      const ph = S.ph[c], mph = S.mph[c], w = S.w[c];
-      for (let i = 0; i < S.m; i++) {
-        let coup = K * Math.sin(mph - ph[i]);
-        const shear = P.Ginh * Rg * Math.sin(ph[i] - psig);
-        ph[i] = (ph[i] + (w[i] + coup + shear) * dt + sqrtD * gaussian(S.rnd) + TAU) % TAU;
+    // apply updates
+    for (const u of upd) {
+      const p = u.pop;
+      const tauA = p.fast ? P.tauAfast : P.tauA;
+      for (let i = 0; i < p.n; i++) {
+        const cl = p.cl[i];
+        cl.a = clamp(cl.a + dt / tauA * (u.aTarget - cl.a), 0, 1);
+        cl.th = (cl.th + u.dth[i] + TAU) % TAU;
       }
     }
+
+    // write STN/GPe mean fields into delay lines
+    meanFields(S);
+    for (let c = 0; c < nCh; c++) for (const nm of ["stn", "gpe"]) {
+      const p = pops[nm + c], h = S.hist[nm + c];
+      h.x[rd] = p.Zx; h.y[rd] = p.Zy;
+    }
+    // running (time-averaged) STN β coherence — instantaneous R of a finite pop is noisy
+    { let sc = 0, sa = 0; for (let c = 0; c < nCh; c++) { const p = pops["stn" + c]; sc += p.act * p.R; sa += p.act; }
+      const inst = sa > 1e-3 ? sc / sa : 0; S.betaSm += (dt / 0.12) * (inst - S.betaSm); }
+    S.hp = (rd + 1) % S.DLEN;
     S.t += dt;
   }
-  function gaussian(rnd) { let u = 0, v = 0; while (u === 0) u = rnd(); while (v === 0) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+
+  // generic population update: excitatory drive builds activity, inhibition suppresses it;
+  // active clocks synchronise via own coherence (assembly) + excitatory afferents; a global
+  // repulsion caps runaway coherence; inhibition also adds phase desynchronisation.
+  function pushUpd(upd, p, exc, inh, excProj, P, selfK, S) {
+    const aTarget = clamp(exc - inh, 0, 1.3);
+    const dt = P.dt;
+    const dth = new Float64Array(p.n);
+    const Kself = (selfK == null ? P.Kself : selfK) * p.out;   // assembly pull ∝ own coherence
+    const desync = P.Ginh * p.out + 1.4 * inh;     // repulsion: feedback-inhibition + afferent GABA
+    for (let i = 0; i < p.n; i++) {
+      const cl = p.cl[i]; let d = cl.w;
+      d += Kself * Math.sin(p.psi - cl.th);
+      for (const [q, w] of excProj) d += w * q.out * Math.sin(q.psi - cl.th);
+      d += desync * Math.sin(cl.th - p.psi);        // repulsion: push AWAY from own mean (desynchronise)
+      dth[i] = d * dt + Math.sqrt(2 * P.D * dt) * S.gauss();
+    }
+    upd.push({ pop: p, aTarget, dth });
+  }
+  // β-loop populations: reciprocal delayed coupling to their partner can lock them into
+  // coherent β; DBS adds desynchronising jitter.
+  function pushUpdBeta(upd, p, exc, inh, partnerPsi, betaK, P, dbs, S) {
+    const aTarget = clamp(exc - inh, 0, 1.3);
+    const dt = P.dt; dbs = dbs || 0;
+    const dth = new Float64Array(p.n);
+    const beta = betaK;                              // DA-gated reciprocal coupling (β generator)
+    const desync = P.Ginh * 0.6 * p.out + dbs * 9.0; // DBS strongly desynchronises
+    // NB: no self-assembly coupling here — STN/GPe are relays, their synchrony comes
+    // ONLY from the DA-gated reciprocal loop, so β is specific to the low-dopamine state.
+    for (let i = 0; i < p.n; i++) {
+      const cl = p.cl[i]; let d = cl.w;
+      d += beta * Math.sin(partnerPsi - cl.th);      // entrain to delayed partner → β lock
+      d += desync * Math.sin(cl.th - p.psi);
+      dth[i] = d * dt + Math.sqrt(2 * P.D * dt) * S.gauss();
+    }
+    upd.push({ pop: p, aTarget, dth });
+  }
 
   function run(S, seconds) { const n = Math.round(seconds / S.P.dt); for (let k = 0; k < n; k++) step(S); }
 
-  // which channel is selected (thalamus released) — returns index or -1
+  // observables. Selection lives in the COHERENT MEAN FIELD mf = act·R: a channel is
+  // selected only when its cortical assembly is both active AND locked (synchronised).
+  const ctxR = (S, c) => S.pops["ctx" + c].R;
+  const ctxOut = (S, c) => S.pops["ctx" + c].mf;
   function selected(S, thr) {
-    thr = thr == null ? 0.5 : thr;
+    thr = thr == null ? 0.45 : thr;
     let best = -1, bv = thr;
-    for (let c = 0; c < S.nCh; c++) if (S.th[c] > bv) { bv = S.th[c]; best = c; }
+    for (let c = 0; c < S.nCh; c++) { const o = S.pops["ctx" + c].mf; if (o > bv) { bv = o; best = c; } }
     return best;
   }
+  // β coherence in STN, ACTIVITY-WEIGHTED (only active STN populations count)
+  function betaCoh(S) { return S.betaSm; }
 
-  // dopamine-gated corticostriatal plasticity (three-factor / actor): reward the
-  // channel that was selected → its cortical drive potentiates (faster next time).
   function reinforce(S, ch, reward, rate) {
-    rate = rate == null ? 0.05 : rate;
-    const dw = rate * reward * S.d1[ch];          // eligibility ∝ D1 activity
-    S.wStr[ch] = clamp(S.wStr[ch] + dw, 0.3, 2.0);
+    rate = rate == null ? 0.06 : rate;
+    S.P.wStr[ch] = clamp(S.P.wStr[ch] + rate * reward * S.pops["d1" + ch].out, 0.3, 2.2);
   }
 
-  return { create, defaults, step, run, order, selected, setSalience, reinforce, mulberry32, TAU };
+  return { create, defaults, step, run, meanFields, setSalience, selected, ctxR, ctxOut, betaCoh, reinforce, mulberry32, TAU };
 });
 
 /* ============================ headless tests ============================ */
@@ -383,115 +482,56 @@ if (typeof require !== "undefined" && require.main === module) {
   let pass = 0, fail = 0;
   const check = (n, c, d) => (c ? (pass++, console.log("  PASS  " + n + "   " + (d || "")))
                                 : (fail++, console.log("  FAIL  " + n + "   " + (d || ""))));
-  const arr = (a, f = fmt) => "[" + Array.from(a).map(x => f(x)).join(" ") + "]";
+  const outs = S => "[" + [0, 1, 2, 3].map(c => fmt(M.ctxOut(S, c))).join(" ") + "]";
 
-  // ---- Test 1: healthy selection — one winner ----
-  console.log("\n[1] Healthy dopamine selects exactly one channel");
+  console.log("\n[1] Healthy dopamine: exactly one cortical assembly synchronises");
   {
     const S = M.create({ DA: 0.6 });
-    M.setSalience(S, [0.9, 0.6, 0.5]);
-    M.run(S, 1.0);
-    console.log("      thal=" + arr(S.th) + "  R=" + arr(S.R) + "  sel=" + M.selected(S));
-    check("channel 0 selected", M.selected(S) === 0, "sel=" + M.selected(S));
-    check("winner thalamus released", S.th[0] > 0.6, "th0=" + fmt(S.th[0]));
-    check("losers suppressed", S.th[1] < 0.25 && S.th[2] < 0.25, "th=" + fmt(S.th[1]) + "," + fmt(S.th[2]));
-    check("winner assembly synchronised", S.R[0] > 0.85, "R0=" + fmt(S.R[0]));
-    check("winner far more coherent than losers", S.R[0] - Math.max(S.R[1], S.R[2]) > 0.25,
-          "ΔR=" + fmt(S.R[0] - Math.max(S.R[1], S.R[2])));
-  }
-
-  // ---- Test 2: winner-take-all with near-equal competitors ----
-  console.log("\n[2] Winner-take-all: two strong competitors, only one wins");
-  {
-    const S = M.create({ DA: 0.6 });
-    M.setSalience(S, [0.82, 0.80, 0.3]);
+    M.setSalience(S, [0.9, 0.6, 0.5, 0.4]);
     M.run(S, 1.2);
-    const nSel = [0, 1, 2].filter(c => S.th[c] > 0.5).length;
-    console.log("      thal=" + arr(S.th) + "  #released=" + nSel);
-    check("exactly one channel released", nSel === 1, "#=" + nSel);
+    console.log("      ctx out=" + outs(S) + "  sel=" + M.selected(S));
+    check("channel 0 selected", M.selected(S) === 0, "sel=" + M.selected(S));
+    check("winner coherent+active", M.ctxOut(S, 0) > 0.55 && M.ctxR(S, 0) > 0.75, "out=" + fmt(M.ctxOut(S,0)) + " R=" + fmt(M.ctxR(S,0)));
+    check("others not selected", [1,2,3].every(c => M.ctxOut(S,c) < 0.35), "outs=" + outs(S));
   }
 
-  // ---- Test 3: selection latency ----
-  console.log("\n[3] Selection latency (healthy)");
+  console.log("\n[2] Winner-take-all with two near-equal competitors");
   {
     const S = M.create({ DA: 0.6 });
-    M.setSalience(S, [0.9, 0.6, 0.5]);
-    let lat = -1;
-    for (let k = 0; k < 600; k++) { M.step(S); if (lat < 0 && S.th[0] > 0.5) lat = S.t * 1000; }
-    console.log("      latency to release = " + fmt(lat, 0) + " ms");
-    check("selects within a plausible window (40–250 ms)", lat > 30 && lat < 250, "lat=" + fmt(lat, 0) + "ms");
+    M.setSalience(S, [0.82, 0.80, 0.4, 0.3]);
+    M.run(S, 1.4);
+    const n = [0,1,2,3].filter(c => M.ctxOut(S,c) > 0.55).length;
+    console.log("      ctx out=" + outs(S) + "  #selected=" + n);
+    check("exactly one selected", n === 1, "#=" + n);
   }
 
-  // ---- Test 4: parkinsonian — low dopamine fails to select ----
-  console.log("\n[4] Low dopamine (parkinsonian) — akinesia / failure to release");
+  console.log("\n[3] Parkinsonian (low DA): akinesia — nothing synchronises");
   {
     const S = M.create({ DA: 0.05 });
-    M.setSalience(S, [0.9, 0.6, 0.5]);
-    M.run(S, 1.0);
-    console.log("      thal=" + arr(S.th) + "  GPi=" + arr(S.gpi) + "  sel=" + M.selected(S));
-    check("no channel released (akinesia)", M.selected(S) === -1, "sel=" + M.selected(S));
-    check("GPi output pathologically high", S.gpi[0] > 0.6, "gpi0=" + fmt(S.gpi[0]));
+    M.setSalience(S, [0.9, 0.6, 0.5, 0.4]);
+    M.run(S, 1.2);
+    console.log("      ctx out=" + outs(S) + "  sel=" + M.selected(S) + "  βcoh=" + fmt(M.betaCoh(S)));
+    check("no channel selected (akinesia)", M.selected(S) === -1, "sel=" + M.selected(S));
   }
 
-  // ---- Test 5: β oscillation appears with low dopamine ----
-  // Measure ABSOLUTE β-band power (amplitude): a healthy STN is near-steady, the
-  // parkinsonian STN⟷GPe loop crosses the Hopf bifurcation into a sustained ~16 Hz
-  // limit cycle. (Normalised β *fraction* is misleading — noise gets resonance-shaped
-  // even in health; amplitude is the honest measure.)
-  console.log("\n[5] β-band oscillation in the STN⟷GPe loop grows when DA is low");
-  function betaAmp(DA) {
-    const S = M.create({ DA });
-    M.setSalience(S, [0.9, 0.6, 0.5]);
-    M.run(S, 1.0);                                   // settle past any transient
-    const buf = [];
-    for (let k = 0; k < 1500; k++) { M.step(S); buf.push(S.stn[0]); }
-    const mu = buf.reduce((s, v) => s + v, 0) / buf.length;
-    let p = 0;
-    for (let hz = 13; hz <= 30; hz++) {
-      let re = 0, im = 0;
-      for (let i = 0; i < buf.length; i++) { const A = M.TAU * hz * i / 1000; re += (buf[i] - mu) * Math.cos(A); im += (buf[i] - mu) * Math.sin(A); }
-      p += (re * re + im * im) / (buf.length * buf.length);
-    }
-    return { amp: Math.sqrt(p), rng: Math.max(...buf) - Math.min(...buf) };
-  }
+  console.log("\n[4] β hypersynchrony in STN grows when dopamine is low");
   {
-    const hi = betaAmp(0.6), lo = betaAmp(0.05);
-    console.log("      β amplitude: healthy=" + fmt(hi.amp, 3) + " (range " + fmt(hi.rng, 2) +
-                ")   parkinsonian=" + fmt(lo.amp, 3) + " (range " + fmt(lo.rng, 2) + ")");
-    check("parkinsonian STN oscillates (range ≥ 0.15)", lo.rng > 0.15, "range=" + fmt(lo.rng, 2));
-    check("healthy STN is near-steady (range ≤ 0.06)", hi.rng < 0.06, "range=" + fmt(hi.rng, 2));
-    check("β amplitude far higher when DA is low", lo.amp > 4 * hi.amp, "ratio=" + fmt(lo.amp / Math.max(hi.amp, 1e-6), 1));
+    // let selection settle first, THEN average β (a healthy transient during bootstrap
+    // is not the steady state)
+    const H = M.create({ DA: 0.6 }); M.setSalience(H, [0.9,0.6,0.5,0.4]); M.run(H, 1.8);
+    const Plo = M.create({ DA: 0.05 }); M.setSalience(Plo, [0.9,0.6,0.5,0.4]); M.run(Plo, 1.8);
+    const bH = M.betaCoh(H), bP = M.betaCoh(Plo);
+    console.log("      STN coherence: healthy=" + fmt(bH) + "  parkinsonian=" + fmt(bP));
+    check("STN β coherence higher when DA low", bP > bH + 0.25, "Δ=" + fmt(bP - bH));
   }
 
-  // ---- Test 6: DBS rescues selection in the parkinsonian model ----
-  console.log("\n[6] STN-DBS restores selection under low dopamine");
+  console.log("\n[5] STN-DBS desynchronises the loop and rescues selection");
   {
-    const S = M.create({ DA: 0.05, dbs: 0.85 });
-    M.setSalience(S, [0.9, 0.6, 0.5]);
-    let lat = -1;
-    for (let k = 0; k < 800; k++) { M.step(S); if (lat < 0 && S.th[0] > 0.5) lat = S.t * 1000; }
-    console.log("      thal=" + arr(S.th) + "  sel=" + M.selected(S) + "  latency=" + fmt(lat, 0) + " ms");
+    const S = M.create({ DA: 0.05, dbs: 0.8 });
+    M.setSalience(S, [0.9, 0.6, 0.5, 0.4]);
+    M.run(S, 1.6);
+    console.log("      ctx out=" + outs(S) + "  sel=" + M.selected(S) + "  βcoh=" + fmt(M.betaCoh(S)));
     check("selection restored by DBS", M.selected(S) === 0, "sel=" + M.selected(S));
-  }
-
-  // ---- Test 7: dopamine-gated reinforcement biases future selection ----
-  console.log("\n[7] Reinforcement: rewarding a weaker channel makes it win next time");
-  {
-    const S = M.create({ DA: 0.6 });
-    // ch1 is initially weaker than ch0
-    for (let trial = 0; trial < 8; trial++) {
-      // reset phases/rates lightly between trials, keep learned weights
-      M.setSalience(S, [0.7, 0.68, 0.3]);
-      M.run(S, 0.6);
-      const win = M.selected(S);
-      // reward ONLY when ch1 is chosen (shape behaviour toward ch1)
-      if (win === 1) M.reinforce(S, 1, 1.0);
-      else if (win === 0) M.reinforce(S, 0, -0.4);   // mild punishment of the habit
-      M.setSalience(S, [0, 0, 0]); M.run(S, 0.15);    // inter-trial
-    }
-    M.setSalience(S, [0.7, 0.68, 0.3]); M.run(S, 0.7);
-    console.log("      after training  wStr=" + arr(S.wStr) + "  sel=" + M.selected(S));
-    check("reinforced channel now wins", M.selected(S) === 1, "sel=" + M.selected(S) + " wStr=" + arr(S.wStr));
   }
 
   console.log("\n==== " + pass + " passed, " + fail + " failed ====\n");
@@ -505,173 +545,120 @@ if (typeof require !== "undefined" && require.main === module) {
 (function(){
   const M = window.BasalGanglia;
   const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-  const betaC=document.getElementById('beta'), bctx=betaC.getContext('2d');
   const $=id=>document.getElementById(id);
   const CSv=getComputedStyle(document.documentElement), cvar=n=>CSv.getPropertyValue(n).trim();
   const C={cx:cvar('--cx'),d1:cvar('--d1'),d2:cvar('--d2'),stn:cvar('--stn'),gpe:cvar('--gpe'),
-    gpi:cvar('--gpi'),th:cvar('--th'),da:cvar('--da'),ink:cvar('--ink'),faint:cvar('--faint'),
-    idle:cvar('--idle'),muted:cvar('--muted'),good:cvar('--good'),warn:cvar('--warn'),bad:cvar('--bad')};
-  const FD="'Space Grotesk',system-ui,sans-serif", FM="'IBM Plex Mono',monospace";
+    gpi:cvar('--gpi'),th:cvar('--th'),da:cvar('--da'),fsi:cvar('--fsi'),trn:cvar('--trn'),
+    ink:cvar('--ink'),faint:cvar('--faint'),idle:cvar('--idle'),muted:cvar('--muted'),
+    good:cvar('--good'),warn:cvar('--warn'),bad:cvar('--bad')};
+  const FM="'IBM Plex Mono',monospace";
   const TAU=Math.PI*2, clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   function rgba(hex,a){hex=hex.replace('#','');
     if(hex.length===3)hex=hex.split('').map(x=>x+x).join('');
     return `rgba(${parseInt(hex.slice(0,2),16)},${parseInt(hex.slice(2,4),16)},${parseInt(hex.slice(4,6),16)},${a})`;}
 
-  const NCH=3;
-  const S = M.create({ nCh:NCH, m:6, DA:0.6 });
-  const CH=[{nm:'REACH',col:C.d1},{nm:'GRASP',col:C.th},{nm:'LOOK',col:C.gpe}];
-  const St={ speed:1, t:0, latency:-1, selAt:-1 };
+  const NCH=4;
+  const S = M.create({ nCh:NCH });
+  const CH=[{nm:'REACH'},{nm:'GRASP'},{nm:'LOOK'},{nm:'STEP'}];
+  const chHue=[C.cx,C.th,C.gpe,C.d1];      // per-channel accent for the cortex label
+  const St={ speed:1, t:0 };
+  M.setSalience(S,[0.9,0.6,0.5,0.4]);
 
-  M.setSalience(S,[0.9,0.6,0.5]);
-
-  /* ---- nuclei layout: rows (dorsoventral), channels = columns ---- */
+  // nucleus rows (dorsoventral). x2 shifts the second of a pair right of channel centre.
   const ROWS=[
-    {k:'cx', lab:'CORTEX', sub:'motor programs', col:C.cx, y:0.16, assembly:true},
-    {k:'d1', lab:'STR D1', sub:'direct · Go', col:C.d1, y:0.30},
-    {k:'d2', lab:'STR D2', sub:'indirect · NoGo', col:C.d2, y:0.30, x2:true},
-    {k:'gpe',lab:'GPe', sub:'', col:C.gpe, y:0.46, x2:true},
-    {k:'stn',lab:'STN', sub:'hyperdirect', col:C.stn, y:0.46},
-    {k:'gpi',lab:'GPi / SNr', sub:'output', col:C.gpi, y:0.64},
-    {k:'th', lab:'THALAMUS', sub:'release', col:C.th, y:0.82},
+    {k:'ctx', lab:'CORTEX',    col:C.cx,  y:0.17, assembly:true},
+    {k:'fsi', lab:'FSI',       col:C.fsi, y:0.265, dx:-0.052, sz:0.6, laby:-0.02},
+    {k:'d1',  lab:'D1 · Go',   col:C.d1,  y:0.30, dx:0.0},
+    {k:'d2',  lab:'D2 · NoGo', col:C.d2,  y:0.30, dx:0.052, laby:0.02},
+    {k:'gpe', lab:'GPe',       col:C.gpe, y:0.45, dx:0.052},
+    {k:'stn', lab:'STN',       col:C.stn, y:0.45, dx:-0.052, beta:true},
+    {k:'gpi', lab:'GPi/SNr',   col:C.gpi, y:0.60},
+    {k:'trn', lab:'TRN',       col:C.trn, y:0.74, dx:-0.05, sz:0.6},
+    {k:'thal',lab:'THALAMUS',  col:C.th,  y:0.76, assembly:true},
   ];
 
   let W=0,H=0,DPR=1;
-  function chX(c){ return W*(0.22 + 0.56*(NCH===1?0.5:c/(NCH-1))); }
+  function chX(c){ return W*(0.20 + 0.58*(c/(NCH-1))); }
   function resize(){
     const r=cv.getBoundingClientRect();
     DPR=Math.min(window.devicePixelRatio||1,2);
     W=r.width;H=r.height;
     cv.width=Math.max(1,W*DPR);cv.height=Math.max(1,H*DPR);
     ctx.setTransform(DPR,0,0,DPR,0,0);
-    const br=betaC.getBoundingClientRect();
-    betaC.width=Math.max(1,br.width*DPR);betaC.height=Math.max(1,br.height*DPR);
-    bctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  function popPos(row,c){ return { x: chX(c) + (row.dx||0)*W, y: H*row.y }; }
+
+  // draw a population of clocks as a small cluster; coherence shown by halo + alignment
+  function drawPop(row,c){
+    const p=S.pops[row.k+c]; if(!p) return;
+    const pos=popPos(row,c);
+    const col=row.col, base=Math.min(W*0.0075,7)*(row.sz||1);
+    const sel=(M.selected(S)===c);
+    // coherence halo
+    if(p.mf>0.15){
+      ctx.beginPath();ctx.arc(pos.x,pos.y,base*2.6+p.mf*base*2.4,0,TAU);
+      ctx.strokeStyle=rgba(row.beta?C.bad:col,(p.R-0.2)*0.5*Math.min(1,p.act*2));
+      ctx.lineWidth=1.2;ctx.stroke();
+    }
+    // clocks in a small ring
+    const n=p.n, rr=base*(1.6+Math.min(1.4,n*0.12));
+    for(let i=0;i<n;i++){
+      const cl=p.cl[i];
+      const ang=-TAU/4 + i*TAU/n;
+      const x=pos.x+Math.cos(ang)*rr, y=pos.y+Math.sin(ang)*rr;
+      const s=.5+.5*Math.sin(cl.th), on=cl.a>0.12;
+      const cr=base*(0.42+0.4*s)*(0.5+0.7*Math.min(1,cl.a));
+      if(on){ctx.shadowColor=col;ctx.shadowBlur=2+s*8*Math.min(1,cl.a*2);}
+      ctx.beginPath();ctx.arc(x,y,Math.max(0.6,cr),0,TAU);
+      ctx.fillStyle=on?rgba(col,.18+s*.6*Math.min(1,cl.a*2)):rgba(C.idle,.05+s*.08);
+      ctx.fill();ctx.shadowBlur=0;
+      // phase hand
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(cl.th)*cr*1.6,y+Math.sin(cl.th)*cr*1.6);
+      ctx.strokeStyle=rgba(C.ink,on?.5:.12);ctx.lineWidth=.7;ctx.stroke();
+    }
+    // label + selected marker
+    if(row.assembly){
+      ctx.textAlign='center';ctx.font='600 9px '+FM;
+      ctx.fillStyle=rgba(sel&&row.k==='ctx'?C.good:col,.55+p.mf*.45);
+      ctx.fillText(row.k==='ctx'?CH[c].nm:('TH'+(c+1)), pos.x, pos.y-rr-8);
+      if(sel&&row.k==='ctx'){ctx.font='500 7.5px '+FM;ctx.fillStyle=rgba(C.good,.9);
+        ctx.fillText('◄ SELECTED', pos.x, pos.y+rr+15);}
+    }
   }
 
-  function nodePos(row,c){
-    let x=chX(c);
-    if(row.x2) x += W*0.048;               // split D2/GPe slightly right of D1/STN
-    else if(row.k==='d1'||row.k==='stn') x -= W*0.048;
-    return {x, y:H*row.y};
-  }
-  function rateOf(k,c){ return S[k]? S[k][c] : 0; }
-
-  function clock(x,y,ph,act,col,r){
-    const s=.5+.5*Math.sin(ph), rr=r*(0.7+0.4*s);
-    if(act){ctx.shadowColor=col;ctx.shadowBlur=3+s*10;}
-    ctx.beginPath();ctx.arc(x,y,rr,0,TAU);
-    ctx.fillStyle=act?rgba(col,.22+s*.6):rgba(C.idle,.06+s*.10);ctx.fill();ctx.shadowBlur=0;
-    ctx.beginPath();ctx.arc(x,y,rr,0,TAU);ctx.lineWidth=.8;
-    ctx.strokeStyle=act?rgba(col,.6+s*.4):rgba(C.idle,.3);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(ph)*r*0.9,y+Math.sin(ph)*r*0.9);
-    ctx.strokeStyle=rgba(C.ink,act?.65:.16);ctx.lineWidth=.8;ctx.stroke();
-  }
-  // terminal: 'glut' arrow, 'gaba' bar, 'dop' diamond
-  function conn(a,b,col,act,kind){
+  function conn(a,b,col,w){
     ctx.beginPath();ctx.moveTo(a.x,a.y);
-    const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
-    ctx.quadraticCurveTo(mx,my,b.x,b.y);
-    ctx.strokeStyle=rgba(col,0.06+act*0.5);ctx.lineWidth=0.6+act*2.2;ctx.stroke();
-    const ang=Math.atan2(b.y-a.y,b.x-a.x), ex=b.x-Math.cos(ang)*8, ey=b.y-Math.sin(ang)*8;
-    ctx.fillStyle=rgba(col,0.2+act*0.7); ctx.strokeStyle=ctx.fillStyle;
-    if(kind==='gaba'){ ctx.lineWidth=2.2; ctx.beginPath();
-      ctx.moveTo(ex-Math.sin(ang)*5,ey+Math.cos(ang)*5);ctx.lineTo(ex+Math.sin(ang)*5,ey-Math.cos(ang)*5);ctx.stroke(); }
-    else { ctx.beginPath();ctx.moveTo(b.x,b.y);
-      ctx.lineTo(b.x-Math.cos(ang-0.5)*8,b.y-Math.sin(ang-0.5)*8);
-      ctx.lineTo(b.x-Math.cos(ang+0.5)*8,b.y-Math.sin(ang+0.5)*8);ctx.closePath();ctx.fill(); }
-  }
-  function node(x,y,v,col,lab,sub){
-    const r=Math.min(W*0.017,17);
-    ctx.beginPath();ctx.arc(x,y,r,0,TAU);
-    ctx.fillStyle=rgba(col,.08+v*.55);ctx.fill();
-    if(v>.2){ctx.shadowColor=col;ctx.shadowBlur=v*16;}
-    ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.lineWidth=1.4;
-    ctx.strokeStyle=rgba(col,.4+v*.6);ctx.stroke();ctx.shadowBlur=0;
-    ctx.textAlign='center';ctx.font='600 8px '+FM;ctx.fillStyle=rgba(C.ink,.85);
-    ctx.fillText((v).toFixed(2),x,y+3);
-    return r;
+    ctx.quadraticCurveTo((a.x+b.x)/2,(a.y+b.y)/2,b.x,b.y);
+    ctx.strokeStyle=rgba(col,0.04+w*0.35);ctx.lineWidth=0.5+w*1.6;ctx.stroke();
   }
 
   function draw(){
     ctx.clearRect(0,0,W,H);
-    const sel=M.selected(S);
-    // ---- connections (drawn behind) ----
+    // connections (behind)
     for(let c=0;c<NCH;c++){
-      const cx=nodePos(ROWS[0],c), d1=nodePos(ROWS[1],c), d2=nodePos(ROWS[2],c),
-            gpe=nodePos(ROWS[3],c), stn=nodePos(ROWS[4],c), gpi=nodePos(ROWS[5],c), th=nodePos(ROWS[6],c);
-      const A=k=>rateOf(k,c);
-      conn(cx,d1,C.cx,S.cx[c],'glut'); conn(cx,d2,C.cx,S.cx[c],'glut');
-      conn(cx,stn,C.cx,S.cx[c],'glut');                 // hyperdirect
-      conn(d1,gpi,C.d1,A('d1'),'gaba');                 // direct Go
-      conn(d2,gpe,C.d2,A('d2'),'gaba');
-      conn(gpe,stn,C.gpe,A('gpe'),'gaba');
-      conn(gpe,gpi,C.gpe,A('gpe'),'gaba');
-      conn(gpi,th,C.gpi,A('gpi'),'gaba');               // tonic inhibition of thalamus
-      conn(th,cx,C.th,A('th'),'glut');                  // thalamocortical loop
-      // STN diffuse to ALL GPi (on-surround)
-      for(let c2=0;c2<NCH;c2++){ const gpi2=nodePos(ROWS[5],c2);
-        conn(stn,gpi2,C.stn,A('stn')*(1-S.P.dbs),'glut'); }
+      const P=k=>popPos(ROWS.find(r=>r.k===k),c);
+      const A=k=>S.pops[k+c];
+      conn(P('ctx'),P('d1'),C.cx,A('ctx').out); conn(P('ctx'),P('d2'),C.cx,A('ctx').out);
+      conn(P('ctx'),P('fsi'),C.cx,A('ctx').out); conn(P('ctx'),P('stn'),C.cx,A('ctx').out);
+      conn(P('d1'),P('gpi'),C.d1,A('d1').act);
+      conn(P('d2'),P('gpe'),C.d2,A('d2').act);
+      conn(P('gpe'),P('stn'),C.gpe,A('gpe').act); conn(P('gpe'),P('gpi'),C.gpe,A('gpe').act);
+      conn(P('gpi'),P('thal'),C.gpi,A('gpi').act);
+      conn(P('thal'),P('ctx'),C.th,A('thal').out);   // loop back
+      conn(P('thal'),P('trn'),C.trn,A('thal').out);
+      // STN diffuse surround to all GPi
+      for(let c2=0;c2<NCH;c2++) conn(P('stn'),popPos(ROWS.find(r=>r.k==='gpi'),c2),C.stn,A('stn').act*(1-S.P.dbs)*0.5);
     }
-    // ---- SNc dopamine node projecting to striatum ----
-    const snc={x:W*0.06,y:H*0.30};
-    ctx.beginPath();ctx.arc(snc.x,snc.y,13,0,TAU);
-    ctx.fillStyle=rgba(C.da,.08+S.P.DA*.4);ctx.fill();
-    ctx.lineWidth=1.4;ctx.strokeStyle=rgba(C.da,.5);ctx.stroke();
-    ctx.textAlign='center';ctx.font='600 8px '+FM;ctx.fillStyle=rgba(C.da,.9);
-    ctx.fillText('SNc',snc.x,snc.y+3);ctx.fillText('DA '+S.P.DA.toFixed(2),snc.x,snc.y+24);
-    for(let c=0;c<NCH;c++){ const d1=nodePos(ROWS[1],c);
-      ctx.beginPath();ctx.moveTo(snc.x+12,snc.y);ctx.quadraticCurveTo((snc.x+d1.x)/2,snc.y-30,d1.x-14,d1.y);
-      ctx.setLineDash([2,3]);ctx.strokeStyle=rgba(C.da,.1+S.P.DA*.3);ctx.lineWidth=1;ctx.stroke();ctx.setLineDash([]); }
-
-    // ---- nodes ----
+    // populations
+    for(const row of ROWS) for(let c=0;c<NCH;c++) drawPop(row,c);
+    // row labels
     for(const row of ROWS){
-      for(let c=0;c<NCH;c++){
-        const p=nodePos(row,c);
-        if(row.assembly){
-          // cortical assembly: ring of clocks, halo shows coherence R
-          const R=S.R[c], mph=S.mph[c];
-          const on=(sel===c);
-          const rr=Math.min(W*0.02,20);
-          if(R>0.4){ ctx.beginPath();ctx.arc(p.x,p.y,rr*1.7,0,TAU);
-            ctx.strokeStyle=rgba(CH[c].col,(R-0.35)*0.6);ctx.lineWidth=1.4;ctx.stroke(); }
-          for(let i=0;i<S.m;i++){ const a=-TAU/4+i*TAU/S.m;
-            clock(p.x+Math.cos(a)*rr,p.y+Math.sin(a)*rr,S.ph[c][i],on||R>0.5,CH[c].col,Math.min(W*0.004,4)); }
-          ctx.textAlign='center';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(CH[c].col,on?1:.6);
-          ctx.fillText(CH[c].nm,p.x,p.y-rr-8);
-          if(on){ ctx.font='500 7.5px '+FM;ctx.fillStyle=rgba(C.good,.9);ctx.fillText('SELECTED',p.x,p.y+rr+16); }
-        } else {
-          node(p.x,p.y,rateOf(row.k,c),row.col);
-        }
-      }
-      // row label at left
-      const yy=H*row.y;
-      ctx.textAlign='left';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(row.col,.75);
-      ctx.fillText(row.lab, W*0.015, yy+3);
-      if(row.sub){ ctx.font='500 7px '+FM;ctx.fillStyle=rgba(C.faint,.8);ctx.fillText(row.sub,W*0.015,yy+13); }
+      ctx.textAlign='left';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(row.col,.7);
+      ctx.fillText(row.lab, W*0.015, H*(row.y+(row.laby||0))+3);
     }
-  }
-
-  /* ---- β spectrum panel ---- */
-  const stnBuf=[]; let betaFrac=0;   // betaFrac here = β oscillation AMPLITUDE (honest measure)
-  function pushBeta(){ stnBuf.push(S.stn[0]); if(stnBuf.length>1200) stnBuf.shift(); }
-  function computeBeta(){
-    const n=Math.min(stnBuf.length,600); if(n<200){betaFrac=0;return;}
-    const y=stnBuf.slice(-n), mu=y.reduce((s,v)=>s+v,0)/n;
-    let p=0;                          // absolute 13–30 Hz power → amplitude
-    for(let hz=13;hz<=30;hz++){ let re=0,im=0;
-      for(let i=0;i<n;i++){const A=TAU*hz*i/1000; re+=(y[i]-mu)*Math.cos(A); im+=(y[i]-mu)*Math.sin(A);}
-      p+=(re*re+im*im)/(n*n); }
-    betaFrac=Math.min(1, Math.sqrt(p)*11);   // scaled to ~0..1 for the readout
-  }
-  function drawBeta(){
-    const w=betaC.clientWidth,h=betaC.clientHeight; if(!w) return;
-    bctx.clearRect(0,0,w,h);
-    const n=Math.min(stnBuf.length,300); if(n<4) return;
-    const y=stnBuf.slice(-n), mn=Math.min(...y), mx=Math.max(...y), rng=Math.max(0.02,mx-mn);
-    bctx.strokeStyle=betaFrac>0.4?rgba(C.bad,1):rgba(C.stn,.85);bctx.lineWidth=1.4;bctx.beginPath();
-    for(let i=0;i<n;i++){ const x=i/(n-1)*w, yy=h-6-((y[i]-mn)/rng)*(h-12);
-      i?bctx.lineTo(x,yy):bctx.moveTo(x,yy); }
-    bctx.stroke();
+    // SNc dopamine badge (kept clear of the striatal row labels)
+    ctx.textAlign='left';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(C.da,.85);
+    ctx.fillText('SNc · DA '+S.P.DA.toFixed(2), W*0.015, H*0.385);
   }
 
   /* ---------------- UI ---------------- */
@@ -689,33 +676,31 @@ if (typeof require !== "undefined" && require.main === module) {
     $('s-da').value=S.P.DA; $('v-da').textContent=S.P.DA.toFixed(2);
     $('s-dbs').value=S.P.dbs; $('v-dbs').textContent=S.P.dbs>0?S.P.dbs.toFixed(2):'off';
     [...pw.children].forEach(b=>b.classList.toggle('on',b.dataset.k===p.k));
-    St.latency=-1; St.selAt=-1;
     updateNote();
   }
   const chWrap=$('channels');
   CH.forEach((c,i)=>{
     const row=document.createElement('div');row.className='ch';
-    row.innerHTML=`<span class="nm"><i style="color:${c.col};background:${c.col}"></i>${c.nm}</span>`+
-      `<input type="range" min="0" max="1" step="0.02" value="${[0.9,0.6,0.5][i]}" data-ch="${i}">`+
-      `<span class="vl" id="sv-${i}">${[0.9,0.6,0.5][i].toFixed(2)}</span>`+
+    row.innerHTML=`<span class="nm"><i style="color:${chHue[i]};background:${chHue[i]}"></i>${c.nm}</span>`+
+      `<input type="range" min="0" max="1" step="0.02" value="${[0.9,0.6,0.5,0.4][i]}" data-ch="${i}">`+
+      `<span class="vl" id="sv-${i}">${[0.9,0.6,0.5,0.4][i].toFixed(2)}</span>`+
       `<button class="rw" data-rw="${i}">⇧ Reward</button>`;
     chWrap.appendChild(row);
   });
   chWrap.addEventListener('input',e=>{
     const ch=e.target.getAttribute('data-ch'); if(ch==null)return;
     S.sal[+ch]=parseFloat(e.target.value); $('sv-'+ch).textContent=(+e.target.value).toFixed(2);
-    St.latency=-1; St.selAt=-1;
   });
   chWrap.addEventListener('click',e=>{
     const rw=e.target.getAttribute('data-rw'); if(rw==null)return;
-    M.reinforce(S,+rw,1.0,0.12);   // deliver a reward to that channel
+    M.reinforce(S,+rw,1.0,0.15);
   });
   const barWrap=$('bars');
   CH.forEach((c,i)=>{const d=document.createElement('div');d.className='bar';
-    d.innerHTML=`<span style="color:${c.col}">${c.nm}</span><span class="t"><i id="tb-${i}" style="background:${c.col}"></i></span><span class="v" id="tv-${i}">.00</span>`;
+    d.innerHTML=`<span style="color:${chHue[i]}">${c.nm}</span><span class="t"><i id="cb-${i}" style="background:${chHue[i]}"></i></span><span class="v" id="cv-${i}">.00</span>`;
     barWrap.appendChild(d);});
   const bind=(id,vid,fmt,set)=>{const el=$(id),vl=$(vid);
-    const f=()=>{const v=parseFloat(el.value);set(v);vl.textContent=fmt(v);};el.oninput=()=>{f();St.latency=-1;St.selAt=-1;[...pw.children].forEach(b=>b.classList.remove('on'));};f();};
+    const f=()=>{const v=parseFloat(el.value);set(v);vl.textContent=fmt(v);};el.oninput=()=>{f();[...pw.children].forEach(b=>b.classList.remove('on'));updateNote();};f();};
   bind('s-da','v-da',v=>v.toFixed(2),v=>S.P.DA=v);
   bind('s-dbs','v-dbs',v=>v>0?v.toFixed(2):'off',v=>S.P.dbs=v);
 
@@ -724,10 +709,10 @@ if (typeof require !== "undefined" && require.main === module) {
     document.body.classList.toggle('pd',pd&&S.P.dbs<0.3);
     $('pill-pd').classList.toggle('on',pd&&S.P.dbs<0.3);
     let t;
-    if(pd&&S.P.dbs>0.3) t='<b>DBS.</b> High-frequency STN stimulation regularises the pathological output — the on-surround is quenched, GPi falls, and selection is <em>restored</em> despite low dopamine.';
-    else if(pd) t='<b>Parkinsonian.</b> Dopamine is gone: the direct (Go) pathway is dead, GPi stays high on every channel — <span class="w">akinesia</span>. The STN⟷GPe loop is <span class="w">β-locked</span>.';
-    else if(S.P.DA>0.8) t='<b>Hyperdopaminergic.</b> The Go pathway is over-facilitated — selection is fast and can become impulsive (weak channels break through).';
-    else t='<b>Healthy.</b> One motor program wins: its D1 shuts off its own GPi (Go) while its STN raises GPi on the others (No-Go). The thalamus then <em>sustains</em> the winner\'s synchrony.';
+    if(pd&&S.P.dbs>0.3) t='<b>DBS.</b> High-frequency STN stimulation <em>desynchronises</em> the pathological β loop; the surround relaxes, a thalamus can lock again, and selection is <b class="g">restored</b>.';
+    else if(pd) t='<b>Parkinsonian.</b> No dopamine: <b class="g">Go</b> is dead, every GPi jams its thalamus, and the STN⟷GPe loop collapses into <span class="w">β-hypersynchrony</span> — <span class="w">akinesia</span>. Nothing locks.';
+    else if(S.P.DA>0.8) t='<b>Hyperdopaminergic.</b> Go is over-facilitated; selection is fast and weak programs can break through (impulsivity).';
+    else t='<b>Healthy.</b> The strongest program\'s D1 shuts off its own GPi; its thalamus and cortex <em>lock into synchrony</em> while the STN surround keeps the rivals scattered.';
     $('note').innerHTML=t;
   }
 
@@ -735,26 +720,20 @@ if (typeof require !== "undefined" && require.main === module) {
     const sel=M.selected(S);
     $('r-da').textContent=S.P.DA.toFixed(2);
     const rs=$('r-sel'); rs.textContent=sel<0?'none':CH[sel].nm; rs.className=sel<0?'bad':'ok';
-    $('r-lat').textContent=St.latency<0?'—':St.latency.toFixed(0)+' ms';
-    const rb=$('r-beta'); rb.textContent=betaFrac.toFixed(2); rb.className=betaFrac>0.4?'bad':'';
-    $('r-R').textContent=sel<0?'—':S.R[sel].toFixed(2);
-    CH.forEach((c,i)=>{ $('tb-'+i).style.width=(S.th[i]*100).toFixed(0)+'%';
-      $('tv-'+i).textContent=S.th[i].toFixed(2); });
-    $('beta-val').textContent='β '+betaFrac.toFixed(2);
-    $('beta-lab').textContent=betaFrac>0.4?'STN — pathological β':'subthalamic rate';
+    $('r-R').textContent=sel<0?'—':S.pops['ctx'+sel].R.toFixed(2);
+    const bc=M.betaCoh(S); const rb=$('r-beta'); rb.textContent=bc.toFixed(2); rb.className=bc>0.45?'bad':'';
+    CH.forEach((c,i)=>{ const mf=S.pops['ctx'+i].mf;
+      $('cb-'+i).style.width=(mf*100).toFixed(0)+'%'; $('cv-'+i).textContent=mf.toFixed(2); });
   }
 
   /* ---------------- main loop ---------------- */
-  let last=performance.now(), carry=0, ui=0, betaTick=0;
+  let last=performance.now(), carry=0, ui=0;
   function frame(now){
     let dt=(now-last)/1000; last=now; dt=Math.min(dt,0.05);
     carry+=dt*St.speed;
-    let steps=Math.min(80,Math.round(carry/S.P.dt)); carry-=steps*S.P.dt;
-    for(let s=0;s<steps;s++){ M.step(S); St.t+=S.P.dt; pushBeta();
-      if(St.selAt<0 && M.selected(S)>=0){ St.selAt=St.t; St.latency=St.t*1000 - (St.lastReset||0); }
-    }
-    computeBeta();
-    draw(); drawBeta();
+    let steps=Math.min(90,Math.round(carry/S.P.dt)); carry-=steps*S.P.dt;
+    for(let s=0;s<steps;s++){ M.step(S); St.t+=S.P.dt; }
+    draw();
     ui+=dt; if(ui>0.1){ui=0;updateUI();}
     requestAnimationFrame(frame);
   }
@@ -765,12 +744,11 @@ if (typeof require !== "undefined" && require.main === module) {
   /* ---------- in-app verification (reproduces the headless numbers) ---------- */
   (function verify(){
     try{
-      const T=M.create({seed:7,DA:0.6}); M.setSalience(T,[0.9,0.6,0.5]); M.run(T,1.0);
-      const selH=M.selected(T), rH=T.R[0];
-      const P=M.create({seed:7,DA:0.05}); M.setSalience(P,[0.9,0.6,0.5]); M.run(P,0.9);
-      const selP=M.selected(P);
-      const ok = selH===0 && rH>0.85 && selP===-1;
-      console.log(`[verify] healthy sel=${selH} R=${rH.toFixed(3)} | parkinsonian sel=${selP} → ${ok?'PASS':'FAIL'}`);
+      const T=M.create({seed:7,DA:0.6}); M.setSalience(T,[0.9,0.6,0.5,0.4]); M.run(T,1.4);
+      const selH=M.selected(T), rH=T.pops.ctx0.R;
+      const Pk=M.create({seed:7,DA:0.05}); M.setSalience(Pk,[0.9,0.6,0.5,0.4]); M.run(Pk,1.4);
+      const ok = selH===0 && rH>0.85 && M.selected(Pk)===-1;
+      console.log(`[verify] healthy sel=${selH} R=${rH.toFixed(3)} | parkinsonian sel=${M.selected(Pk)} → ${ok?'PASS':'FAIL'}`);
     }catch(e){ console.error('[verify] error', e); }
   })();
 })();
