@@ -58,6 +58,8 @@ significance — that is p-hacking and it nearly happened here.
 | `pulvinar-gate-model.js` | transthalamic gate, Jaramillo/Wang formulation |
 | `overlap-model.js` | overlapping-figure stimuli + adjustable-RF V2 |
 | `models/kuramoto-assembly.js` | **the project thesis as a model**: clocks, assemblies-as-synchrony, LTP/LTD as coupling plasticity (validated; runs headless) |
+| `models/basal-ganglia.js` | goal-directed action selection; matrix/striosome actor–critic; akinesia/chorea/β-DBS (validated; runs headless) |
+| `models/cerebellum.js` | VOR adaptation as an adaptive filter; inferior olive as coupled oscillators (validated; runs headless) |
 | `docs/ASSEMBLY-VALIDATION.md` | Kuramoto-assembly validation record — equations, parameters, 14 checks, seed sweep |
 | `build/build-kuramoto-assembly.py` | inlines the assembly model into its app template |
 | `*.html` | single-file apps (model inlined; edit the build script, not the HTML) |
@@ -131,6 +133,28 @@ rivals — the winner's D1 bypasses it); **dopamine is the RPE not the reward** 
 plausibility upgrade): **cholinergic TANs** — the pause gates *when* the RPE writes and modulates
 ACh↔DA balance (PD/dystonia). The deprioritised inlined `basal-ganglia-selection.html` is unrelated
 and untouched.
+
+**Cerebellum — VOR adaptation** (`apps/cerebellum.html`, model `models/cerebellum.js`) —
+supervised motor learning as an **adaptive filter** (Fujita; Dean & Porrill) on the canonical
+oculomotor task, **vestibulo-ocular reflex gain adaptation**. Head rotates → eyes must
+counter-rotate; **retinal slip** is the error; the **inferior olive** reports it as **climbing-fibre
+complex spikes** driving PF→PC **LTD** (Marr–Albus–Ito). Granule cells expand the mossy input into a
+sparse phase **basis** (Golgi-sparsified); one Purkinje cell reads `Σ w_k·PF_k`; the covariance rule
+`Δw_k ∝ −(CF−cf0)·PF_k` **decorrelates** the error from the basis → slip → 0, gain → demand.
+**DUAL CODE:** the **inferior olive is a genuine gap-junction-coupled oscillator population**
+(subthreshold ~6 Hz) whose **synchrony organises complex-spike timing** — the one functional
+synchrony; the cortical microcircuit (granule/Purkinje/DCN) is **rate + plastic weights**. **DCN⊣IO
+nucleo-olivary** feedback gates the teaching signal. Validated **10/10 headless, robust 12/12 seeds**
+(baseline gain≈1; gain-UP to ~1.5 at demand 1.6; gain-DOWN to ~0.6 at demand 0.5; **IO lesion → no
+learning**; gap-junction synchrony R 0.23→0.86; savings on re-adaptation — all 12/12). Things not to
+re-derive (see `docs/CEREBELLUM-VALIDATION.md`): the **teaching signal reads the GRADED complex-spike
+probability, not the bursty sample** (else weights random-walk on baseline noise — the sampled spikes
+are display-only); **auto-calibrate cf0** (the drive-free baseline the error is signed against);
+**olive membrane centred at 0** so slip is a *signed* teaching signal (one microzone learns both
+directions); **CF-lesion removes the whole olive** (slip drive *and* nucleo-olivary, else the loop
+learns on noise); **nucleo-olivary gates, doesn't sharpen** (a population-level effect, small per
+seed — don't claim it lowers slip). Open: a true **temporal** granule basis (latency spread) would
+give *timed* responses (eyeblink, timed saccades) — the bridge to metastable-chronotaxis timing.
 
 **Metastable Chronotaxis** (`metastable-chronotaxis.html`) — 15-clock cortical pool;
 assemblies are *dynamic coalitions* drawn from it, not fixed boxes. Kuramoto coupling

@@ -24,6 +24,11 @@ See [`CLAUDE.md`](CLAUDE.md) for the full project memory and method.
   assemblies; direct/indirect/hyperdirect pathways release one winner, dopamine sets the balance.
   Drive it into parkinsonian akinesia with β oscillations, then rescue it with STN-DBS. Validated
   in [`docs/BASAL-GANGLIA-VALIDATION.md`](docs/BASAL-GANGLIA-VALIDATION.md).
+- **`apps/cerebellum.html`** — *VOR Adaptation.* Supervised motor learning as an adaptive filter:
+  the head rotates, the eyes must counter-rotate, and retinal slip — reported by the inferior
+  olive's climbing fibres — drives parallel-fibre→Purkinje LTD until the VOR gain matches what the
+  visual world demands. The inferior olive is a gap-junction-coupled oscillator population. Validated
+  in [`docs/CEREBELLUM-VALIDATION.md`](docs/CEREBELLUM-VALIDATION.md).
 - `apps/thalamocortical-3d.html` — 19-column thalamocortical sheet; sleep rhythms, spindles,
   and the spindle→spike-wave switch.
 - `apps/hippocampus-index-replay.html` — trisynaptic circuit: sparse indexing, sharp-wave
