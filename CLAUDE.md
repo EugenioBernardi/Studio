@@ -113,8 +113,12 @@ be tagged); **chorea** (indirect-pathway D2-MSN degeneration slider `degen` → 
 held plans self-terminate on fatigue → continuous involuntary breakthrough of *different* plans);
 **parkinsonian β** — the delayed STN⟷GPe loop locks into β HYPERSYNCHRONY at low DA, and coherent β
 **enslaves the thalamus** (downstream of GPi, so D1-Go can't bypass it) → moderate-PD akinesia that
-**STN-DBS rescues by desynchronising** (not by restoring DA). Validated **15/15 headless, robust
-12/12 seeds** (selection, akinesia, chorea ≥2 plans, DBS rescue, β higher in PD — all 12/12).
+**STN-DBS rescues by desynchronising** (not by restoring DA). **Striatal mosaic = actor–critic:**
+the **matrix** selects (the machinery above); the **striosome** holds a value `V[goal]` and projects
+to SNc, so phasic dopamine is an emergent **RPE** `= reward − V` — the burst shrinks as a cue is
+learned (Schultz transfer, `1.0→0.05`), a predicted reward gives ~0, an omitted one a −1.0 dip.
+Validated **20/20 headless, robust 12/12 seeds** (selection, akinesia, chorea ≥2 plans, DBS rescue,
+β higher in PD, RPE shrinks with learning, omission dip — all 12/12).
 Watchable: selection unfolds over ~0.5–0.9 s. Things not to re-derive (see
 `docs/BASAL-GANGLIA-VALIDATION.md`): the **dual code**; **D1 goal-driven not cortex-driven** (else
 stuck); transmission `act·(0.5+0.5R)` on assemblies (pure-synchrony deadlocks bootstrap); the
@@ -122,9 +126,11 @@ stuck); transmission `act·(0.5+0.5R)` on assemblies (pure-synchrony deadlocks b
 lateral inhibition on **activity** not coherence; relay nuclei **no self-coupling + larger spread**
 (else β isn't DA-specific); **low-pass the STN surround**; **chorea fatigue gated above an escape
 threshold** (else nothing escapes); **β clamps the thalamus, not the surround** (surround only jams
-rivals — the winner's D1 bypasses it). Open (next plausibility upgrades): **striosome/matrix** split
-(striosome = critic → emergent phasic DA/RPE) and **cholinergic TANs** (pause gates plasticity;
-ACh↔DA balance). The deprioritised inlined `basal-ganglia-selection.html` is unrelated and untouched.
+rivals — the winner's D1 bypasses it); **dopamine is the RPE not the reward** (else no transfer/dip);
+**explore ≥ 0.30** (an unlearned cue must reliably escape or there's nothing to reward). Open (next
+plausibility upgrade): **cholinergic TANs** — the pause gates *when* the RPE writes and modulates
+ACh↔DA balance (PD/dystonia). The deprioritised inlined `basal-ganglia-selection.html` is unrelated
+and untouched.
 
 **Metastable Chronotaxis** (`metastable-chronotaxis.html`) — 15-clock cortical pool;
 assemblies are *dynamic coalitions* drawn from it, not fixed boxes. Kuramoto coupling

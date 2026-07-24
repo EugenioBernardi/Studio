@@ -114,8 +114,9 @@
       goalSpec: 0.72,    // learned goal→plan drive to CORTEX (steers which plan wins the WTA)
       goalStr: 2.70,     // goal → striatal-D1 drive, gated by the LEARNED weight W[plan][goal]
       Wmax: 1.6, Winit: 0.20,   // corticostriatal weight range / init (near-uniform ⇒ exploration)
-      lr: 0.38,          // dopamine-gated learning rate
-      explore: 0.24,     // exploration drive on D1 (lets an unlearned goal try different plans)
+      lr: 0.55,          // actor (matrix) learning rate on the RPE-gated teaching signal
+      lrV: 0.45,         // critic (striosome) value learning rate — V[goal] tracks expected reward
+      explore: 0.30,     // exploration drive on D1 (lets an unlearned goal reliably try a plan)
       tauExpl: 0.6,      // exploration offsets drift on this timescale (s)
       adaptGain: 0.60,    // cortical spike-frequency adaptation — lets a selection RELEASE / switch
       tauAdapt: 0.6,     // adaptation timescale (s): a plan can hold ~1 s then yields
@@ -163,8 +164,8 @@
     // FSI: one shared striatal interneuron pool per channel (gap-junction coupled → coherent)
     for (let c = 0; c < nCh; c++) addPop("fsi" + c, c, P.nFsi, P.fFsi, "tonic", true);
 
-    // learned corticostriatal weights W[plan][goal] — near-uniform at birth (⇒ exploration),
-    // shaped by dopamine reward into a one goal → one plan mapping.
+    // MATRIX (actor): learned corticostriatal weights W[plan][goal] — near-uniform at birth
+    // (⇒ exploration), shaped by the dopaminergic teaching signal into one goal → one plan.
     const W = [];
     for (let p = 0; p < nCh; p++) { W[p] = new Float64Array(P.nGoal);
       for (let g = 0; g < P.nGoal; g++) W[p][g] = P.Winit + 0.03 * (rnd() - 0.5); }
@@ -173,7 +174,9 @@
       P, nCh, rnd, gauss, t: 0, pops,
       sal: new Float64Array(nCh),          // optional manual bias (0 by default)
       goal: new Float64Array(P.nGoal),     // active goal(s)
-      W,                                    // corticostriatal associative weights
+      W,                                    // MATRIX corticostriatal associative weights (actor)
+      V: new Float64Array(P.nGoal),        // STRIOSOME value estimate per goal (critic → SNc)
+      phasicDA: 0,                          // last phasic dopamine = reward-prediction error
       adapt: new Float64Array(nCh),        // per-plan spike-frequency adaptation
       expl: new Float64Array(nCh),         // slowly-drifting exploration offsets
       explClock: 0,
@@ -407,25 +410,45 @@
   // β coherence in STN, ACTIVITY-WEIGHTED (only active STN populations count)
   function betaCoh(S) { return S.betaSm; }
 
-  // dopamine-gated corticostriatal learning: reward strengthens the association between
-  // the ACTIVE goal(s) and the currently-selected plan, and mildly weakens its rivals for
-  // that goal — so each goal converges onto one plan (three-factor / actor rule).
+  // ACTOR–CRITIC learning across the striatal mosaic. The STRIOSOME is the critic: it holds a
+  // value estimate V[goal] (expected reward) and projects to SNc, so the dopamine that is
+  // actually released is a REWARD-PREDICTION ERROR, not the raw reward — `phasicDA = reward − V`.
+  // The MATRIX is the actor: its corticostriatal weights W[plan][goal] learn on that RPE-gated
+  // dopamine. Emergent consequences (Schultz signatures): the DA burst SHRINKS as a cue becomes
+  // predicted (V → reward), a fully-predicted reward evokes ~no phasic DA, and an OMITTED expected
+  // reward drives a negative RPE (a dip) that unlearns. `reward` is the primary outcome (1 reward,
+  // 0 omission); pass rate to override the actor step size.
   function reinforceGoal(S, reward, rate) {
     const P = S.P; rate = rate == null ? P.lr : rate;
+    // striosomal expected value for the active goal(s)
+    let val = 0, gc = 0;
+    for (let g = 0; g < P.nGoal; g++) if (S.goal[g] >= 0.05) { val += S.V[g]; gc++; }
+    val = gc > 0 ? val / gc : 0;
+    const rpe = reward - val;                          // phasic dopamine = RPE (SNc output)
+    S.phasicDA = rpe;
+    // critic: striosome updates its value toward the outcome (TD)
+    for (let g = 0; g < P.nGoal; g++) if (S.goal[g] >= 0.05)
+      S.V[g] = clamp(S.V[g] + P.lrV * rpe, 0, 1.2);
+    // actor: matrix weights learn on the RPE-gated dopamine (three-factor). A positive RPE
+    // strengthens the selected plan and weakens its rivals for the goal; a negative RPE
+    // (surprising omission) weakens the plan that was (wrongly) selected.
     const sel = selected(S); if (sel < 0) return;
     for (let g = 0; g < P.nGoal; g++) {
       if (S.goal[g] < 0.05) continue;
       const elig = S.pops["d1" + sel].act;            // eligibility ∝ the winner's D1 firing
-      S.W[sel][g] = clamp(S.W[sel][g] + rate * reward * elig * (P.Wmax - S.W[sel][g]), 0, P.Wmax);
+      S.W[sel][g] = clamp(S.W[sel][g] + rate * rpe * elig * (P.Wmax - S.W[sel][g]), 0, P.Wmax);
       for (let p = 0; p < S.nCh; p++) if (p !== sel)
-        S.W[p][g] = clamp(S.W[p][g] - 0.5 * rate * reward * S.W[p][g], 0, P.Wmax);
+        S.W[p][g] = clamp(S.W[p][g] - 0.5 * rate * Math.max(0, rpe) * S.W[p][g], 0, P.Wmax);
     }
   }
+  const expectedValue = (S, g) => S.V[g];              // striosomal value readout
+  const phasicDopamine = (S) => S.phasicDA;            // last RPE (SNc phasic output)
   // back-compat shim (old single-channel API)
   function reinforce(S, ch, reward, rate) { reinforceGoal(S, reward, rate); }
 
   return { create, defaults, step, run, meanFields, setSalience, setGoal, clearGoals,
-           selected, ctxR, ctxOut, betaCoh, reinforce, reinforceGoal, mulberry32, TAU };
+           selected, ctxR, ctxOut, betaCoh, reinforce, reinforceGoal,
+           expectedValue, phasicDopamine, mulberry32, TAU };
 });
 
 /* ============================ headless tests ============================ */
@@ -540,6 +563,38 @@ if (typeof require !== "undefined" && require.main === module) {
     check("STN-DBS restores selection (β desync, not DA)", M.selected(D) === 2, "sel=" + M.selected(D));
   }
   function S_setGoalLearned(S, plan, goal){ S.W[plan][goal]=S.P.Wmax; for(let p=0;p<4;p++) if(p!==plan) S.W[p][goal]=0.1; M.setGoal(S,goal); }
+
+  console.log("\n[9] Striosome critic: phasic dopamine is a REWARD-PREDICTION ERROR");
+  {
+    // train goal 0, recording the phasic DA released on each reward. As the striosome learns to
+    // predict the reward (V → 1), the DA burst must SHRINK (Schultz's dopamine transfer).
+    const S = M.create({ DA:0.6 });
+    const da=[];
+    for(let t=0;t<8;t++){
+      M.setGoal(S,0); M.run(S,0.9);
+      if(M.selected(S)>=0){ M.reinforceGoal(S,1.0); da.push(M.phasicDopamine(S)); }
+      M.clearGoals(S); M.run(S,0.4);
+    }
+    console.log("      phasic DA over training = [" + da.map(x=>fmt(x)).join(" ") + "]   V[0]=" + fmt(M.expectedValue(S,0)));
+    check("first reward gives a large DA burst", da[0] > 0.7, "DA0=" + fmt(da[0]));
+    check("DA burst shrinks as the cue is learned", da[da.length-1] < da[0] - 0.3, "DAlast=" + fmt(da[da.length-1]));
+    check("striosomal value converges toward reward", M.expectedValue(S,0) > 0.7, "V=" + fmt(M.expectedValue(S,0)));
+  }
+
+  console.log("\n[10] Predicted reward → ~no DA; omitted reward → negative RPE (dip)");
+  {
+    const S = M.create({ DA:0.6 });
+    // over-train goal 0 so V saturates near 1
+    for(let t=0;t<10;t++){ M.setGoal(S,0); M.run(S,0.9); if(M.selected(S)>=0) M.reinforceGoal(S,1.0); M.clearGoals(S); M.run(S,0.4); }
+    // fully-predicted reward → phasic DA ≈ 0
+    M.setGoal(S,0); M.run(S,0.9); M.reinforceGoal(S,1.0); const daPred=M.phasicDopamine(S);
+    // now OMIT the expected reward → negative RPE
+    M.clearGoals(S); M.run(S,0.4);
+    M.setGoal(S,0); M.run(S,0.9); M.reinforceGoal(S,0.0); const daOmit=M.phasicDopamine(S);
+    console.log("      predicted-reward DA=" + fmt(daPred) + "   omission DA=" + fmt(daOmit));
+    check("a fully predicted reward evokes little phasic DA", Math.abs(daPred) < 0.3, "DA=" + fmt(daPred));
+    check("an omitted expected reward gives a negative dip", daOmit < -0.3, "DA=" + fmt(daOmit));
+  }
 
   console.log("\n==== " + pass + " passed, " + fail + " failed ====\n");
   process.exit(fail ? 1 : 0);

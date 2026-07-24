@@ -12,7 +12,10 @@ Here selection is **goal-directed and learned**: motor plans idle as competing c
 assemblies, a *goal* (stimulus) makes them compete, dopamine *tags* the plan whose learned
 corticostriatal weight wins, and reward shapes those weights so each goal comes to evoke its own
 plan. Removing the goal releases the plan; changing the goal switches it — **no dopamine change
-required**. Dopamine loss causes akinesia; indirect-pathway degeneration causes chorea.
+required**. Dopamine loss causes akinesia; indirect-pathway degeneration causes chorea. The
+striatal mosaic is an **actor–critic**: the *matrix* selects (actor) and the *striosome* predicts
+reward and shapes the dopamine (critic), so the phasic dopamine is an emergent
+**reward-prediction error**.
 
 ## 1. Principle — a DUAL CODE, stated explicitly
 
@@ -53,30 +56,36 @@ sector; D1 Go (gain ∝ dopamine) withdraws that clamp for the tagged plan; the 
 on-surround jams rivals; cortical lateral inhibition on activity makes the competition
 salience/goal-ordered.
 
-**Goals & learning (the actor).** A goal drives all plans nonspecifically ("prepare to act");
-the learned weight `W[plan][goal]` steers which plan's **D1** is driven hard enough to escape.
-D1 carries **no drive from its own cortex** — it is purely goal×weight (+ exploration), DA-gated —
-so a plan releases the instant its goal is withdrawn (GPi re-clamps). Reward runs a three-factor
-rule: `W[sel][g] += lr·reward·D1_sel·(Wmax−W)`, rivals-for-that-goal decay. Each goal converges
-onto one plan.
+**Goals & learning — MATRIX = actor, STRIOSOME = critic.** A goal drives all plans
+nonspecifically ("prepare to act"); the learned **matrix** weight `W[plan][goal]` steers which
+plan's **D1** is driven hard enough to escape. D1 carries **no drive from its own cortex** — it is
+purely goal×weight (+ exploration), DA-gated — so a plan releases the instant its goal is withdrawn
+(GPi re-clamps). The **striosome** holds a value estimate `V[goal]` (expected reward) and projects
+to SNc, so the dopamine actually released is `phasicDA = reward − V` — a **reward-prediction
+error**, not the raw reward. The matrix (actor) learns a three-factor rule on that RPE-gated
+dopamine: `W[sel][g] += lr·rpe·D1_sel·(Wmax−W)`, rivals decay on positive RPE; the critic updates
+`V[g] += lrV·rpe`. Each goal converges onto one plan, and the teaching signal shrinks as the cue
+is learned.
 
-## 3. Validated results — `15/15` headless, robust `12/12` seeds
+## 3. Validated results — `20/20` headless, robust `12/12` seeds
 
 | # | check | result |
 |---|-------|--------|
 | 1 | rest, no goal | nothing escapes the cortex (`sel = −1`) |
 | 2 | a learned goal selects its plan | `sel = 2`, winner coherent `R = 0.99` |
-| 3 | reward shapes a stable goal→plan map | consistent recall; `W[·][0] = [1.25 .07 .07 .07]` |
+| 3 | reward shapes a stable goal→plan map | consistent recall; matrix weight dominates |
 | 4 | **release** — remove goal | selection drops (`sel = −1`), not stuck |
 | 5 | **switch** — change goal | plan switches (goal0→0, goal1→3), no DA change |
 | 6 | hypodopaminergic (DA 0.05) | no plan can be tagged — akinesia/rigidity |
 | 7 | indirect-pathway degeneration (degen 0.9) | ≥2 distinct plans escape involuntarily = **chorea**; healthy rest stays quiet |
 | 8 | β + STN-DBS | β higher at low DA (Δ 0.34); untreated moderate PD akinetic; **DBS restores selection** |
+| 9 | striosome critic — RPE | first reward `DA ≈ 1.0`; burst shrinks to `≈ 0.05` as learned; `V → 0.97` |
+| 10 | prediction / omission | fully-predicted reward `DA ≈ 0`; **omitted** expected reward `DA ≈ −1.0` (dip) |
 
 **Seed sweep (12 seeds):** healthy selects the learned plan **12/12**; severe-low-DA akinesia
 **12/12**; chorea ≥2 plans **12/12** (sizes mostly 2, occasionally 3); healthy rest quiet
 **12/12**; moderate-PD untreated akinetic **12/12**; DBS restores selection **12/12**; β higher in
-PD **12/12**.
+PD **12/12**; RPE burst shrinks with learning **12/12**; omission → negative dip **12/12**.
 
 ### 3.1 Chorea is emergent, not scripted
 
@@ -104,6 +113,17 @@ D1-Go has withdrawn its GPi clamp cannot select while β is high. Consequently:
   DBS does **not** restore dopamine; it removes the synchrony. Exactly the clinical picture.
 - **DA 0.16** — Go too weak; DBS cannot rescue (it can't replace dopamine). Severe PD.
 - **DA 0.35** — β below floor; moves regardless. Mild PD.
+
+### 3.3 The striosome makes phasic dopamine an emergent RPE
+
+The teaching signal is no longer handed in. Across eight rewarded trials the released phasic
+dopamine falls `[1.00, 0.55, 0.30, 0.17, 0.09, 0.05, …]` as the striosomal value climbs to
+`V ≈ 0.97` — Schultz's **dopamine transfer**: the burst moves off the (now-predicted) reward. A
+fully-predicted reward evokes `DA ≈ 0.01`; an **omitted** expected reward drives `DA ≈ −1.0`, the
+canonical negative-error dip that unlearns. This is the same RPE curve on every seed (the value
+recursion is deterministic); the only cross-seed variability was whether an *unlearned* cue's
+exploration escaped in the training window, fixed by a modest `explore` bump — the critic itself is
+seed-invariant. This closes the RL loop the earlier model left open.
 
 ## 4. Design decisions worth not re-deriving (each cost real tuning)
 
@@ -133,17 +153,25 @@ D1-Go has withdrawn its GPi clamp cannot select while β is high. Consequently:
   STN on-surround only jams *rivals*; the winner's own D1 bypasses it. Only a downstream thalamic
   clamp blocks the selected channel — which is what makes DBS rescue meaningful.
 
-## 5. Open threads
+## 5. Design decisions worth not re-deriving (critic)
 
-- **Striosome/matrix split (the critic).** The actor (`W`) learns, but phasic dopamine is handed
-  in, not computed. The striatal mosaic is an actor/critic: **matrix** (current selection
-  machinery) selects; **striosomes** project to SNc and shape the teaching signal. Adding a
-  striosomal critic would make phasic DA / RPE **emergent** (reward − expected) and close the RL
-  loop. Flagged as the next plausibility upgrade.
+- **Dopamine is the RPE, not the reward.** The actor learns on `reward − V`, not `reward`. This is
+  what makes the burst shrink with learning and makes omission a negative teaching signal; feeding
+  raw reward gives a burst that never adapts and no dip.
+- **Value saturates the actor.** Because the actor step is RPE-gated, `W` grows less each trial as
+  `V` rises (converges to ~0.7, still dominating rivals at 0.1). This is a feature — no runaway —
+  but it means the actor learning rate `lr` had to rise (0.38 → 0.55) to reach dominance before the
+  RPE closes.
+- **Exploration must reliably escape an unlearned cue.** With a near-uniform `W`, the symmetry is
+  broken only by the exploration offsets; too little `explore` and some seeds never escape (nothing
+  to reward). `explore = 0.30` gives a first escape on all 12 seeds without destabilising selection.
+
+## 6. Open threads
+
 - **Cholinergic interneurons (TANs).** The TAN pause gates DA-dependent plasticity and the
   ACh↔DA balance (PD, dystonia, anticholinergic benefit). ACh would become the third factor on
-  the learning rule — the same "ACh gates encode/retrieve" knob used in the hippocampus and
-  assembly models.
+  the learning rule (gating *when* the RPE writes) and modulate effective DA — the same "ACh gates
+  encode/retrieve" knob used in the hippocampus and assembly models. **Next plausibility upgrade.**
 - No action sequencing / chunking; TRN and GPe are single prototypic pools (no arkypallidal
   "stop" pathway yet). Wiring the selected assembly into a thalamocortical *sequence* (the
   chronotaxis thread) is future work.

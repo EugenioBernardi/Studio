@@ -69,14 +69,23 @@
   .goals button .k{width:9px;height:9px;border-radius:2px;display:block}
   .goals button:hover{color:var(--ink);border-color:rgba(86,212,255,.45)}
   .goals button.on{background:rgba(86,212,255,.16);color:#dff4ff;border-color:var(--th);box-shadow:0 0 0 1px rgba(86,212,255,.25) inset}
-  .teach{display:grid;grid-template-columns:1.4fr 1fr;gap:6px;margin-top:8px}
+  .teach{display:grid;gap:6px;margin-top:8px}
+  .teach.t3{grid-template-columns:1.2fr 1fr 0.9fr}
   .teach button{font-family:var(--mono);font-size:10px;cursor:pointer;padding:9px 4px;border-radius:8px;transition:.15s;border:1px solid var(--line)}
   #btn-reward{background:rgba(62,230,176,.08);color:var(--d1);border-color:rgba(62,230,176,.4)}
   #btn-reward:hover{background:rgba(62,230,176,.18);border-color:var(--d1)}
-  #btn-reward:disabled{opacity:.4;cursor:default}
+  #btn-omit{background:rgba(255,77,125,.06);color:var(--stn);border-color:rgba(255,77,125,.35)}
+  #btn-omit:hover{background:rgba(255,77,125,.15);border-color:var(--stn)}
+  #btn-reward:disabled,#btn-omit:disabled{opacity:.4;cursor:default}
   #btn-reset{background:rgba(255,255,255,.02);color:var(--muted)}
   #btn-reset:hover{color:var(--ink);border-color:rgba(120,150,200,.4)}
-  .rewpulse{position:absolute;pointer-events:none}
+  .critic{display:flex;align-items:center;gap:8px;margin-top:9px;font-family:var(--mono);font-size:9px;color:var(--muted)}
+  .critic b{color:var(--ink)} .critic .da{margin-left:auto;color:var(--faint)}
+  .critic .dabar{position:relative;width:66px;height:7px;border-radius:4px;background:rgba(255,255,255,.06);
+    overflow:hidden;display:flex;justify-content:center;flex:none}
+  .critic .dabar::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.18)}
+  .critic .dabar i{position:absolute;top:0;bottom:0;width:0;transition:width .12s}
+  .critic .dabar #c-dapos{left:50%;background:var(--da)} .critic .dabar #c-daneg{right:50%;background:var(--stn)}
   .sl{display:flex;align-items:center;gap:9px;margin-top:8px;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
   .sl .nm{width:104px;flex:none} .sl input{flex:1;accent-color:var(--c2,var(--th));min-width:0}
   .sl .vl{width:46px;text-align:right;color:var(--ink);flex:none}
@@ -129,9 +138,16 @@
     <div class="blk" style="--dot:var(--th)">
       <h2>Stimulus <span class="hint">click to present · again to clear</span></h2>
       <div class="goals" id="goals"></div>
-      <div class="teach">
-        <button id="btn-reward">✓ Reward · phasic DA</button>
-        <button id="btn-reset">↺ New weights</button>
+      <div class="teach t3">
+        <button id="btn-reward">✓ Reward</button>
+        <button id="btn-omit">✕ Omit</button>
+        <button id="btn-reset">↺ New</button>
+      </div>
+      <div class="critic" id="critic">
+        <span>striosome value <b id="c-val">–</b></span>
+        <span class="da">phasic DA · RPE</span>
+        <span class="dabar"><i id="c-dapos"></i><i id="c-daneg"></i></span>
+        <b id="c-da">0.00</b>
       </div>
       <div class="note" id="gnote"></div>
     </div>
@@ -209,7 +225,7 @@
   const GOAL=[{nm:'CUE A'},{nm:'CUE B'},{nm:'CUE C'},{nm:'CUE D'}]; // stimuli/goals
   const chHue=[C.cx,C.th,C.gpe,C.d1];        // per-plan accent
   const goalHue=[C.th,C.gpe,C.warn,C.d2];    // per-stimulus accent
-  const St={ speed:0.3, t:0, activeGoal:-1, rewT:0 };
+  const St={ speed:0.3, t:0, activeGoal:-1, rewT:0, rewDA:0 };
 
   // nucleus rows (dorsoventral). dx shifts the second of a pair right of channel centre.
   const ROWS=[
@@ -307,13 +323,14 @@
       ctx.textAlign='left';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(row.col,.7);
       ctx.fillText(row.lab, W*0.015, H*(row.y+(row.laby||0))+3);
     }
-    // SNc dopamine badge
+    // SNc dopamine badge (tonic) + phasic burst (RPE) rendered right at the source
     ctx.textAlign='left';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(C.da,.85);
     ctx.fillText('SNc · DA '+S.P.DA.toFixed(2), W*0.015, H*0.385);
-    // reward flash
-    if(St.rewT>0){ ctx.textAlign='center';ctx.font='600 12px '+FM;
-      ctx.fillStyle=rgba(C.da,Math.min(1,St.rewT*2));
-      ctx.fillText('✓ DOPAMINE REWARD', W*0.49, H*0.075); }
+    // phasic dopamine flash — coloured and signed by the RPE (emergent teaching signal)
+    if(St.rewT>0){ ctx.font='600 11px '+FM;
+      const pos=St.rewDA>=0, mag=Math.min(1,Math.abs(St.rewDA));
+      ctx.fillStyle=rgba(pos?C.da:C.stn,Math.min(1,St.rewT*2)*(0.4+0.6*mag));
+      ctx.fillText((pos?'▲ phasic +':'▼ dip ')+St.rewDA.toFixed(2), W*0.015, H*0.41); }
   }
 
   /* ---------------- UI ---------------- */
@@ -354,7 +371,11 @@
   }
   $('btn-reward').onclick=()=>{
     if(St.activeGoal<0) return;
-    M.reinforceGoal(S,1.0); St.rewT=0.9; updateGoalNote();
+    M.reinforceGoal(S,1.0); St.rewT=0.9; St.rewDA=M.phasicDopamine(S); updateGoalNote();
+  };
+  $('btn-omit').onclick=()=>{                 // deliver NO reward → negative RPE if it was expected
+    if(St.activeGoal<0) return;
+    M.reinforceGoal(S,0.0); St.rewT=0.9; St.rewDA=M.phasicDopamine(S); updateGoalNote();
   };
   $('btn-reset').onclick=()=>{
     for(let p=0;p<NCH;p++) for(let g=0;g<S.P.nGoal;g++) S.W[p][g]=S.P.Winit+0.03*(S.rnd()-0.5);
@@ -412,7 +433,7 @@
     else if(akin) t='<b>Parkinsonian.</b> Dopamine ≈ 0: <b class="g">Go</b> is dead and the STN⟷GPe loop collapses into <span class="w">β-hypersynchrony</span>. No plan can be tagged — <span class="w">akinesia / rigidity</span>.';
     else if(pd) t='<b>Moderate PD.</b> Coherent <span class="w">β enslaves the thalamocortical loop</span> downstream of GPi, so even a correctly-tagged plan cannot lock. Akinetic despite the cue — until DBS breaks the β.';
     else if(S.P.DA>0.8) t='<b>Hyperdopaminergic.</b> Go is over-facilitated; selection is fast and weakly-associated plans break through (impulsivity).';
-    else t='<b>Healthy.</b> Present a stimulus, watch a plan escape, then <b class="g">Reward</b> it — the association consolidates in the weight matrix and the cue soon enacts its plan directly.';
+    else t='<b>Healthy.</b> Present a stimulus, watch a plan escape, then <b class="g">Reward</b> it. The striosome <em>critic</em> learns to predict the reward, so the <b class="g">phasic DA</b> burst shrinks as the cue is mastered — and <b class="g">Omit</b> a predicted reward to see the dopamine <span class="w">dip</span>.';
     $('note').innerHTML=t;
   }
   function updateGoalNote(){
@@ -426,6 +447,13 @@
     }
     $('gnote').innerHTML=t;
     $('btn-reward').disabled=(St.activeGoal<0);
+    $('btn-omit').disabled=(St.activeGoal<0);
+    // striosome critic readout: expected value for the active cue + last phasic DA (RPE)
+    $('c-val').textContent = St.activeGoal<0 ? '–' : M.expectedValue(S,St.activeGoal).toFixed(2);
+    const da=St.rewDA; $('c-da').textContent=da.toFixed(2);
+    $('c-da').style.color = da>0.05?'var(--da)':da<-0.05?'var(--stn)':'var(--muted)';
+    $('c-dapos').style.width=(da>0?Math.min(1,da)*33:0)+'px';
+    $('c-daneg').style.width=(da<0?Math.min(1,-da)*33:0)+'px';
   }
 
   function updateUI(){

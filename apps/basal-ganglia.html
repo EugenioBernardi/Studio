@@ -69,14 +69,23 @@
   .goals button .k{width:9px;height:9px;border-radius:2px;display:block}
   .goals button:hover{color:var(--ink);border-color:rgba(86,212,255,.45)}
   .goals button.on{background:rgba(86,212,255,.16);color:#dff4ff;border-color:var(--th);box-shadow:0 0 0 1px rgba(86,212,255,.25) inset}
-  .teach{display:grid;grid-template-columns:1.4fr 1fr;gap:6px;margin-top:8px}
+  .teach{display:grid;gap:6px;margin-top:8px}
+  .teach.t3{grid-template-columns:1.2fr 1fr 0.9fr}
   .teach button{font-family:var(--mono);font-size:10px;cursor:pointer;padding:9px 4px;border-radius:8px;transition:.15s;border:1px solid var(--line)}
   #btn-reward{background:rgba(62,230,176,.08);color:var(--d1);border-color:rgba(62,230,176,.4)}
   #btn-reward:hover{background:rgba(62,230,176,.18);border-color:var(--d1)}
-  #btn-reward:disabled{opacity:.4;cursor:default}
+  #btn-omit{background:rgba(255,77,125,.06);color:var(--stn);border-color:rgba(255,77,125,.35)}
+  #btn-omit:hover{background:rgba(255,77,125,.15);border-color:var(--stn)}
+  #btn-reward:disabled,#btn-omit:disabled{opacity:.4;cursor:default}
   #btn-reset{background:rgba(255,255,255,.02);color:var(--muted)}
   #btn-reset:hover{color:var(--ink);border-color:rgba(120,150,200,.4)}
-  .rewpulse{position:absolute;pointer-events:none}
+  .critic{display:flex;align-items:center;gap:8px;margin-top:9px;font-family:var(--mono);font-size:9px;color:var(--muted)}
+  .critic b{color:var(--ink)} .critic .da{margin-left:auto;color:var(--faint)}
+  .critic .dabar{position:relative;width:66px;height:7px;border-radius:4px;background:rgba(255,255,255,.06);
+    overflow:hidden;display:flex;justify-content:center;flex:none}
+  .critic .dabar::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.18)}
+  .critic .dabar i{position:absolute;top:0;bottom:0;width:0;transition:width .12s}
+  .critic .dabar #c-dapos{left:50%;background:var(--da)} .critic .dabar #c-daneg{right:50%;background:var(--stn)}
   .sl{display:flex;align-items:center;gap:9px;margin-top:8px;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
   .sl .nm{width:104px;flex:none} .sl input{flex:1;accent-color:var(--c2,var(--th));min-width:0}
   .sl .vl{width:46px;text-align:right;color:var(--ink);flex:none}
@@ -129,9 +138,16 @@
     <div class="blk" style="--dot:var(--th)">
       <h2>Stimulus <span class="hint">click to present · again to clear</span></h2>
       <div class="goals" id="goals"></div>
-      <div class="teach">
-        <button id="btn-reward">✓ Reward · phasic DA</button>
-        <button id="btn-reset">↺ New weights</button>
+      <div class="teach t3">
+        <button id="btn-reward">✓ Reward</button>
+        <button id="btn-omit">✕ Omit</button>
+        <button id="btn-reset">↺ New</button>
+      </div>
+      <div class="critic" id="critic">
+        <span>striosome value <b id="c-val">–</b></span>
+        <span class="da">phasic DA · RPE</span>
+        <span class="dabar"><i id="c-dapos"></i><i id="c-daneg"></i></span>
+        <b id="c-da">0.00</b>
       </div>
       <div class="note" id="gnote"></div>
     </div>
@@ -299,8 +315,9 @@
       goalSpec: 0.72,    // learned goal→plan drive to CORTEX (steers which plan wins the WTA)
       goalStr: 2.70,     // goal → striatal-D1 drive, gated by the LEARNED weight W[plan][goal]
       Wmax: 1.6, Winit: 0.20,   // corticostriatal weight range / init (near-uniform ⇒ exploration)
-      lr: 0.38,          // dopamine-gated learning rate
-      explore: 0.24,     // exploration drive on D1 (lets an unlearned goal try different plans)
+      lr: 0.55,          // actor (matrix) learning rate on the RPE-gated teaching signal
+      lrV: 0.45,         // critic (striosome) value learning rate — V[goal] tracks expected reward
+      explore: 0.30,     // exploration drive on D1 (lets an unlearned goal reliably try a plan)
       tauExpl: 0.6,      // exploration offsets drift on this timescale (s)
       adaptGain: 0.60,    // cortical spike-frequency adaptation — lets a selection RELEASE / switch
       tauAdapt: 0.6,     // adaptation timescale (s): a plan can hold ~1 s then yields
@@ -348,8 +365,8 @@
     // FSI: one shared striatal interneuron pool per channel (gap-junction coupled → coherent)
     for (let c = 0; c < nCh; c++) addPop("fsi" + c, c, P.nFsi, P.fFsi, "tonic", true);
 
-    // learned corticostriatal weights W[plan][goal] — near-uniform at birth (⇒ exploration),
-    // shaped by dopamine reward into a one goal → one plan mapping.
+    // MATRIX (actor): learned corticostriatal weights W[plan][goal] — near-uniform at birth
+    // (⇒ exploration), shaped by the dopaminergic teaching signal into one goal → one plan.
     const W = [];
     for (let p = 0; p < nCh; p++) { W[p] = new Float64Array(P.nGoal);
       for (let g = 0; g < P.nGoal; g++) W[p][g] = P.Winit + 0.03 * (rnd() - 0.5); }
@@ -358,7 +375,9 @@
       P, nCh, rnd, gauss, t: 0, pops,
       sal: new Float64Array(nCh),          // optional manual bias (0 by default)
       goal: new Float64Array(P.nGoal),     // active goal(s)
-      W,                                    // corticostriatal associative weights
+      W,                                    // MATRIX corticostriatal associative weights (actor)
+      V: new Float64Array(P.nGoal),        // STRIOSOME value estimate per goal (critic → SNc)
+      phasicDA: 0,                          // last phasic dopamine = reward-prediction error
       adapt: new Float64Array(nCh),        // per-plan spike-frequency adaptation
       expl: new Float64Array(nCh),         // slowly-drifting exploration offsets
       explClock: 0,
@@ -592,25 +611,45 @@
   // β coherence in STN, ACTIVITY-WEIGHTED (only active STN populations count)
   function betaCoh(S) { return S.betaSm; }
 
-  // dopamine-gated corticostriatal learning: reward strengthens the association between
-  // the ACTIVE goal(s) and the currently-selected plan, and mildly weakens its rivals for
-  // that goal — so each goal converges onto one plan (three-factor / actor rule).
+  // ACTOR–CRITIC learning across the striatal mosaic. The STRIOSOME is the critic: it holds a
+  // value estimate V[goal] (expected reward) and projects to SNc, so the dopamine that is
+  // actually released is a REWARD-PREDICTION ERROR, not the raw reward — `phasicDA = reward − V`.
+  // The MATRIX is the actor: its corticostriatal weights W[plan][goal] learn on that RPE-gated
+  // dopamine. Emergent consequences (Schultz signatures): the DA burst SHRINKS as a cue becomes
+  // predicted (V → reward), a fully-predicted reward evokes ~no phasic DA, and an OMITTED expected
+  // reward drives a negative RPE (a dip) that unlearns. `reward` is the primary outcome (1 reward,
+  // 0 omission); pass rate to override the actor step size.
   function reinforceGoal(S, reward, rate) {
     const P = S.P; rate = rate == null ? P.lr : rate;
+    // striosomal expected value for the active goal(s)
+    let val = 0, gc = 0;
+    for (let g = 0; g < P.nGoal; g++) if (S.goal[g] >= 0.05) { val += S.V[g]; gc++; }
+    val = gc > 0 ? val / gc : 0;
+    const rpe = reward - val;                          // phasic dopamine = RPE (SNc output)
+    S.phasicDA = rpe;
+    // critic: striosome updates its value toward the outcome (TD)
+    for (let g = 0; g < P.nGoal; g++) if (S.goal[g] >= 0.05)
+      S.V[g] = clamp(S.V[g] + P.lrV * rpe, 0, 1.2);
+    // actor: matrix weights learn on the RPE-gated dopamine (three-factor). A positive RPE
+    // strengthens the selected plan and weakens its rivals for the goal; a negative RPE
+    // (surprising omission) weakens the plan that was (wrongly) selected.
     const sel = selected(S); if (sel < 0) return;
     for (let g = 0; g < P.nGoal; g++) {
       if (S.goal[g] < 0.05) continue;
       const elig = S.pops["d1" + sel].act;            // eligibility ∝ the winner's D1 firing
-      S.W[sel][g] = clamp(S.W[sel][g] + rate * reward * elig * (P.Wmax - S.W[sel][g]), 0, P.Wmax);
+      S.W[sel][g] = clamp(S.W[sel][g] + rate * rpe * elig * (P.Wmax - S.W[sel][g]), 0, P.Wmax);
       for (let p = 0; p < S.nCh; p++) if (p !== sel)
-        S.W[p][g] = clamp(S.W[p][g] - 0.5 * rate * reward * S.W[p][g], 0, P.Wmax);
+        S.W[p][g] = clamp(S.W[p][g] - 0.5 * rate * Math.max(0, rpe) * S.W[p][g], 0, P.Wmax);
     }
   }
+  const expectedValue = (S, g) => S.V[g];              // striosomal value readout
+  const phasicDopamine = (S) => S.phasicDA;            // last RPE (SNc phasic output)
   // back-compat shim (old single-channel API)
   function reinforce(S, ch, reward, rate) { reinforceGoal(S, reward, rate); }
 
   return { create, defaults, step, run, meanFields, setSalience, setGoal, clearGoals,
-           selected, ctxR, ctxOut, betaCoh, reinforce, reinforceGoal, mulberry32, TAU };
+           selected, ctxR, ctxOut, betaCoh, reinforce, reinforceGoal,
+           expectedValue, phasicDopamine, mulberry32, TAU };
 });
 
 /* ============================ headless tests ============================ */
@@ -726,6 +765,38 @@ if (typeof require !== "undefined" && require.main === module) {
   }
   function S_setGoalLearned(S, plan, goal){ S.W[plan][goal]=S.P.Wmax; for(let p=0;p<4;p++) if(p!==plan) S.W[p][goal]=0.1; M.setGoal(S,goal); }
 
+  console.log("\n[9] Striosome critic: phasic dopamine is a REWARD-PREDICTION ERROR");
+  {
+    // train goal 0, recording the phasic DA released on each reward. As the striosome learns to
+    // predict the reward (V → 1), the DA burst must SHRINK (Schultz's dopamine transfer).
+    const S = M.create({ DA:0.6 });
+    const da=[];
+    for(let t=0;t<8;t++){
+      M.setGoal(S,0); M.run(S,0.9);
+      if(M.selected(S)>=0){ M.reinforceGoal(S,1.0); da.push(M.phasicDopamine(S)); }
+      M.clearGoals(S); M.run(S,0.4);
+    }
+    console.log("      phasic DA over training = [" + da.map(x=>fmt(x)).join(" ") + "]   V[0]=" + fmt(M.expectedValue(S,0)));
+    check("first reward gives a large DA burst", da[0] > 0.7, "DA0=" + fmt(da[0]));
+    check("DA burst shrinks as the cue is learned", da[da.length-1] < da[0] - 0.3, "DAlast=" + fmt(da[da.length-1]));
+    check("striosomal value converges toward reward", M.expectedValue(S,0) > 0.7, "V=" + fmt(M.expectedValue(S,0)));
+  }
+
+  console.log("\n[10] Predicted reward → ~no DA; omitted reward → negative RPE (dip)");
+  {
+    const S = M.create({ DA:0.6 });
+    // over-train goal 0 so V saturates near 1
+    for(let t=0;t<10;t++){ M.setGoal(S,0); M.run(S,0.9); if(M.selected(S)>=0) M.reinforceGoal(S,1.0); M.clearGoals(S); M.run(S,0.4); }
+    // fully-predicted reward → phasic DA ≈ 0
+    M.setGoal(S,0); M.run(S,0.9); M.reinforceGoal(S,1.0); const daPred=M.phasicDopamine(S);
+    // now OMIT the expected reward → negative RPE
+    M.clearGoals(S); M.run(S,0.4);
+    M.setGoal(S,0); M.run(S,0.9); M.reinforceGoal(S,0.0); const daOmit=M.phasicDopamine(S);
+    console.log("      predicted-reward DA=" + fmt(daPred) + "   omission DA=" + fmt(daOmit));
+    check("a fully predicted reward evokes little phasic DA", Math.abs(daPred) < 0.3, "DA=" + fmt(daPred));
+    check("an omitted expected reward gives a negative dip", daOmit < -0.3, "DA=" + fmt(daOmit));
+  }
+
   console.log("\n==== " + pass + " passed, " + fail + " failed ====\n");
   process.exit(fail ? 1 : 0);
 }
@@ -755,7 +826,7 @@ if (typeof require !== "undefined" && require.main === module) {
   const GOAL=[{nm:'CUE A'},{nm:'CUE B'},{nm:'CUE C'},{nm:'CUE D'}]; // stimuli/goals
   const chHue=[C.cx,C.th,C.gpe,C.d1];        // per-plan accent
   const goalHue=[C.th,C.gpe,C.warn,C.d2];    // per-stimulus accent
-  const St={ speed:0.3, t:0, activeGoal:-1, rewT:0 };
+  const St={ speed:0.3, t:0, activeGoal:-1, rewT:0, rewDA:0 };
 
   // nucleus rows (dorsoventral). dx shifts the second of a pair right of channel centre.
   const ROWS=[
@@ -853,13 +924,14 @@ if (typeof require !== "undefined" && require.main === module) {
       ctx.textAlign='left';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(row.col,.7);
       ctx.fillText(row.lab, W*0.015, H*(row.y+(row.laby||0))+3);
     }
-    // SNc dopamine badge
+    // SNc dopamine badge (tonic) + phasic burst (RPE) rendered right at the source
     ctx.textAlign='left';ctx.font='600 9px '+FM;ctx.fillStyle=rgba(C.da,.85);
     ctx.fillText('SNc · DA '+S.P.DA.toFixed(2), W*0.015, H*0.385);
-    // reward flash
-    if(St.rewT>0){ ctx.textAlign='center';ctx.font='600 12px '+FM;
-      ctx.fillStyle=rgba(C.da,Math.min(1,St.rewT*2));
-      ctx.fillText('✓ DOPAMINE REWARD', W*0.49, H*0.075); }
+    // phasic dopamine flash — coloured and signed by the RPE (emergent teaching signal)
+    if(St.rewT>0){ ctx.font='600 11px '+FM;
+      const pos=St.rewDA>=0, mag=Math.min(1,Math.abs(St.rewDA));
+      ctx.fillStyle=rgba(pos?C.da:C.stn,Math.min(1,St.rewT*2)*(0.4+0.6*mag));
+      ctx.fillText((pos?'▲ phasic +':'▼ dip ')+St.rewDA.toFixed(2), W*0.015, H*0.41); }
   }
 
   /* ---------------- UI ---------------- */
@@ -900,7 +972,11 @@ if (typeof require !== "undefined" && require.main === module) {
   }
   $('btn-reward').onclick=()=>{
     if(St.activeGoal<0) return;
-    M.reinforceGoal(S,1.0); St.rewT=0.9; updateGoalNote();
+    M.reinforceGoal(S,1.0); St.rewT=0.9; St.rewDA=M.phasicDopamine(S); updateGoalNote();
+  };
+  $('btn-omit').onclick=()=>{                 // deliver NO reward → negative RPE if it was expected
+    if(St.activeGoal<0) return;
+    M.reinforceGoal(S,0.0); St.rewT=0.9; St.rewDA=M.phasicDopamine(S); updateGoalNote();
   };
   $('btn-reset').onclick=()=>{
     for(let p=0;p<NCH;p++) for(let g=0;g<S.P.nGoal;g++) S.W[p][g]=S.P.Winit+0.03*(S.rnd()-0.5);
@@ -958,7 +1034,7 @@ if (typeof require !== "undefined" && require.main === module) {
     else if(akin) t='<b>Parkinsonian.</b> Dopamine ≈ 0: <b class="g">Go</b> is dead and the STN⟷GPe loop collapses into <span class="w">β-hypersynchrony</span>. No plan can be tagged — <span class="w">akinesia / rigidity</span>.';
     else if(pd) t='<b>Moderate PD.</b> Coherent <span class="w">β enslaves the thalamocortical loop</span> downstream of GPi, so even a correctly-tagged plan cannot lock. Akinetic despite the cue — until DBS breaks the β.';
     else if(S.P.DA>0.8) t='<b>Hyperdopaminergic.</b> Go is over-facilitated; selection is fast and weakly-associated plans break through (impulsivity).';
-    else t='<b>Healthy.</b> Present a stimulus, watch a plan escape, then <b class="g">Reward</b> it — the association consolidates in the weight matrix and the cue soon enacts its plan directly.';
+    else t='<b>Healthy.</b> Present a stimulus, watch a plan escape, then <b class="g">Reward</b> it. The striosome <em>critic</em> learns to predict the reward, so the <b class="g">phasic DA</b> burst shrinks as the cue is mastered — and <b class="g">Omit</b> a predicted reward to see the dopamine <span class="w">dip</span>.';
     $('note').innerHTML=t;
   }
   function updateGoalNote(){
@@ -972,6 +1048,13 @@ if (typeof require !== "undefined" && require.main === module) {
     }
     $('gnote').innerHTML=t;
     $('btn-reward').disabled=(St.activeGoal<0);
+    $('btn-omit').disabled=(St.activeGoal<0);
+    // striosome critic readout: expected value for the active cue + last phasic DA (RPE)
+    $('c-val').textContent = St.activeGoal<0 ? '–' : M.expectedValue(S,St.activeGoal).toFixed(2);
+    const da=St.rewDA; $('c-da').textContent=da.toFixed(2);
+    $('c-da').style.color = da>0.05?'var(--da)':da<-0.05?'var(--stn)':'var(--muted)';
+    $('c-dapos').style.width=(da>0?Math.min(1,da)*33:0)+'px';
+    $('c-daneg').style.width=(da<0?Math.min(1,-da)*33:0)+'px';
   }
 
   function updateUI(){
