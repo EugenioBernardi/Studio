@@ -57,6 +57,9 @@ significance — that is p-hacking and it nearly happened here.
 | `motion-model.js` | V1 direction energy → V3 → V5/MT |
 | `pulvinar-gate-model.js` | transthalamic gate, Jaramillo/Wang formulation |
 | `overlap-model.js` | overlapping-figure stimuli + adjustable-RF V2 |
+| `models/kuramoto-assembly.js` | **the project thesis as a model**: clocks, assemblies-as-synchrony, LTP/LTD as coupling plasticity (validated; runs headless) |
+| `docs/ASSEMBLY-VALIDATION.md` | Kuramoto-assembly validation record — equations, parameters, 14 checks, seed sweep |
+| `build/build-kuramoto-assembly.py` | inlines the assembly model into its app template |
 | `*.html` | single-file apps (model inlined; edit the build script, not the HTML) |
 | `claude-code-brief.md` | expandable-simulator spec **+ validated parameter blocks for chronotaxis (§6.1), basal ganglia (§6.2) and hippocampus (§6.3)** |
 
@@ -72,6 +75,25 @@ build script and the HTML together**, or the next rebuild silently reverts the f
 ---
 
 ## 4. State of each model
+
+**Kuramoto Assembly** (`apps/kuramoto-assembly.html`, model `models/kuramoto-assembly.js`) —
+the canonical statement of the project thesis, and the first model where **synchrony does
+work**: the coupling that carries the synchrony is the same quantity the plasticity reads
+and writes. 24 phase-clocks; assembly = a set locked in synchrony; `dK_ij ∝ cos(θ_j−θ_i)−c0`
+so co-phase → LTP, anti-phase → LTD; subtractive synaptic competition (limited budget);
+feedback-inhibition **repulsion** from the global mean caps runaway synchrony. Encode/retrieve
+gated (plasticity on/off), as ACh gates the hippocampus.
+Validated (14/14 headless, robust over 10 seeds): driving 6 clocks co-phasic writes an
+assembly at **R 0.996±0.002** while the background stays at **0.097±0.072**; partial cue
+(2 of 6, frozen weights) completes to **R 0.997±0.002**; the LTD/LTP rule is exact
+(co→Kmax, anti→0); two assemblies coexist at distinct phases (≈179°) with cross-K ≈ 0;
+an assembly survives 15 s of disuse and still recalls.
+Three things not to remove: **subtractive** (not multiplicative) normalisation — it is what
+makes membership crisp; **repulsive** feedback inhibition — the sign matters, `+` desyncs and
+is what makes assemblies selective; and the **rotating** stimulus — a static phase cannot
+entrain a rotating clock. Open: retroactive interference is real (a new engram weakens an old
+one); fixed assembly size; no asymmetric/STDP (β-offset) rule yet — that would write *directed*
+assemblies (sequences), the bridge to replay and chronotaxis. Full record: `docs/ASSEMBLY-VALIDATION.md`.
 
 **Metastable Chronotaxis** (`metastable-chronotaxis.html`) — 15-clock cortical pool;
 assemblies are *dynamic coalitions* drawn from it, not fixed boxes. Kuramoto coupling

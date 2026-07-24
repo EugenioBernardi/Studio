@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assemblies — Synchrony, LTP &amp; LTD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#060911; --panel:rgba(13,19,33,.74); --line:rgba(120,150,200,.14);
+    --ink:#e4ebf7; --muted:#8a99b6; --faint:#4a5670; --idle:#3f4d68;
+    --a:#56d4ff; --b:#4ce0a0; --c:#ffa34d; --bg4:#7f9bff;
+    --ltp:#3ee6b0; --ltd:#ff4d7d; --inh:#c07bff; --stim:#ffc861;
+    --good:#3ee6b0; --warn:#ff9d4d; --bad:#ff4d7d;
+    --display:'Space Grotesk',system-ui,-apple-system,Segoe UI,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:var(--display);color:var(--ink);overflow:hidden;
+    background:radial-gradient(1200px 700px at 25% -10%,#101a2e 0%,transparent 60%),
+      radial-gradient(900px 600px at 100% 110%,#0c1424 0%,transparent 55%),var(--bg)}
+  .app{display:grid;grid-template-columns:1fr 384px;height:100vh;width:100vw}
+  .stage{position:relative;min-width:0;overflow:hidden}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .title{position:absolute;top:15px;left:22px;z-index:3;pointer-events:none;max-width:52%}
+  .title h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.15em;text-transform:uppercase}
+  .title .sub{margin-top:5px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.6}
+  .title em{font-style:normal;color:var(--ltp)}
+  .title b.ltd{color:var(--ltd);font-weight:600}
+  .read{position:absolute;left:22px;bottom:14px;z-index:3;pointer-events:none;font-family:var(--mono);
+    font-size:10px;color:var(--muted);display:flex;gap:15px;flex-wrap:wrap;max-width:94%}
+  .read b{color:var(--ink);font-weight:600}
+  .read b.ok{color:var(--good)} .read b.hot{color:var(--warn)}
+  .mode-pill{position:absolute;top:14px;right:14px;z-index:3;font-family:var(--mono);font-size:10px;
+    letter-spacing:.14em;padding:7px 13px;border-radius:20px;transition:.25s}
+  .mode-encode{color:#06121f;background:linear-gradient(180deg,#7ff0c8,#3ee6b0);box-shadow:0 4px 14px -6px rgba(62,230,176,.7)}
+  .mode-recall{color:#06121f;background:linear-gradient(180deg,#a9e0ff,#56d4ff);box-shadow:0 4px 14px -6px rgba(86,212,255,.7)}
+  .panel{background:linear-gradient(180deg,rgba(10,15,28,.93),rgba(8,12,22,.97));
+    border-left:1px solid var(--line);padding:15px 14px;overflow-y:auto;z-index:4;
+    display:flex;flex-direction:column;gap:12px}
+  .panel::-webkit-scrollbar{width:8px}
+  .panel::-webkit-scrollbar-thumb{background:rgba(120,150,200,.18);border-radius:4px}
+  .blk{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px}
+  .blk h2{margin:0 0 9px;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;display:flex;align-items:center;gap:7px}
+  .blk h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--a));
+    box-shadow:0 0 8px var(--dot,var(--a))}
+  .seg{display:flex;background:rgba(0,0,0,.35);border-radius:9px;padding:3px;gap:3px}
+  .seg button{flex:1;border:0;background:transparent;color:var(--muted);font-family:var(--mono);
+    font-size:11px;padding:9px 2px;border-radius:6px;cursor:pointer;transition:.18s}
+  .seg button[aria-pressed="true"]{color:#06121f;font-weight:600}
+  .seg button.enc[aria-pressed="true"]{background:linear-gradient(180deg,#7ff0c8,#3ee6b0)}
+  .seg button.rec[aria-pressed="true"]{background:linear-gradient(180deg,#a9e0ff,#56d4ff)}
+  .note{font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--muted);min-height:52px;margin-top:9px}
+  .note b{color:var(--ink)} .note em{font-style:normal;color:var(--ltp)}
+  .concepts{display:flex;flex-direction:column;gap:7px}
+  .cpt{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center}
+  .cpt .nm{font-family:var(--mono);font-size:11px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .cpt .nm i{width:9px;height:9px;border-radius:50%;display:block;box-shadow:0 0 7px currentColor}
+  .cpt .rr{font-family:var(--mono);font-size:9px;color:var(--faint);width:52px;text-align:right}
+  .cbtn{border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);
+    font-family:var(--mono);font-size:10px;cursor:pointer;padding:6px 9px;border-radius:7px;transition:.15s}
+  .cbtn:hover{color:var(--ink);border-color:rgba(86,212,255,.45)}
+  .cbtn.enc:hover{border-color:rgba(62,230,176,.55)}
+  .btnrow{display:flex;gap:6px;margin-top:4px}
+  .ghost{flex:1;border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);
+    font-family:var(--mono);font-size:10.5px;cursor:pointer;padding:8px 3px;border-radius:8px;transition:.18s}
+  .ghost:hover{color:var(--ink);border-color:rgba(86,212,255,.45)}
+  .sl{display:flex;align-items:center;gap:9px;margin-top:8px;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  .sl .nm{width:96px;flex:none} .sl input{flex:1;accent-color:var(--c2,var(--a));min-width:0}
+  .sl .vl{width:44px;text-align:right;color:var(--ink);flex:none}
+  #mat{width:100%;display:block;border-radius:8px;background:rgba(0,0,0,.3);border:1px solid var(--line)}
+  .cap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8.5px;color:var(--faint);margin-top:6px}
+  .bars{display:flex;flex-direction:column;gap:6px}
+  .bar{display:grid;grid-template-columns:66px 1fr 36px;gap:8px;align-items:center;
+    font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  .bar .t{height:6px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden}
+  .bar .t i{display:block;height:100%;border-radius:3px;transition:width .12s}
+  .bar .v{text-align:right;color:var(--ink)}
+  @media (max-width:1040px){.app{grid-template-columns:1fr;grid-template-rows:1fr auto}
+    .panel{border-left:0;border-top:1px solid var(--line);max-height:52vh}
+    .title{max-width:70%}.read{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <canvas id="cv"></canvas>
+    <div class="title">
+      <h1>Assemblies · Synchrony as Memory</h1>
+      <div class="sub">
+        Every neuron is a clock. An <em>assembly</em> is a set of clocks running in synchrony.
+        <em>LTP</em> strengthens the coupling between co-phasic clocks; <b class="ltd">LTD</b>
+        weakens it between anti-phasic ones — a Kuramoto network that writes its own connectome.
+      </div>
+    </div>
+    <div class="mode-pill mode-encode" id="modePill">ENCODE · learning on</div>
+    <div class="read">
+      <span>MODE <b id="r-mode">encode</b></span>
+      <span>R global <b id="r-rg">–</b></span>
+      <span>active <b id="r-act">–</b></span>
+      <span>⟨K⟩ bound <b id="r-kb" class="ok">–</b></span>
+      <span>⟨K⟩ cross <b id="r-kx">–</b></span>
+      <span>t <b id="r-t">0.0 s</b></span>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <div class="blk" style="--dot:var(--stim)">
+      <h2>Mode — the encode / retrieve switch</h2>
+      <div class="seg" role="group" aria-label="mode">
+        <button id="m-enc" class="enc" aria-pressed="true">● Encode (plastic)</button>
+        <button id="m-rec" class="rec" aria-pressed="false">◈ Recall (frozen)</button>
+      </div>
+      <div class="note" id="note"></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--a)">
+      <h2>Memories — three cell assemblies</h2>
+      <div class="concepts" id="concepts"></div>
+      <div class="btnrow">
+        <button id="b-scramble" class="ghost">↯ Scramble phases</button>
+        <button id="b-reset" class="ghost">↺ Wipe connectome</button>
+      </div>
+    </div>
+
+    <div class="blk" style="--dot:var(--ltp)">
+      <h2>Learned connectome (K matrix)</h2>
+      <canvas id="mat"></canvas>
+      <div class="cap"><span>row = postsynaptic · col = presynaptic</span><span>bright = strong coupling</span></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--b)">
+      <h2>Assembly coherence R</h2>
+      <div class="bars" id="bars"></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--inh)">
+      <h2>Circuit parameters</h2>
+      <label class="sl" style="--c2:var(--inh)"><span class="nm">Feedback inhib. G</span>
+        <input id="s-ginh" type="range" min="0" max="7" step="0.1" value="3.5"><span class="vl" id="v-ginh">3.5</span></label>
+      <label class="sl" style="--c2:var(--stim)"><span class="nm">LTP/LTD thresh c₀</span>
+        <input id="s-c0" type="range" min="0.2" max="0.9" step="0.02" value="0.55"><span class="vl" id="v-c0">0.55</span></label>
+      <label class="sl" style="--c2:var(--ltp)"><span class="nm">Plasticity rate η</span>
+        <input id="s-eta" type="range" min="0.2" max="3" step="0.1" value="1.2"><span class="vl" id="v-eta">1.2</span></label>
+      <label class="sl" style="--c2:var(--b)"><span class="nm">Synaptic budget</span>
+        <input id="s-ktot" type="range" min="3" max="14" step="0.5" value="7.5"><span class="vl" id="v-ktot">7.5</span></label>
+      <label class="sl" style="--c2:var(--bad)"><span class="nm">Phase noise D</span>
+        <input id="s-noise" type="range" min="0" max="0.12" step="0.005" value="0.03"><span class="vl" id="v-noise">0.030</span></label>
+      <label class="sl"><span class="nm">Speed</span>
+        <input id="s-spd" type="range" min="0.1" max="2.5" step="0.1" value="1"><span class="vl" id="v-spd">1.0×</span></label>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ===================== MODEL (inlined, single source of truth) ===================== */
+/*__MODEL__*/
+</script>
+
+<script>
+"use strict";
+(function(){
+  const M = window.KuramotoAssembly;
+  const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  const matC=document.getElementById('mat'), mctx=matC.getContext('2d');
+  const $=id=>document.getElementById(id);
+  const CSv=getComputedStyle(document.documentElement), cvar=n=>CSv.getPropertyValue(n).trim();
+  const C={a:cvar('--a'),b:cvar('--b'),c:cvar('--c'),bg4:cvar('--bg4'),ltp:cvar('--ltp'),ltd:cvar('--ltd'),
+    inh:cvar('--inh'),stim:cvar('--stim'),ink:cvar('--ink'),faint:cvar('--faint'),idle:cvar('--idle'),
+    muted:cvar('--muted'),good:cvar('--good'),warn:cvar('--warn'),bad:cvar('--bad')};
+  const FD="'Space Grotesk',system-ui,sans-serif", FM="'IBM Plex Mono',monospace";
+  const TAU=Math.PI*2, clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function rgba(hex,a){hex=hex.replace('#','');
+    if(hex.length===3)hex=hex.split('').map(x=>x+x).join('');
+    return `rgba(${parseInt(hex.slice(0,2),16)},${parseInt(hex.slice(2,4),16)},${parseInt(hex.slice(4,6),16)},${a})`;}
+
+  /* ---------------- model instance ---------------- */
+  const S = M.create({ N:24, dt:0.001 });
+  const N = S.N;
+
+  /* ---------------- concepts (assemblies to train) ---------------- */
+  // three non-overlapping groups of 6; neurons 6,7,14,15,22,23 stay uncommitted
+  const CONCEPTS=[
+    {nm:'FACE',  col:C.a,   cells:[0,1,2,3,4,5],      off:0.0},
+    {nm:'PLACE', col:C.b,   cells:[8,9,10,11,12,13],  off:TAU/3},
+    {nm:'SOUND', col:C.c,   cells:[16,17,18,19,20,21],off:2*TAU/3},
+  ];
+  const memberColor=new Array(N).fill(null);
+  CONCEPTS.forEach(cp=>cp.cells.forEach(i=>memberColor[i]=cp.col));
+
+  /* ---------------- interaction state ---------------- */
+  const St={ mode:'encode', speed:1, action:null, t:0 };
+  // action = {kind:'encode'|'cue', concept, until, drove:[...]}
+
+  function setMode(m){
+    St.mode=m;
+    $('m-enc').setAttribute('aria-pressed', m==='encode');
+    $('m-rec').setAttribute('aria-pressed', m==='recall');
+    const pill=$('modePill');
+    pill.className='mode-pill '+(m==='encode'?'mode-encode':'mode-recall');
+    pill.textContent = m==='encode' ? 'ENCODE · learning on' : 'RECALL · weights frozen';
+    updateNote();
+  }
+  function updateNote(){
+    let t;
+    if(St.action && St.action.kind==='encode')
+      t='<b>Encoding.</b> The driven clocks are forced co-phasic; every co-phasic pair <em>potentiates</em> (LTP) while pairs that fall out of phase weaken. An assembly is being written into the coupling.';
+    else if(St.action && St.action.kind==='cue')
+      t='<b>Recall.</b> Only two clocks are cued — the learned coupling drags the rest of the assembly into synchrony. Pattern completion at frozen weights.';
+    else if(St.mode==='encode')
+      t='Plasticity is <em>on</em>. Press <b>Encode</b> on a memory to drive its clocks together and bind them. Feedback inhibition keeps the rest of the net scattered.';
+    else
+      t='Weights are <b>frozen</b>. Press <b>Cue</b> to reinstate a memory from a partial trigger, or scramble the phases first to prove the assembly re-forms itself.';
+    $('note').innerHTML=t;
+  }
+
+  function doEncode(ci){
+    setMode('encode');
+    const cp=CONCEPTS[ci];
+    M.drive(S, cp.cells, cp.off);
+    St.action={kind:'encode', concept:ci, until:St.t+7.0, drove:cp.cells.slice()};
+    updateNote();
+  }
+  function doCue(ci){
+    setMode('recall');
+    const cp=CONCEPTS[ci];
+    // scramble, then cue only the first two members
+    for(let i=0;i<N;i++) S.th[i]=S.rnd()*TAU;
+    const cue=cp.cells.slice(0,2);
+    M.drive(S, cue, cp.off);
+    St.action={kind:'cue', concept:ci, until:St.t+1.6, drove:cue.slice()};
+    updateNote();
+  }
+
+  /* ---------------- layout ---------------- */
+  let W=0,H=0,DPR=1,cx=0,cy=0,ringR=0,clkR=8;
+  const pos=Array.from({length:N},()=>({x:0,y:0}));
+  function layout(){
+    cx=W*0.48; cy=H*0.52;
+    ringR=Math.min(W,H)*0.34;
+    clkR=clamp(ringR*0.052,6,15);
+    for(let i=0;i<N;i++){
+      const a=-TAU/4 + i*TAU/N;
+      pos[i].x=cx+Math.cos(a)*ringR;
+      pos[i].y=cy+Math.sin(a)*ringR;
+    }
+  }
+  function resize(){
+    const r=cv.getBoundingClientRect();
+    DPR=Math.min(window.devicePixelRatio||1,2);
+    W=r.width;H=r.height;
+    cv.width=Math.max(1,W*DPR);cv.height=Math.max(1,H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    const mr=matC.getBoundingClientRect();
+    matC.width=Math.max(1,mr.width*DPR); matC.height=Math.max(1,mr.width*DPR);
+    matC.style.height=mr.width+'px';
+    mctx.setTransform(DPR,0,0,DPR,0,0);
+    layout();
+  }
+
+  /* ---------------- drawing ---------------- */
+  function clock(x,y,ph,act,col,r){
+    const s=.5+.5*Math.sin(ph), rr=r*(0.72+0.42*s);
+    if(act){ctx.shadowColor=col;ctx.shadowBlur=3+s*13;}
+    ctx.beginPath();ctx.arc(x,y,rr,0,TAU);
+    ctx.fillStyle=act?rgba(col,.20+s*.62):rgba(C.idle,.06+s*.10);
+    ctx.fill();ctx.shadowBlur=0;
+    ctx.beginPath();ctx.arc(x,y,rr,0,TAU);
+    ctx.lineWidth=1;ctx.strokeStyle=act?rgba(col,.6+s*.4):rgba(C.idle,.30);ctx.stroke();
+    // phase hand
+    ctx.beginPath();ctx.moveTo(x,y);
+    ctx.lineTo(x+Math.cos(ph)*(r*0.95),y+Math.sin(ph)*(r*0.95));
+    ctx.strokeStyle=rgba(C.ink,act?.7:.2);ctx.lineWidth=1;ctx.stroke();
+    // reference tick (top)
+    ctx.beginPath();ctx.arc(x+Math.cos(-TAU/4)*rr,y+Math.sin(-TAU/4)*rr,0.9,0,TAU);
+    ctx.fillStyle=rgba(col,act?.9:.3);ctx.fill();
+  }
+  function halo(cells,col){
+    // order parameter for the group → halo drawn at the group centroid
+    let sx=0,sy=0,px=0,py=0;
+    for(const i of cells){sx+=Math.cos(S.th[i]);sy+=Math.sin(S.th[i]);px+=pos[i].x;py+=pos[i].y;}
+    const R=Math.hypot(sx/cells.length,sy/cells.length);
+    px/=cells.length;py/=cells.length;
+    if(R>0.35){
+      ctx.beginPath();ctx.arc(px,py,ringR*0.16*R+6,0,TAU);
+      ctx.strokeStyle=rgba(col,(R-0.3)*0.5);ctx.lineWidth=1.5;ctx.stroke();
+    }
+    return {R,px,py};
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // ---- coupling chords (behind clocks): opacity/width ∝ K ----
+    const Kmax=S.P.Kmax;
+    for(let i=0;i<N;i++){
+      for(let j=0;j<N;j++){
+        if(i===j) continue;
+        const k=S.K[i][j];
+        if(k<0.12) continue;
+        const t=clamp(k/Kmax,0,1);
+        // colour by shared membership, else neutral
+        let col=C.faint;
+        if(memberColor[i]&&memberColor[i]===memberColor[j]) col=memberColor[i];
+        ctx.beginPath();
+        ctx.moveTo(pos[i].x,pos[i].y);
+        // gentle bow toward centre
+        ctx.quadraticCurveTo((pos[i].x+pos[j].x)/2*0.72+cx*0.28,
+                             (pos[i].y+pos[j].y)/2*0.72+cy*0.28, pos[j].x,pos[j].y);
+        ctx.strokeStyle=rgba(col,0.05+t*0.55);
+        ctx.lineWidth=0.4+t*2.4;ctx.stroke();
+      }
+    }
+    // ---- concept halos + labels ----
+    CONCEPTS.forEach(cp=>{
+      const h=halo(cp.cells,cp.col);
+      cp._R=h.R;
+      ctx.textAlign='center';ctx.font='600 9px '+FM;
+      ctx.fillStyle=rgba(cp.col,.5+h.R*.5);
+      ctx.fillText(cp.nm, h.px, h.py+3);
+    });
+    // ---- clocks ----
+    for(let i=0;i<N;i++){
+      const act=S.r? null : null; // r not used; activity ~ driven or coupled
+      const drv = St.action && St.action.drove.includes(i);
+      const col = memberColor[i] || C.bg4;
+      const on = memberColor[i]!=null;
+      clock(pos[i].x,pos[i].y,S.th[i],on,col,clkR);
+      if(drv){ // stimulus ring on driven clocks
+        ctx.beginPath();ctx.arc(pos[i].x,pos[i].y,clkR*1.7,0,TAU);
+        ctx.strokeStyle=rgba(C.stim,.7);ctx.lineWidth=1.4;ctx.setLineDash([2,3]);ctx.stroke();ctx.setLineDash([]);
+      }
+    }
+    // ---- centre: global coherence dial ----
+    const g=M.order(S);
+    ctx.beginPath();ctx.arc(cx,cy,ringR*0.14,0,TAU);
+    ctx.strokeStyle=rgba(C.inh,.18);ctx.lineWidth=1;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+Math.cos(g.psi)*ringR*0.14*g.R,cy+Math.sin(g.psi)*ringR*0.14*g.R);
+    ctx.strokeStyle=rgba(C.inh,.5+g.R*.5);ctx.lineWidth=2;ctx.stroke();
+    ctx.textAlign='center';ctx.font='500 8px '+FM;ctx.fillStyle=rgba(C.muted,.7);
+    ctx.fillText('global R '+g.R.toFixed(2),cx,cy+ringR*0.14+13);
+  }
+
+  function drawMat(){
+    const w=matC.clientWidth; if(!w) return;
+    mctx.clearRect(0,0,w,w);
+    const cell=w/N, Kmax=S.P.Kmax;
+    for(let i=0;i<N;i++)for(let j=0;j<N;j++){
+      const k=i===j?0:S.K[i][j];
+      const t=clamp(k/Kmax,0,1);
+      if(t<0.02){ if((i+j)&1){mctx.fillStyle=rgba(C.idle,.05);mctx.fillRect(j*cell,i*cell,cell,cell);} continue; }
+      let col=C.ltp;
+      if(memberColor[i]&&memberColor[i]===memberColor[j]) col=memberColor[i];
+      mctx.fillStyle=rgba(col,0.12+t*0.85);
+      mctx.fillRect(j*cell,i*cell,cell+0.5,cell+0.5);
+    }
+  }
+
+  /* ---------------- UI wiring ---------------- */
+  const cw=$('concepts');
+  CONCEPTS.forEach((cp,i)=>{
+    const row=document.createElement('div');row.className='cpt';
+    row.innerHTML=`<span class="nm"><i style="color:${cp.col};background:${cp.col}"></i>${cp.nm}</span>`+
+      `<button class="cbtn enc" data-enc="${i}">Encode</button>`+
+      `<button class="cbtn" data-cue="${i}">Cue</button>`;
+    cw.appendChild(row);
+    // per-concept R readout appended into the coherence bars section below
+  });
+  cw.addEventListener('click',e=>{
+    const enc=e.target.getAttribute('data-enc'), cue=e.target.getAttribute('data-cue');
+    if(enc!=null) doEncode(+enc);
+    if(cue!=null) doCue(+cue);
+  });
+  const barWrap=$('bars');
+  CONCEPTS.forEach((cp,i)=>{
+    const d=document.createElement('div');d.className='bar';
+    d.innerHTML=`<span style="color:${cp.col}">${cp.nm}</span><span class="t"><i id="bar-${i}" style="background:${cp.col}"></i></span><span class="v" id="bv-${i}">.00</span>`;
+    barWrap.appendChild(d);
+  });
+  {const d=document.createElement('div');d.className='bar';
+   d.innerHTML=`<span>global</span><span class="t"><i id="bar-g" style="background:${C.inh}"></i></span><span class="v" id="bv-g">.00</span>`;
+   barWrap.appendChild(d);}
+
+  $('m-enc').onclick=()=>{setMode('encode');};
+  $('m-rec').onclick=()=>{setMode('recall');};
+  $('b-scramble').onclick=()=>{for(let i=0;i<N;i++)S.th[i]=S.rnd()*TAU;};
+  $('b-reset').onclick=()=>{
+    for(let i=0;i<N;i++)for(let j=0;j<N;j++) if(S.gate[i][j]) S.K[i][j]=S.P.Kinit;
+    for(let i=0;i<N;i++)S.th[i]=S.rnd()*TAU;
+    M.clearDrive(S); St.action=null; updateNote();
+  };
+  const bind=(id,vid,fmt,set)=>{const el=$(id),vl=$(vid);
+    const f=()=>{const v=parseFloat(el.value);set(v);vl.textContent=fmt(v);};el.oninput=f;f();};
+  bind('s-ginh','v-ginh',v=>v.toFixed(1),v=>S.P.Ginh=v);
+  bind('s-c0','v-c0',v=>v.toFixed(2),v=>S.P.c0=v);
+  bind('s-eta','v-eta',v=>v.toFixed(1),v=>S.P.eta=v);
+  bind('s-ktot','v-ktot',v=>v.toFixed(1),v=>S.P.Ktot=v);
+  bind('s-noise','v-noise',v=>v.toFixed(3),v=>S.P.D=v);
+  bind('s-spd','v-spd',v=>v.toFixed(1)+'×',v=>St.speed=v);
+
+  /* ---------------- readouts ---------------- */
+  function updateUI(){
+    $('r-mode').textContent=St.mode;
+    const g=M.order(S);
+    const rg=$('r-rg'); rg.textContent=g.R.toFixed(2); rg.className=g.R>0.6?'hot':'';
+    // active = clocks with high local coherence membership
+    let boundSum=0,boundN=0,crossSum=0,crossN=0;
+    CONCEPTS.forEach(cp=>{ boundSum+=M.meanK(S,cp.cells); boundN++; });
+    // cross = between different concepts
+    for(let a=0;a<CONCEPTS.length;a++)for(let b=0;b<CONCEPTS.length;b++){
+      if(a===b)continue;
+      for(const i of CONCEPTS[a].cells)for(const j of CONCEPTS[b].cells){crossSum+=S.K[i][j];crossN++;}
+    }
+    $('r-kb').textContent=(boundSum/boundN).toFixed(2);
+    $('r-kx').textContent=(crossN?crossSum/crossN:0).toFixed(2);
+    let active=0; for(const cp of CONCEPTS) if((cp._R||0)>0.7) active++;
+    $('r-act').textContent=active+' / 3 assemblies';
+    $('r-t').textContent=St.t.toFixed(1)+' s';
+    CONCEPTS.forEach((cp,i)=>{
+      const R=cp._R||0;
+      $('bar-'+i).style.width=(R*100).toFixed(0)+'%';
+      $('bv-'+i).textContent=R.toFixed(2);
+    });
+    $('bar-g').style.width=(g.R*100).toFixed(0)+'%';
+    $('bv-g').textContent=g.R.toFixed(2);
+  }
+
+  /* ---------------- main loop ---------------- */
+  let last=performance.now(), carry=0, ui=0;
+  function frame(now){
+    let dt=(now-last)/1000; last=now; dt=Math.min(dt,0.05);
+    const sim=dt*St.speed;
+    // expire timed actions
+    if(St.action && St.t>=St.action.until){
+      M.clearDrive(S); St.action=null; updateNote();
+    }
+    const learn = (St.mode==='encode');
+    carry+=sim;
+    let steps=Math.min(60,Math.round(carry/S.P.dt));
+    carry-=steps*S.P.dt;
+    for(let s=0;s<steps;s++){ M.step(S,learn); St.t+=S.P.dt; }
+    draw(); drawMat();
+    ui+=dt; if(ui>0.1){ui=0;updateUI();}
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize',resize);
+  resize(); setMode('encode'); updateUI();
+  requestAnimationFrame(frame);
+
+  /* ---------------- in-app verification (reproduces the headless numbers) ----------------
+     Runs a deterministic copy of the LTP+recall scenario on load and logs PASS/FAIL,
+     so the shipped app is proven to reproduce models/kuramoto-assembly.js §3.            */
+  (function verify(){
+    try{
+      const A=[0,1,2,3,4,5];
+      const T=M.create({seed:7});
+      M.drive(T,A,0.0); M.run(T,9,true); M.clearDrive(T); M.run(T,1,true);
+      const RAtr=M.order(T,A).R, RGtr=M.order(T).R;
+      for(let i=0;i<T.N;i++)T.th[i]=T.rnd()*TAU;
+      M.run(T,1.0,false); M.drive(T,[0,1],0.0); M.run(T,1.5,false); M.clearDrive(T); M.run(T,0.5,false);
+      const RA=M.order(T,A).R, RG=M.order(T).R;
+      const ok = RAtr>0.9 && RGtr<0.35 && RA>0.85 && RG<0.35;
+      console.log(`[verify] encode R(A)=${RAtr.toFixed(3)} R(bg)=${RGtr.toFixed(3)} | `+
+        `recall R(A)=${RA.toFixed(3)} R(glob)=${RG.toFixed(3)} → ${ok?'PASS':'FAIL'}`);
+    }catch(e){ console.error('[verify] error', e); }
+  })();
+})();
+</script>
+</body>
+</html>
