@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amygdala — Fear Conditioning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070610; --panel:rgba(19,15,30,.74); --line:rgba(150,130,190,.15);
+    --ink:#efeaf7; --muted:#9a90b2; --faint:#59506f; --idle:#453f5c;
+    --csp:#ffc861; --csm:#56b8ff; --us:#ff3d57; --la:#ff9d4d; --con:#3ee6b0;
+    --coff:#c07bff; --cem:#ff5c7a; --itc:#4ce0c0; --pl:#ff7ab0; --il:#56d4ff; --free:#ffd24a;
+    --good:#3ee6b0; --warn:#ff9d4d; --bad:#ff4d7d;
+    --display:'Space Grotesk',system-ui,-apple-system,Segoe UI,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:var(--display);color:var(--ink);overflow:hidden;transition:background .8s;
+    background:radial-gradient(1200px 700px at 25% -10%,#181026 0%,transparent 60%),
+      radial-gradient(900px 600px at 100% 110%,#120a1e 0%,transparent 55%),var(--bg)}
+  body.fear{background:radial-gradient(1200px 800px at 40% 20%,#3a0f1c 0%,transparent 62%),#0c0710}
+  .app{display:grid;grid-template-columns:1fr 398px;height:100vh;width:100vw}
+  .stage{position:relative;min-width:0;overflow:hidden}
+  #cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .title{position:absolute;top:15px;left:22px;z-index:3;pointer-events:none;max-width:60%}
+  .title h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+  .title .sub{margin-top:5px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.6}
+  .title em{font-style:normal;color:var(--cem)} .title b.g{color:var(--good);font-weight:600} .title b.u{color:var(--us)}
+  .read{position:absolute;left:22px;bottom:14px;z-index:3;pointer-events:none;font-family:var(--mono);
+    font-size:10px;color:var(--muted);display:flex;gap:15px;flex-wrap:wrap;max-width:94%}
+  .read b{color:var(--ink);font-weight:600}
+  .read b.ok{color:var(--good)} .read b.bad{color:var(--bad)}
+  .pill{position:absolute;top:14px;right:14px;z-index:3;font-family:var(--mono);font-size:10px;
+    letter-spacing:.14em;padding:7px 13px;border-radius:20px;opacity:0;transition:.25s}
+  .pill.on{opacity:1} .pill.fear{color:#fff;border:1px solid var(--us);background:rgba(255,61,87,.32)}
+  .panel{background:linear-gradient(180deg,rgba(16,11,26,.93),rgba(11,7,18,.97));
+    border-left:1px solid var(--line);padding:15px 14px;overflow-y:auto;z-index:4;
+    display:flex;flex-direction:column;gap:12px}
+  .panel::-webkit-scrollbar{width:8px}
+  .panel::-webkit-scrollbar-thumb{background:rgba(150,130,190,.18);border-radius:4px}
+  .blk{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px}
+  .blk h2{margin:0 0 9px;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;display:flex;align-items:center;gap:7px}
+  .blk h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dot,var(--cem));
+    box-shadow:0 0 8px var(--dot,var(--cem))}
+  .blk h2 .hint{margin-left:auto;letter-spacing:.04em;text-transform:none;color:var(--faint);font-weight:500}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .btns button{border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);
+    font-family:var(--mono);font-size:10px;cursor:pointer;padding:9px 4px;border-radius:8px;transition:.15s}
+  .btns button:hover{color:var(--ink);border-color:rgba(150,130,190,.5)}
+  .btns button.pair{grid-column:span 2;border-color:rgba(255,61,87,.4);color:#ffb8c2}
+  .btns button.pair:hover{background:rgba(255,61,87,.14);border-color:var(--us)}
+  .btns button.ext{border-color:rgba(86,212,255,.35);color:#bfe8ff}
+  .btns button.ext:hover{background:rgba(86,212,255,.12);border-color:var(--il)}
+  .btns button:disabled{opacity:.4;cursor:default}
+  .ctxrow{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+  .ctxrow button{border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);
+    font-family:var(--mono);font-size:10px;cursor:pointer;padding:8px 4px;border-radius:8px}
+  .ctxrow button.on{background:rgba(86,212,255,.14);color:#dff4ff;border-color:var(--il)}
+  .sl{display:flex;align-items:center;gap:9px;margin-top:9px;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  .sl .nm{width:60px;flex:none} .sl input{flex:1;accent-color:var(--cem);min-width:0} .sl .vl{width:40px;text-align:right;color:var(--ink)}
+  .note{font-family:var(--mono);font-size:10px;line-height:1.55;color:var(--muted);min-height:40px;margin-top:9px}
+  .note b{color:var(--ink)} .note em{font-style:normal;color:var(--cem)} .note .g{color:var(--good)} .note .u{color:var(--us)} .note .i{color:var(--il)}
+  .rd{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .rd .c{background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  .rd .c .k{font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .rd .c .v{font-family:var(--mono);font-size:17px;font-weight:600;color:var(--ink);margin-top:2px}
+  .rd .c .v small{font-size:9px;color:var(--muted);font-weight:400}
+  .bars{display:flex;flex-direction:column;gap:6px;margin-top:2px}
+  .bar{display:grid;grid-template-columns:64px 1fr 34px;gap:8px;align-items:center;font-family:var(--mono);font-size:9px;color:var(--muted)}
+  .bar .t{height:7px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden}
+  .bar .t i{display:block;height:100%;border-radius:4px;transition:width .15s}
+  .bar .v{text-align:right;color:var(--ink)}
+  canvas.mini{width:100%;display:block;border-radius:8px;background:rgba(255,255,255,.015);margin-top:4px}
+  @media (max-width:1060px){.app{grid-template-columns:1fr;grid-template-rows:1fr auto}
+    .panel{border-left:0;border-top:1px solid var(--line);max-height:54vh}.title{max-width:70%}.read{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <canvas id="cv"></canvas>
+    <div class="title">
+      <h1>Amygdala · Fear Conditioning</h1>
+      <div class="sub">
+        Pair a tone <b class="g">CS+</b> with a <b class="u">shock (US)</b> and the lateral amygdala
+        learns the association — the tone alone comes to drive <em>freezing</em>. Extinguish it and the
+        fear falls silent, but the engram <em>persists</em>: shift context and it <em>returns</em>.
+      </div>
+    </div>
+    <div class="pill fear" id="pill-fear">FREEZING · FEAR STATE</div>
+    <div class="read">
+      <span>freezing <b id="r-free" class="bad">0%</b></span>
+      <span>LA engram <b id="r-wla">0.00</b></span>
+      <span>safety <b id="r-wext">0.00</b></span>
+      <span>LA⟷PL coherence <b id="r-coh">0.00</b></span>
+      <span>context <b id="r-ctx">A</b></span>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <div class="blk" style="--dot:var(--us)">
+      <h2>Protocol <span class="hint">run a trial</span></h2>
+      <div class="btns">
+        <button class="pair" id="b-pair">⚡ Pair CS+ &amp; shock (acquire)</button>
+        <button class="ext" id="b-ext">CS+ alone (extinguish)</button>
+        <button id="b-csm">CS− alone</button>
+        <button id="b-acq8">▶▶ Acquire ×8</button>
+        <button class="ext" id="b-ext12">▶▶ Extinguish ×12</button>
+      </div>
+      <div class="ctxrow" id="ctxrow">
+        <button data-c="A" class="on">Context A</button>
+        <button data-c="B">Context B (shift)</button>
+      </div>
+      <label class="sl"><span class="nm">Speed</span><input id="s-spd" type="range" min="0.3" max="4" step="0.1" value="1.5"><span class="vl" id="v-spd">1.5×</span></label>
+      <button id="b-reset" style="width:100%;margin-top:8px;border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);font-family:var(--mono);font-size:10px;cursor:pointer;padding:8px;border-radius:8px">↺ Reset (naïve animal)</button>
+      <div class="note" id="note"></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--cem)">
+      <h2>Fear response <span class="hint">CeM → freezing</span></h2>
+      <div class="rd">
+        <div class="c"><div class="k">Freezing to CS+</div><div class="v" id="rd-free">0<small>%</small></div></div>
+        <div class="c"><div class="k">LA⟷PL coherence</div><div class="v" id="rd-coh">0.00</div></div>
+      </div>
+      <canvas class="mini" id="curve" height="80"></canvas>
+    </div>
+
+    <div class="blk" style="--dot:var(--la)">
+      <h2>Memories <span class="hint">engram vs safety</span></h2>
+      <div class="bars" id="bars"></div>
+      <div class="note" style="min-height:0;margin-top:8px" id="mnote"></div>
+    </div>
+
+    <div class="blk" style="--dot:var(--con)">
+      <h2>Legend</h2>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.7">
+        <span style="color:var(--csp)">■</span> CS+ tone
+        <span style="color:var(--csm)">■</span> CS− tone
+        <span style="color:var(--us)">■</span> US shock
+        <span style="color:var(--la)">■</span> lateral amygdala
+        <span style="color:var(--con)">■</span> CeL-on
+        <span style="color:var(--coff)">■</span> CeL-off
+        <span style="color:var(--cem)">■</span> CeM (output)
+        <span style="color:var(--itc)">■</span> ITC
+        <span style="color:var(--pl)">■</span> PL
+        <span style="color:var(--il)">■</span> IL<br>
+        The <b style="color:var(--ink)">LA⟷PL theta coherence</b> (linked halo) is the fear
+        signature — it rises with fear and amplifies the amygdala's output. Extinction is
+        <b style="color:var(--ink)">IL→ITC</b> inhibition layered on an intact engram.
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ===================== MODEL (inlined, single source of truth) ===================== */
+"use strict";
+/* =====================================================================
+   Amygdala — Pavlovian THREAT conditioning (auditory fear learning).
+
+   A neutral CS (tone) paired with an aversive US (shock) acquires the power to
+   drive a fear response (freezing); a CS− stays safe. Extinction makes the CS
+   safe again — but as NEW inhibitory learning, so the original engram persists
+   and fear can return (renewal / spontaneous recovery). This is the amygdala's
+   analogue of the cerebellum's supervised learning and the basal ganglia's
+   reinforcement learning: associative (Hebbian) learning under a teaching (US)
+   signal, with an aversive PREDICTION ERROR (Rescorla–Wagner: a predicted US
+   teaches nothing → blocking).
+
+   Circuit:
+     CS (auditory thalamus/cortex) + US (nociceptive) → LATERAL AMYGDALA (LA):
+       the plasticity site — CS–US convergence potentiates thalamo/cortico-LA
+       weights (Hebbian, gated by the US prediction error) so the CS comes to
+       evoke LA activity = the fear memory.
+     LA → CENTRAL AMYGDALA: CeL-on (SOM+) ⊣ CeL-off (PKCδ+) mutual inhibition;
+       fear activates CeL-on → suppresses CeL-off → disinhibits CeM.
+     CeM → freezing (PAG) / autonomic / HPA — the fear OUTPUT.
+     INTERCALATED cells (ITC), driven by infralimbic mPFC (IL), inhibit CeM →
+       EXTINCTION (safety learning). Prelimbic mPFC (PL) sustains fear.
+
+   DUAL CODE (as in the basal-ganglia / cerebellum models): the association and
+   the CeL/CeM gating are RATE + plastic weights; the functional SYNCHRONY is the
+   LA⟷PL THETA COHERENCE (Seidenbecher 2003; Likhtik 2014) — fear raises the
+   coupling → coherence → amplified fear transmission (communication-through-
+   coherence); safety (IL) lowers it. Every unit is still a clock.
+
+   Single source of truth: `node models/amygdala.js test`.
+   ===================================================================== */
+
+(function (root, factory) {
+  if (typeof module !== "undefined" && module.exports) module.exports = factory();
+  else root.Amygdala = factory();
+})(typeof self !== "undefined" ? self : this, function () {
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const relu = v => (v > 0 ? v : 0);
+  const sig = v => 1 / (1 + Math.exp(-v));
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function defaults() {
+    return {
+      dt: 0.005,          // s
+      seed: 7,
+      nCS: 2,             // CS+ (0) and CS− (1)
+
+      // ---- population sizes (clocks) ----
+      nLA: 10, nPL: 8, nIL: 8, nITC: 6, nCon: 6, nCoff: 6, nCeM: 6,
+      fTheta: 7.0,        // amygdala/mPFC theta (Hz)
+      sigmaF: 0.05,       // clock frequency spread
+      thetaNoise: 0.12,
+
+      // ---- LA association ----
+      wUS: 1.2,           // US drive onto LA (postsynaptic teaching)
+      laGain: 3.6,        // gain of CS·w → LA activity (sigmoid)
+      laBias: -2.6,       // LA threshold (silent without drive)
+      wLAinit: 0.05,      // initial thalamo/cortico-LA weight (near-naive)
+
+      // ---- central amygdala microcircuit ----
+      wLAon: 4.5, conBias: 2.3,      // LA → CeL-on (sigmoid threshold)
+      coffTonic: 0.75,               // CeL-off tonic activity (the brake)
+      wOnOff: 1.7,                   // CeL-on ⊣ CeL-off
+      wOffCeM: 1.25,                 // CeL-off ⊣ CeM (the tonic brake, released by fear)
+      cemTonic: 0.10, wOnCeM: 1.05,  // CeM baseline + direct CeL-on drive
+      wITCeM: 1.4,                   // ITC ⊣ CeM (extinction inhibition)
+
+      // ---- mPFC / extinction ----
+      wPLfear: 2.4,       // PL ← LA (fear drive); PL sustains fear
+      wILext: 4.0, ilBias: 2.5,      // IL → ITC (safety drive), expressed in the extinction context
+      ilGain: 3.0, ilBias0: 3.0,     // extinction weight → IL activity (silent until safety is learned)
+
+      // ---- theta coherence (functional synchrony) ----
+      kThetaBase: 0.2,    // baseline LA⟷PL coupling (low → incoherent at rest)
+      kThetaFear: 8.0,    // fear-driven extra coupling → coherence
+      cohGate: 0.5,       // how much LA→CeM transmission is amplified by coherence
+
+      // ---- learning ----
+      lrLA: 0.35,         // Hebbian LA potentiation rate (on the US prediction error)
+      predGain: 0.8,      // how strongly the CS-evoked LA prediction cancels the US teaching
+      lrExt: 0.5,         // extinction (safety) learning rate
+      lrExtDown: 4.0,     // the US unwrites safety (reinforced trials stay fearful)
+      extDecay: 0.0,      // extinction memories are context-gated, not erased
+      laDecay: 0.0,       // the fear engram does not passively decay (persists)
+
+      // ---- context ----
+      ctx: 1.0,           // 1 = extinction context (IL/ITC expressed); <1 = shifted context → renewal
+      tau: 0.08,          // activity/observable smoothing (s)
+      tauFreeze: 0.28,    // freezing (behavioural) smoothing (s)
+    };
+  }
+
+  function create(opts) {
+    const P = Object.assign(defaults(), opts || {});
+    const rnd = mulberry32(P.seed);
+    const gauss = () => { let u = 0, v = 0; while (!u) u = rnd(); while (!v) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); };
+    const pops = {};
+    const addPop = (name, n) => {
+      const cl = [];
+      for (let i = 0; i < n; i++) cl.push({ th: rnd() * TAU, w: TAU * P.fTheta * (1 + P.sigmaF * gauss()) });
+      pops[name] = { name, n, cl, act: 0, R: 0, psi: 0 };
+    };
+    addPop("la", P.nLA); addPop("pl", P.nPL); addPop("il", P.nIL); addPop("itc", P.nITC);
+    addPop("con", P.nCon); addPop("coff", P.nCoff); addPop("cem", P.nCeM);
+
+    const wLA = new Float64Array(P.nCS), wExt = new Float64Array(P.nCS);
+    for (let i = 0; i < P.nCS; i++) wLA[i] = P.wLAinit;
+
+    return {
+      P, rnd, gauss, t: 0, pops, wLA, wExt,
+      cs: new Float64Array(P.nCS), us: 0,
+      la: 0, pl: 0, il: 0, itc: 0, con: 0, coff: 0, cem: 0,
+      pred: 0, usErr: 0, coh: 0, freeze: 0,
+    };
+  }
+
+  // phase coherence of a population (order parameter), and advance its clocks toward a target
+  function popStep(S, p, drive, extraCoupleTo, kCouple) {
+    const P = S.P, dt = P.dt;
+    let sx = 0, sy = 0; for (const c of p.cl) { sx += Math.cos(c.th); sy += Math.sin(c.th); }
+    sx /= p.n; sy /= p.n; p.psi = Math.atan2(sy, sx); p.R = Math.hypot(sx, sy);
+    p.act += (dt / P.tau) * (drive - p.act);
+    const selfK = 1.2 * p.act;                    // active pop self-synchronises a little
+    for (const c of p.cl) {
+      let d = c.w + selfK * Math.sin(p.psi - c.th);
+      if (extraCoupleTo) d += kCouple * Math.sin(extraCoupleTo.psi - c.th);
+      c.th = (c.th + dt * d + Math.sqrt(dt) * P.thetaNoise * S.gauss() + TAU) % TAU;
+    }
+  }
+
+  function step(S) {
+    const P = S.P, dt = P.dt;
+    // ---- LA: CS association + US teaching ----
+    let csW = 0, csAny = 0;
+    for (let i = 0; i < P.nCS; i++) { csW += S.cs[i] * S.wLA[i]; csAny += S.cs[i]; }
+    S.pred = csW;                                            // aversive prediction from the CS
+    const laDrive = sig(P.laGain * (csW + P.wUS * S.us) + P.laBias);
+    // ---- theta coherence LA⟷PL: coupling grows with fear drive ----
+    const fearDrive = S.la;                                  // current LA fear activity
+    const kth = P.kThetaBase + P.kThetaFear * fearDrive;
+    popStep(S, S.pops.la, laDrive, S.pops.pl, kth);
+    popStep(S, S.pops.pl, sig(P.wPLfear * S.la - 1.0 + 0.3), S.pops.la, kth);
+    S.la = S.pops.la.act; S.pl = S.pops.pl.act;
+    S.coh = 0.5 * (S.pops.la.R + S.pops.pl.R);              // LA/PL theta coherence (fear signature)
+    // coherence AMPLIFIES the LA→central transmission (communication-through-coherence)
+    const laOut = S.la * (1 - P.cohGate + P.cohGate * S.coh);
+
+    // ---- infralimbic mPFC + intercalated cells: extinction / safety ----
+    // IL activity grows with the CS-specific safety weight, expressed only in the extinction
+    // context; IL drives the ITC cells, whose GABA inhibits the CeM output.
+    let extW = 0; for (let i = 0; i < P.nCS; i++) extW += S.cs[i] * S.wExt[i];
+    const ilDrive = csAny > 0 ? sig(P.ilGain * (P.ctx * extW) - P.ilBias0) : 0;
+    popStep(S, S.pops.il, ilDrive);
+    popStep(S, S.pops.itc, sig(P.wILext * S.pops.il.act * P.ctx - P.ilBias));
+    S.il = S.pops.il.act; S.itc = S.pops.itc.act;
+
+    // ---- central amygdala microcircuit: CeL-on ⊣ CeL-off → CeM ----
+    popStep(S, S.pops.con, sig(P.wLAon * laOut - P.conBias));
+    S.con = S.pops.con.act;
+    popStep(S, S.pops.coff, relu(P.coffTonic - P.wOnOff * S.con));   // fear (CeL-on) suppresses the brake
+    S.coff = S.pops.coff.act;
+    const cemDrive = relu(P.cemTonic + P.wOnCeM * S.con - P.wOffCeM * S.coff - P.wITCeM * S.itc);
+    popStep(S, S.pops.cem, cemDrive);
+    S.cem = S.pops.cem.act;
+    S.freeze += (dt / P.tauFreeze) * (S.cem - S.freeze);    // behavioural freezing (slow)
+
+    // ---- plasticity ----
+    // LA (fear): Hebbian, gated by the US PREDICTION ERROR (predicted US teaches nothing).
+    S.usErr = relu(S.us - P.predGain * S.pred);
+    for (let i = 0; i < P.nCS; i++) {
+      S.wLA[i] = clamp(S.wLA[i] + dt * (P.lrLA * S.cs[i] * S.usErr) - dt * P.laDecay * S.wLA[i], 0, 3);
+      // Extinction (safety): CS evokes fear (la high) but NO US arrives → learn CS-specific safety;
+      // when the US DOES arrive it proves the CS is not safe and unwrites that safety. So only
+      // genuinely non-reinforced (extinction) trials accumulate safety — paired trials keep it low.
+      const safetyUp = S.cs[i] * relu(S.la - 0.2) * (1 - S.us);
+      const safetyDown = S.cs[i] * S.us * (S.wExt[i] + 0.3);
+      S.wExt[i] = clamp(S.wExt[i] + dt * (P.lrExt * safetyUp - P.lrExtDown * safetyDown), 0, 3);
+    }
+    S.t += dt;
+  }
+
+  function run(S, seconds) { const n = Math.round(seconds / S.P.dt); for (let k = 0; k < n; k++) step(S); }
+
+  // ---- trial helpers ----
+  function setCS(S, i, on) { for (let k = 0; k < S.P.nCS; k++) S.cs[k] = 0; if (i >= 0) S.cs[i] = on == null ? 1 : on; }
+  // present CS i for `dur` s; deliver US in the last `usDur` s if paired
+  function trial(S, i, paired, dur, usDur) {
+    dur = dur == null ? 2.0 : dur; usDur = usDur == null ? 0.3 : usDur;
+    setCS(S, i, 1);
+    run(S, dur - usDur);
+    if (paired) S.us = 1;
+    run(S, usDur);
+    S.us = 0; setCS(S, -1);
+    run(S, 1.2);                                  // inter-trial interval
+  }
+  // measure the response to a CS probe with LEARNING FROZEN (i<0 = rest, no CS)
+  function probe(S, i, dur) {
+    dur = dur == null ? 2.0 : dur;
+    const savedLA = S.P.lrLA, savedExt = S.P.lrExt; S.P.lrLA = 0; S.P.lrExt = 0;
+    setCS(S, i, 1); run(S, dur);
+    const out = { freeze: S.freeze, coh: S.coh, la: S.la, con: S.con, coff: S.coff, cem: S.cem };
+    setCS(S, -1); run(S, 0.8);
+    S.P.lrLA = savedLA; S.P.lrExt = savedExt;
+    return out;
+  }
+
+  function acquire(S, trials) { for (let t = 0; t < trials; t++) { trial(S, 0, true); trial(S, 1, false); } }  // CS+ paired, CS− unpaired
+  function extinguish(S, trials) { for (let t = 0; t < trials; t++) trial(S, 0, false); }                       // CS+ alone
+
+  return { create, defaults, step, run, setCS, trial, probe, acquire, extinguish, mulberry32, TAU };
+});
+
+/* ============================ headless tests ============================ */
+if (typeof require !== "undefined" && require.main === module) {
+  const M = module.exports;
+  const fmt = (x, d = 3) => (x >= 0 ? " " : "") + x.toFixed(d);
+  let pass = 0, fail = 0;
+  const check = (n, c, d) => (c ? (pass++, console.log("  PASS  " + n + "   " + (d || "")))
+                                : (fail++, console.log("  FAIL  " + n + "   " + (d || ""))));
+
+  console.log("\n[1] Acquisition + discrimination (CS+ paired, CS− unpaired)");
+  {
+    const S = M.create({});
+    const f0 = M.probe(S, 0).freeze;
+    M.acquire(S, 14);
+    const fp = M.probe(S, 0).freeze, fm = M.probe(S, 1).freeze;
+    console.log("      freezing  CS+ before=" + fmt(f0) + "  after=" + fmt(fp) + "   CS−=" + fmt(fm) + "   wLA=[" + fmt(S.wLA[0]) + "," + fmt(S.wLA[1]) + "]");
+    check("CS+ acquires fear", fp > 0.5 && fp > f0 + 0.35, "fp=" + fmt(fp));
+    check("CS− stays safe (discrimination)", fm < 0.25, "fm=" + fmt(fm));
+  }
+
+  console.log("\n[2] US prediction error — a predicted US stops teaching (saturation/blocking)");
+  {
+    const S = M.create({});
+    const errs = [];
+    for (let t = 0; t < 12; t++) { M.setCS(S, 0, 1); M.run(S, 1.7); S.us = 1; M.run(S, 0.3); errs.push(S.usErr); S.us = 0; M.setCS(S, -1); M.run(S, 1.0); }
+    console.log("      US teaching error over trials: [" + errs.map(x => fmt(x, 2)).join(" ") + "]");
+    check("US error is large early", errs[0] > 0.5, "e0=" + fmt(errs[0]));
+    check("US error shrinks as the CS predicts the US", errs[errs.length - 1] < errs[0] - 0.4, "eN=" + fmt(errs[errs.length - 1]));
+  }
+
+  console.log("\n[3] CeL-on ⊣ CeL-off → CeM gating during fear");
+  {
+    const S = M.create({}); M.acquire(S, 14);
+    const f = M.probe(S, 0), r = M.probe(S, -1);      // fear CS vs rest, learning frozen
+    console.log("      fear CS:  CeL-on=" + fmt(f.con) + " CeL-off=" + fmt(f.coff) + " CeM=" + fmt(f.cem) + "   |  rest: on=" + fmt(r.con) + " off=" + fmt(r.coff) + " CeM=" + fmt(r.cem));
+    check("fear activates CeL-on", f.con > r.con + 0.2, "Δon=" + fmt(f.con - r.con));
+    check("CeL-on suppresses CeL-off", f.coff < r.coff - 0.1, "off=" + fmt(f.coff));
+    check("CeM (output) is released by fear", f.cem > r.cem + 0.2, "Δcem=" + fmt(f.cem - r.cem));
+  }
+
+  console.log("\n[4] Extinction — CS+ alone lowers freezing, but the LA engram PERSISTS");
+  {
+    const S = M.create({}); M.acquire(S, 14);
+    const wEngram = S.wLA[0];
+    const fAcq = M.probe(S, 0).freeze;
+    M.extinguish(S, 24);
+    const fExt = M.probe(S, 0).freeze;
+    console.log("      freezing acq=" + fmt(fAcq) + " → extinguished=" + fmt(fExt) + "   wLA engram " + fmt(wEngram) + " → " + fmt(S.wLA[0]) + "   wExt=" + fmt(S.wExt[0]));
+    check("extinction lowers freezing", fExt < fAcq - 0.3, "fExt=" + fmt(fExt));
+    check("the LA fear engram is not erased", S.wLA[0] > wEngram - 0.05, "wLA=" + fmt(S.wLA[0]));
+    check("extinction is new (safety) learning", S.wExt[0] > 0.3, "wExt=" + fmt(S.wExt[0]));
+  }
+
+  console.log("\n[5] Return of fear — a context shift renews the extinguished response");
+  {
+    const S = M.create({}); M.acquire(S, 14); M.extinguish(S, 24);
+    const fExt = M.probe(S, 0).freeze;
+    S.P.ctx = 0.0;                                  // shift out of the extinction context
+    const fRen = M.probe(S, 0).freeze;
+    console.log("      extinguished=" + fmt(fExt) + "  → context shift → renewed=" + fmt(fRen) + "  (engram wLA=" + fmt(S.wLA[0]) + ")");
+    check("fear returns outside the extinction context", fRen > fExt + 0.3, "fRen=" + fmt(fRen));
+  }
+
+  console.log("\n[6] Theta coherence — LA⟷PL synchrony is higher during fear than safety");
+  {
+    const S = M.create({}); M.acquire(S, 14);
+    const cP = M.probe(S, 0, 3.0).coh, cM = M.probe(S, 1, 3.0).coh;
+    console.log("      LA⟷PL coherence  CS+ (fear)=" + fmt(cP) + "   CS− (safe)=" + fmt(cM));
+    check("fear raises LA⟷PL theta coherence", cP > cM + 0.15, "Δ=" + fmt(cP - cM));
+  }
+
+  console.log("\n==== " + pass + " passed, " + fail + " failed ====\n");
+  process.exit(fail ? 1 : 0);
+}
+
+</script>
+
+<script>
+"use strict";
+(function(){
+  const M = window.Amygdala;
+  const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  const $=id=>document.getElementById(id);
+  const CSv=getComputedStyle(document.documentElement), cvar=n=>CSv.getPropertyValue(n).trim();
+  const C={csp:cvar('--csp'),csm:cvar('--csm'),us:cvar('--us'),la:cvar('--la'),con:cvar('--con'),
+    coff:cvar('--coff'),cem:cvar('--cem'),itc:cvar('--itc'),pl:cvar('--pl'),il:cvar('--il'),free:cvar('--free'),
+    ink:cvar('--ink'),faint:cvar('--faint'),idle:cvar('--idle'),muted:cvar('--muted'),good:cvar('--good'),bad:cvar('--bad')};
+  const FM="'IBM Plex Mono',monospace";
+  const TAU=Math.PI*2, clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function rgba(hex,a){hex=hex.replace('#',''); if(hex.length===3)hex=hex.split('').map(x=>x+x).join('');
+    return `rgba(${parseInt(hex.slice(0,2),16)},${parseInt(hex.slice(2,4),16)},${parseInt(hex.slice(4,6),16)},${a})`;}
+
+  const S = M.create({});
+  const St={ speed:1.5, t:0, ctx:'A', queue:[], cur:null };
+  const HIST=520, freeH=new Float32Array(HIST), evH=new Int8Array(HIST); let hp=0;   // freezing + event ticks (1=US,2=CS+,3=CS-)
+
+  let W=0,H=0,DPR=1;
+  function resize(){ const r=cv.getBoundingClientRect(); DPR=Math.min(window.devicePixelRatio||1,2);
+    W=r.width;H=r.height; cv.width=Math.max(1,W*DPR);cv.height=Math.max(1,H*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
+
+  // layout (fractions of W,H) — circuit fills the band below the top trace
+  const P={ csp:[.06,.44], csm:[.06,.58], us:[.06,.76], la:[.25,.57], pl:[.31,.33], il:[.145,.33],
+            con:[.46,.47], coff:[.46,.65], itc:[.45,.82], cem:[.63,.58], free:[.84,.60] };
+  const xy=k=>[W*P[k][0], H*P[k][1]];
+
+  function clockPop(k,col,rr,base){
+    const [cx,cy]=xy(k); const p=S.pops[k]; if(!p) return [cx,cy];
+    if(p.R>0.12){ ctx.beginPath();ctx.arc(cx,cy,rr+5+p.R*9,0,TAU);ctx.strokeStyle=rgba(col,0.1+p.R*0.45);ctx.lineWidth=1.2;ctx.stroke(); }
+    const n=p.n;
+    for(let i=0;i<n;i++){ const c=p.cl[i], ang=-TAU/4+i*TAU/n, x=cx+Math.cos(ang)*rr, y=cy+Math.sin(ang)*rr;
+      const s=.5+.5*Math.sin(c.th), on=p.act>0.06; const cr=(base||3.4)*(0.5+0.45*s)*(0.5+0.6*Math.min(1,p.act));
+      if(on){ctx.shadowColor=col;ctx.shadowBlur=2+s*7*Math.min(1,p.act*2);}
+      ctx.beginPath();ctx.arc(x,y,Math.max(0.7,cr),0,TAU);ctx.fillStyle=on?rgba(col,.2+s*.6*Math.min(1,p.act*2)):rgba(C.idle,.08);ctx.fill();ctx.shadowBlur=0;
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(c.th)*cr*1.5,y+Math.sin(c.th)*cr*1.5);ctx.strokeStyle=rgba(C.ink,on?.45:.12);ctx.lineWidth=.7;ctx.stroke(); }
+    return [cx,cy];
+  }
+  function inputNode(k,col,on,lab){ const [cx,cy]=xy(k);
+    ctx.beginPath();ctx.arc(cx,cy,9,0,TAU); if(on){ctx.shadowColor=col;ctx.shadowBlur=14;}
+    ctx.fillStyle=on?rgba(col,.9):rgba(col,.14);ctx.fill();ctx.shadowBlur=0;
+    ctx.strokeStyle=rgba(col,.6);ctx.lineWidth=1.4;ctx.stroke();
+    label(cx,cy-15,lab,col,'center',9); return [cx,cy]; }
+  function conn(a,b,col,w,inhib,curve){ ctx.beginPath();ctx.moveTo(a[0],a[1]);
+    ctx.quadraticCurveTo((a[0]+b[0])/2+(curve||0),(a[1]+b[1])/2,b[0],b[1]);
+    ctx.strokeStyle=rgba(col,0.05+w*0.5);ctx.lineWidth=0.6+w*2.0;ctx.stroke();
+    if(inhib){ ctx.beginPath();ctx.arc(b[0],b[1],2.4,0,TAU);ctx.fillStyle=rgba(col,0.3+w*0.6);ctx.fill(); } }
+  function label(x,y,t,col,al,sz){ ctx.textAlign=al||'center';ctx.font='600 '+(sz||9)+'px '+FM;ctx.fillStyle=rgba(col,.82);ctx.fillText(t,x,y); }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    drawTrace();
+    const csPos=S.cs[0]>0.5, csMon=S.cs[1]>0.5, usOn=S.us>0.5;
+    // input nodes
+    const nCsp=inputNode('csp',C.csp,csPos,'CS+ tone');
+    const nCsm=inputNode('csm',C.csm,csMon,'CS− tone');
+    const nUs=inputNode('us',C.us,usOn,'US shock ⚡');
+    // connections into LA (thickness ∝ learned weight; US always strong when on)
+    const nLa=xy('la');
+    conn(nCsp,nLa,C.csp,0.15+S.wLA[0]/2.0*0.8, false, -10);
+    conn(nCsm,nLa,C.csm,0.10+S.wLA[1]/2.0*0.8, false, 0);
+    conn(nUs,nLa,C.us,usOn?0.9:0.1, false, 10);
+    // amygdala populations
+    clockPop('la',C.la,17,4.6); label(nLa[0],nLa[1]-26,'LATERAL AMYGDALA',C.la,'center',9); label(nLa[0],nLa[1]+27,'(association / engram)',C.faint,'center',7.5);
+    const nCon=clockPop('con',C.con,12,3.6), nCoff=clockPop('coff',C.coff,12,3.6), nItc=clockPop('itc',C.itc,11,3.4), nCem=clockPop('cem',C.cem,15,4.4);
+    const nPl=clockPop('pl',C.pl,12,3.6), nIl=clockPop('il',C.il,12,3.6);
+    label(nCon[0]+22,nCon[1]-4,'CeL-on',C.con,'left',8.5); label(nCoff[0]+22,nCoff[1]-4,'CeL-off',C.coff,'left',8.5);
+    label(nItc[0]-20,nItc[1]+18,'ITC',C.itc,'center',8.5); label(nCem[0],nCem[1]-24,'CeM',C.cem,'center',10); label(nCem[0],nCem[1]+26,'fear output',C.faint,'center',7.5);
+    label(nPl[0],nPl[1]-18,'PL · fear',C.pl,'center',8.5); label(nIl[0],nIl[1]-18,'IL · extinction',C.il,'center',8.5);
+    // intra-amygdala connections
+    conn(nLa,nCon,C.la,0.15+S.con*0.6,false,-6);          // LA → CeL-on
+    conn(nCon,nCoff,C.con,0.2+S.con*0.7,true,0);          // CeL-on ⊣ CeL-off
+    conn(nCoff,nCem,C.coff,0.15+S.coff*0.7,true,-8);      // CeL-off ⊣ CeM (brake)
+    conn(nCon,nCem,C.con,0.1+S.con*0.4,false,8);          // CeL-on → CeM
+    conn(nItc,nCem,C.itc,0.1+S.itc*0.8,true,0);           // ITC ⊣ CeM (extinction)
+    conn(nIl,nItc,C.il,0.1+S.il*0.7,false,-10);           // IL → ITC
+    // LA ⟷ PL theta coherence link (prominent)
+    ctx.save();ctx.setLineDash([2,3]);
+    conn(nLa,nPl,C.pl,0.2+S.coh*1.1,false,-14); ctx.restore();
+    const mx=(nLa[0]+nPl[0])/2-24, my=(nLa[1]+nPl[1])/2;
+    label(mx,my,'theta coherence '+S.coh.toFixed(2),S.coh>0.7?C.pl:C.faint,'center',8);
+    conn(nLa,nPl,C.pl,0.1+S.la*0.4,false,-14);            // LA → PL fear drive
+    // CeM → freezing subject
+    const nFree=xy('free');
+    conn(nCem,nFree,C.cem,0.2+S.freeze*0.9,false,10);
+    drawSubject(nFree[0],nFree[1], S.freeze);
+  }
+
+  // the animal: a rounded silhouette; freezing → tense/bright red halo + "FREEZING"
+  function drawSubject(x,y,fr){
+    const r=W*0.028;
+    if(fr>0.15){ ctx.beginPath();ctx.arc(x,y,r+6+fr*16,0,TAU);ctx.strokeStyle=rgba(C.us,fr*0.5);ctx.lineWidth=1.5+fr*2;ctx.stroke(); }
+    ctx.beginPath();ctx.ellipse(x,y,r*1.25,r*0.85,0,0,TAU);
+    ctx.fillStyle=rgba(fr>0.35?C.us:C.muted, 0.2+fr*0.5);ctx.fill();
+    ctx.strokeStyle=rgba(fr>0.35?C.us:C.muted,.7);ctx.lineWidth=1.6;ctx.stroke();
+    // ears
+    ctx.beginPath();ctx.arc(x+r*0.9,y-r*0.7,r*0.32,0,TAU);ctx.arc(x+r*1.2,y-r*0.4,r*0.28,0,TAU);ctx.fill();
+    label(x,y+r+16,fr>0.35?'FREEZING':'exploring',fr>0.35?C.us:C.muted,'center',9);
+    label(x,y+r+29,(fr*100|0)+'% freeze',C.faint,'center',8);
+  }
+
+  function drawTrace(){
+    const tx=W*0.055, tw=W*0.90, ty=H*0.135, th=H*0.115, base=ty+th;
+    ctx.strokeStyle=rgba(C.faint,.2);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(tx,base);ctx.lineTo(tx+tw,base);ctx.stroke();
+    // event ticks
+    for(let i=0;i<HIST;i++){ const e=evH[(hp+i)%HIST]; if(!e)continue; const x=tx+tw*i/(HIST-1);
+      const col=e===1?C.us:e===2?C.csp:C.csm; ctx.strokeStyle=rgba(col,.5);ctx.lineWidth=e===1?1.6:1;
+      ctx.beginPath();ctx.moveTo(x,ty);ctx.lineTo(x,base);ctx.stroke(); }
+    // freezing curve
+    ctx.beginPath();
+    for(let i=0;i<HIST;i++){ const x=tx+tw*i/(HIST-1), yv=base-freeH[(hp+i)%HIST]*th; if(i===0)ctx.moveTo(x,yv);else ctx.lineTo(x,yv); }
+    ctx.strokeStyle=rgba(C.free,.95);ctx.lineWidth=1.8;ctx.stroke();
+    label(tx,ty-6,'FREEZING over time',C.free,'left',9);
+    label(tx+tw,ty-6,'│ US shock   │ CS+   │ CS−',C.faint,'right',8);
+  }
+
+  /* ---------------- protocol queue (animated trials) ---------------- */
+  // a trial = a sequence of phases {cs, us, dur}
+  function enqTrial(cs, paired){ St.queue.push(
+    {cs, us:false, dur:1.8, ev: cs===0?2:3}, ...(paired?[{cs, us:true, dur:0.35, ev:1}]:[]), {cs:-1, us:false, dur:1.0, ev:0}); }
+  function enqMany(cs,paired,n){ for(let k=0;k<n;k++) enqTrial(cs,paired); }
+  function stepProto(dt){
+    if(!St.cur){ if(!St.queue.length){ S.cs[0]=0;S.cs[1]=0;S.us=0; return; } St.cur=St.queue.shift(); St.cur.t=0;
+      S.cs[0]=St.cur.cs===0?1:0; S.cs[1]=St.cur.cs===1?1:0; S.us=St.cur.us?1:0; }
+    St.cur.t+=dt; if(St.cur.t>=St.cur.dur) St.cur=null;
+  }
+
+  /* ---------------- panel: curve + weight bars ---------------- */
+  const curve=$('curve'), cctx=curve.getContext('2d'); let CW;
+  function sizeMini(cn){ const r=cn.getBoundingClientRect(), d=Math.min(window.devicePixelRatio||1,2);
+    cn.width=r.width*d;cn.height=cn.height*d;cn.getContext('2d').setTransform(d,0,0,d,0,0); return {w:r.width,h:cn.height/d}; }
+  function drawCurve(){ const {w,h}=CW; cctx.clearRect(0,0,w,h);
+    for(let i=0;i<HIST;i++){ const e=evH[(hp+i)%HIST]; if(e!==1)continue; const x=w*i/(HIST-1);
+      cctx.strokeStyle=rgba(C.us,.35);cctx.lineWidth=1;cctx.beginPath();cctx.moveTo(x,0);cctx.lineTo(x,h);cctx.stroke(); }
+    cctx.beginPath();
+    for(let i=0;i<HIST;i++){ const x=w*i/(HIST-1), y=h-3-freeH[(hp+i)%HIST]*(h-6); if(i===0)cctx.moveTo(x,y);else cctx.lineTo(x,y); }
+    cctx.strokeStyle=rgba(C.free,.95);cctx.lineWidth=1.7;cctx.stroke();
+    cctx.fillStyle=rgba(C.free,.9);cctx.font='8px '+FM;cctx.textAlign='right';cctx.fillText('freezing '+(S.freeze*100|0)+'%',w-4,11); }
+  const barWrap=$('bars');
+  const BARS=[['CS+ engram (LA)',()=>S.wLA[0]/2,C.la],['CS+ safety (ext)',()=>S.wExt[0]/2,C.il],
+              ['CS− engram',()=>S.wLA[1]/2,C.la],['CS− safety',()=>S.wExt[1]/2,C.il]];
+  BARS.forEach((b,i)=>{const d=document.createElement('div');d.className='bar';
+    d.innerHTML=`<span>${b[0]}</span><span class="t"><i id="bar-${i}" style="background:${b[2]}"></i></span><span class="v" id="barv-${i}">.00</span>`;barWrap.appendChild(d);});
+
+  /* ---------------- UI ---------------- */
+  $('b-pair').onclick=()=>enqTrial(0,true);
+  $('b-ext').onclick=()=>enqTrial(0,false);
+  $('b-csm').onclick=()=>enqTrial(1,false);
+  $('b-acq8').onclick=()=>enqMany(0,true,8);
+  $('b-ext12').onclick=()=>enqMany(0,false,12);
+  $('ctxrow').querySelectorAll('button').forEach(b=>b.onclick=()=>{ St.ctx=b.dataset.c; S.P.ctx=(b.dataset.c==='A')?1.0:0.0;
+    $('ctxrow').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.c===St.ctx)); updateNote(); });
+  $('b-reset').onclick=()=>{ const ns=M.create({}); Object.assign(S,{cs:ns.cs,us:0,wLA:ns.wLA,wExt:ns.wExt,pops:ns.pops,
+     la:0,pl:0,il:0,itc:0,con:0,coff:0,cem:0,freeze:0,coh:0,pred:0,usErr:0}); St.queue=[];St.cur=null; freeH.fill(0);evH.fill(0); };
+  {const el=$('s-spd'),vl=$('v-spd');el.oninput=()=>{St.speed=parseFloat(el.value);vl.textContent=St.speed.toFixed(1)+'×';};}
+
+  function updateNote(){
+    const fear=S.freeze>0.4;
+    document.body.classList.toggle('fear',fear); $('pill-fear').classList.toggle('on',fear);
+    let t;
+    if(St.queue.length||St.cur){ t=(St.cur&&St.cur.us)?'<b class="u">Shock.</b> The US drives the LA and teaches the CS–US association (gated by the prediction error — a predicted shock teaches less).':'<b>Tone on.</b> The CS drives whatever LA association it has learned.'; }
+    else if(S.wLA[0]>0.5 && S.wExt[0]>0.8) t='<b>Extinguished.</b> Freezing is low — but the <em>engram persists</em> (LA weight intact); the drop is <b class="i">IL→ITC</b> safety inhibition. Switch to <b class="i">Context B</b> and fear <em>returns</em>.';
+    else if(S.wLA[0]>0.5) t='<b>Conditioned.</b> The CS+ now evokes LA activity → CeL-on ⊣ CeL-off → <em>CeM</em> → freezing, amplified by LA⟷PL <b class="g">theta coherence</b>. Present CS+ alone to extinguish.';
+    else t='<b>Naïve.</b> The tone is neutral. Pair CS+ with the shock a few times and watch the amygdala learn to fear it.';
+    $('note').innerHTML=t;
+    $('mnote').innerHTML='The <b style="color:var(--la)">engram</b> (LA) is written by fear and never erased; <b style="color:var(--il)">safety</b> (extinction) is layered on top and gated by context.';
+  }
+
+  function updateUI(){
+    $('r-free').textContent=(S.freeze*100|0)+'%';
+    $('r-wla').textContent=S.wLA[0].toFixed(2); $('r-wext').textContent=S.wExt[0].toFixed(2);
+    $('r-coh').textContent=S.coh.toFixed(2); $('r-ctx').textContent=St.ctx;
+    $('rd-free').innerHTML=(S.freeze*100|0)+'<small>%</small>'; $('rd-coh').textContent=S.coh.toFixed(2);
+    BARS.forEach((b,i)=>{const v=clamp(b[1](),0,1); $('bar-'+i).style.width=(v*100).toFixed(0)+'%'; $('barv-'+i).textContent=(b[1]()*2).toFixed(2);});
+    drawCurve(); updateNote();
+  }
+
+  /* ---------------- main loop ---------------- */
+  let last=performance.now(), carry=0, ui=0, hAcc=0;
+  function frame(now){
+    let dt=(now-last)/1000; last=now; dt=Math.min(dt,0.05);
+    carry+=dt*St.speed;
+    let steps=Math.min(160,Math.round(carry/S.P.dt)); carry-=steps*S.P.dt;
+    let evThis=0;
+    for(let s=0;s<steps;s++){ stepProto(S.P.dt); if(St.cur&&St.cur.ev) evThis=St.cur.ev; M.step(S); St.t+=S.P.dt;
+      hAcc+=S.P.dt; if(hAcc>=0.03){ hAcc=0; freeH[hp]=S.freeze; evH[hp]=evThis; evThis=0; hp=(hp+1)%HIST; } }
+    draw();
+    ui+=dt; if(ui>0.08){ui=0;updateUI();}
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize',()=>{resize();CW=sizeMini(curve);});
+  resize(); CW=sizeMini(curve); updateNote(); updateUI();
+  requestAnimationFrame(frame);
+
+  /* ---------- in-app verification (reproduces the headless numbers) ---------- */
+  (function verify(){
+    try{
+      const A=M.create({}); A.wLA[0]=A.wLA[0];   // acquire
+      for(let t=0;t<14;t++){ M.trial(A,0,true); M.trial(A,1,false); }
+      const fp=M.probe(A,0).freeze, fm=M.probe(A,1).freeze, eng=A.wLA[0];
+      for(let t=0;t<24;t++) M.trial(A,0,false);
+      const fe=M.probe(A,0).freeze; A.P.ctx=0; const fr=M.probe(A,0).freeze;
+      const ok = fp>0.5 && fm<0.25 && fe<fp-0.3 && A.wLA[0]>eng-0.05 && fr>fe+0.3;
+      console.log(`[verify] CS+=${fp.toFixed(2)} CS-=${fm.toFixed(2)} | extinguished=${fe.toFixed(2)} renewed=${fr.toFixed(2)} engram=${A.wLA[0].toFixed(2)} → ${ok?'PASS':'FAIL'}`);
+    }catch(e){ console.error('[verify] error',e); }
+  })();
+})();
+</script>
+</body>
+</html>

@@ -96,7 +96,7 @@
       // ---- context ----
       ctx: 1.0,           // 1 = extinction context (IL/ITC expressed); <1 = shifted context → renewal
       tau: 0.08,          // activity/observable smoothing (s)
-      tauFreeze: 0.4,     // freezing (behavioural) smoothing (s)
+      tauFreeze: 0.28,    // freezing (behavioural) smoothing (s)
     };
   }
 
