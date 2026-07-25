@@ -60,6 +60,7 @@ significance — that is p-hacking and it nearly happened here.
 | `models/kuramoto-assembly.js` | **the project thesis as a model**: clocks, assemblies-as-synchrony, LTP/LTD as coupling plasticity (validated; runs headless) |
 | `models/basal-ganglia.js` | goal-directed action selection; matrix/striosome actor–critic; akinesia/chorea/β-DBS (validated; runs headless) |
 | `models/cerebellum.js` | VOR adaptation as an adaptive filter; inferior olive as coupled oscillators (validated; runs headless) |
+| `models/amygdala.js` | Pavlovian threat conditioning; LA engram, CeL/CeM gating, extinction/renewal, LA–PL theta coherence (validated; runs headless) |
 | `docs/ASSEMBLY-VALIDATION.md` | Kuramoto-assembly validation record — equations, parameters, 14 checks, seed sweep |
 | `build/build-kuramoto-assembly.py` | inlines the assembly model into its app template |
 | `*.html` | single-file apps (model inlined; edit the build script, not the HTML) |
@@ -161,6 +162,27 @@ here the **nucleo-olivary loop finally stars** — the learned response cancels 
 the CS returns to baseline and timing self-stabilises (Medina & Mauk). Output pathway corrected:
 nucleus → **oculomotor motoneurons → extraocular muscle → eye** (never nucleus→muscle). This
 temporal basis is the bridge to metastable-chronotaxis timing.
+
+**Amygdala — Pavlovian threat conditioning** (`apps/amygdala.html`, model `models/amygdala.js`) —
+the hub of **fear learning**, completing the learning trio (BG = appetitive RPE, cerebellum =
+supervised error, amygdala = **associative threat learning under an aversive prediction error**). A
+CS+ paired with an aversive US acquires **freezing**; a CS− stays safe. Associative (Hebbian) CS–US
+learning at the **lateral amygdala (LA)**, gated by an aversive **prediction error** (Rescorla–Wagner:
+a predicted US teaches nothing → blocking). LA → **central amygdala**: **CeL-on ⊣ CeL-off** mutual
+inhibition; fear drives CeL-on → suppresses the tonic CeL-off brake → **disinhibits CeM** → freezing.
+**Extinction** is separate, context-gated **safety** learning (infralimbic mPFC → **intercalated
+cells ⊣ CeM**) layered on an **intact engram** — so **renewal** (context shift → fear returns) falls
+out for free. **DUAL CODE:** association + CeL/CeM gating are **rate + plastic weights**; the
+functional **synchrony** is the **LA⟷PL theta coherence** (Seidenbecher; Likhtik) — fear raises the
+coupling → coherence → **amplifies** LA→central transmission; safety lowers it. Validated **12/12
+headless, robust 12/12 seeds** (acquisition 0→0.60, CS− discrimination, US-PE 0.88→0.35, extinction
+→0 with engram persisting, renewal, fear coherence 0.91 vs 0.56). Things not to re-derive (see
+`docs/AMYGDALA-VALIDATION.md`): learn on the **aversive RPE not the raw US** (else no blocking); the
+**US must UNWRITE safety** (else acquisition builds extinction and can't express fear); **extinction
+is new learning on an intact engram** (else no renewal); **ITC baseline ≈ 0** (`ilBias0` high, else
+tonic inhibition eats CeM); **measure fear with learning frozen** (within-session extinction is
+fast); **coherence amplifies transmission, fear raises coupling** (synchrony does work). Open:
+reinstatement / spontaneous recovery; context from the hippocampus (entorhinal thread).
 
 **Metastable Chronotaxis** (`metastable-chronotaxis.html`) — 15-clock cortical pool;
 assemblies are *dynamic coalitions* drawn from it, not fixed boxes. Kuramoto coupling

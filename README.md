@@ -32,6 +32,12 @@ See [`CLAUDE.md`](CLAUDE.md) for the full project memory and method.
   the learned time (the nucleo-olivary loop makes the timing self-stabilise). The inferior olive is a
   gap-junction-coupled oscillator population. Validated in
   [`docs/CEREBELLUM-VALIDATION.md`](docs/CEREBELLUM-VALIDATION.md).
+- **`apps/amygdala.html`** — *Fear Conditioning.* Pavlovian threat learning: pair a tone (CS+) with
+  a shock and it acquires the power to drive freezing; a CS− stays safe. The lateral amygdala learns
+  the association under an aversive prediction error; the CeL-on/CeL-off microcircuit gates the CeM
+  output; extinction is context-gated *safety* learning on an intact engram, so fear can return
+  (renewal). Fear rides an LA↔prefrontal theta coherence. Validated in
+  [`docs/AMYGDALA-VALIDATION.md`](docs/AMYGDALA-VALIDATION.md).
 - `apps/thalamocortical-3d.html` — 19-column thalamocortical sheet; sleep rhythms, spindles,
   and the spindle→spike-wave switch.
 - `apps/hippocampus-index-replay.html` — trisynaptic circuit: sparse indexing, sharp-wave
