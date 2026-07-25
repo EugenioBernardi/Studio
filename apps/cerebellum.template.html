@@ -78,8 +78,8 @@
   <div class="stage">
     <canvas id="cv"></canvas>
     <div class="title">
-      <h1>Cerebellum · VOR Adaptation</h1>
-      <div class="sub">
+      <h1 id="ttl">Cerebellum · VOR Adaptation</h1>
+      <div class="sub" id="sub">
         Head rotates → eyes counter-rotate to hold gaze. <b class="e">Retinal slip</b> is the error;
         the <b class="e">inferior olive</b> reports it as climbing-fibre complex spikes driving
         <em>parallel-fibre → Purkinje</em> LTD until the <b class="g">VOR gain</b> matches the goggles.
@@ -87,20 +87,29 @@
     </div>
     <div class="pill lz" id="pill-lz">INFERIOR OLIVE LESIONED · NO LEARNING</div>
     <div class="read">
-      <span>demand G* <b id="r-dem">1.00</b></span>
-      <span>VOR gain <b id="r-gain" class="ok">1.00</b></span>
-      <span>retinal slip <b id="r-slip">0.00</b></span>
+      <span><span id="rl-dem">demand G*</span> <b id="r-dem">1.00</b></span>
+      <span><span id="rl-gain">VOR gain</span> <b id="r-gain" class="ok">1.00</b></span>
+      <span><span id="rl-slip">retinal slip</span> <b id="r-slip">0.00</b></span>
       <span>complex-spike <b id="r-cs">0.00</b></span>
       <span>olive sync R <b id="r-ior">0.00</b></span>
     </div>
   </div>
 
   <aside class="panel">
+    <div class="blk" style="--dot:var(--pc)">
+      <h2>Task</h2>
+      <div class="pre" id="mode">
+        <button data-m="vor" class="on">VOR gain</button>
+        <button data-m="timing">Timed saccade</button>
+      </div>
+    </div>
     <div class="blk" style="--dot:var(--eye)">
-      <h2>Visual world <span class="hint">goggles set the demanded gain</span></h2>
+      <h2 id="ctl-h">Visual world <span class="hint" id="ctl-hint">goggles set the demanded gain</span></h2>
       <div class="pre" id="pre"></div>
-      <label class="sl" style="--c2:var(--eye)"><span class="nm">Demanded gain G*</span>
+      <label class="sl" id="row-dem" style="--c2:var(--eye)"><span class="nm">Demanded gain G*</span>
         <input id="s-dem" type="range" min="0.3" max="2.0" step="0.05" value="1.0"><span class="vl" id="v-dem">1.00×</span></label>
+      <label class="sl" id="row-tstar" style="--c2:var(--dcn);display:none"><span class="nm">Target time T*</span>
+        <input id="s-tstar" type="range" min="0.15" max="0.9" step="0.05" value="0.45"><span class="vl" id="v-tstar">450 ms</span></label>
       <button class="btn" id="btn-reset">↺ Reset the learned gain (naïve cerebellum)</button>
       <div class="note" id="note"></div>
     </div>
@@ -108,8 +117,8 @@
     <div class="blk" style="--dot:var(--good)">
       <h2>Adaptation <span class="hint">VOR gain → demand</span></h2>
       <div class="rd">
-        <div class="c"><div class="k">VOR gain</div><div class="v" id="rd-gain">1.00<small>×</small></div></div>
-        <div class="c"><div class="k">Retinal slip</div><div class="v" id="rd-slip">0.00</div></div>
+        <div class="c"><div class="k" id="rd-k1">VOR gain</div><div class="v" id="rd-gain">1.00<small>×</small></div></div>
+        <div class="c"><div class="k" id="rd-k2">Retinal slip</div><div class="v" id="rd-slip">0.00</div></div>
       </div>
       <canvas class="mini" id="curve" height="90"></canvas>
     </div>
@@ -169,11 +178,15 @@
     if(hex.length===3)hex=hex.split('').map(x=>x+x).join('');
     return `rgba(${parseInt(hex.slice(0,2),16)},${parseInt(hex.slice(2,4),16)},${parseInt(hex.slice(4,6),16)},${a})`;}
 
-  const S = M.create({});
-  const St={ speed:1.0, t:0 };
+  let S = M.create({});                    // active model (reassigned on task switch)
+  const Svor = S; let Stim = null;
+  const St={ speed:1.0, t:0, mode:'vor' };
   // scrolling history of head velocity & retinal slip (for the gaze trace and learning curve)
   const HIST=600, headH=new Float32Array(HIST), slipH=new Float32Array(HIST), gainH=new Float32Array(HIST), envH=new Float32Array(HIST);
   let hp=0, slipEnv=0;
+  // timed-saccade trial timeline (sampled by trial phase)
+  const NB=240, curBurst=new Float32Array(NB), curUs=new Float32Array(NB), prevBurst=new Float32Array(NB);
+  let sacBin=-1, prevSacBin=-1;
 
   let W=0,H=0,DPR=1;
   function resize(){ const r=cv.getBoundingClientRect(); DPR=Math.min(window.devicePixelRatio||1,2);
@@ -215,9 +228,34 @@
 
   function draw(){
     ctx.clearRect(0,0,W,H);
-    drawSlipTrace();
+    if(St.mode==='timing') drawTimingTrace(); else drawSlipTrace();
     drawCortex();
     drawOutput();
+  }
+
+  /* ---- timed-saccade trial timeline: nucleus burst (CR), teaching pulse, saccade, T* ---- */
+  function drawTimingTrace(){
+    const tx=W*0.055, tw=W*0.90, ty=H*0.105, th=H*0.145, base=ty+th;
+    ctx.strokeStyle=rgba(C.faint,.22);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(tx,base);ctx.lineTo(tx+tw,base);ctx.stroke();
+    // target-time marker
+    const Tp=S.P.Tperiod, xstar=tx+tw*clamp(S.P.Tstar/Tp,0,1);
+    ctx.strokeStyle=rgba(C.dcn,.4);ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(xstar,ty-4);ctx.lineTo(xstar,base);ctx.stroke();ctx.setLineDash([]);
+    label(xstar,ty-8,'T* target',C.dcn,'center',8.5);
+    // teaching pulse (US) and previous-trial CR (faint) and current CR (bold)
+    const plot=(arr,col,w,al)=>{ ctx.beginPath();
+      for(let b=0;b<NB;b++){ const x=tx+tw*b/(NB-1); const y=base-arr[b]*th*0.9; if(b===0)ctx.moveTo(x,y);else ctx.lineTo(x,y); }
+      ctx.strokeStyle=rgba(col,al);ctx.lineWidth=w;ctx.stroke(); };
+    plot(curUs,C.io,1.1,.5);
+    plot(prevBurst,C.dcn,1.1,.28);
+    plot(curBurst,C.dcn,1.8,.95);
+    // saccade marker (current trial)
+    if(sacBin>=0){ const x=tx+tw*sacBin/(NB-1); ctx.fillStyle=rgba(C.eye,.9);
+      ctx.beginPath();ctx.moveTo(x,base-2);ctx.lineTo(x-4,base+7);ctx.lineTo(x+4,base+7);ctx.fill();
+      label(x,base+18,'saccade',C.eye,'center',8); }
+    label(tx,ty-8,'NUCLEUS BURST (saccade command)',C.dcn,'left',9);
+    label(tx+tw,ty-8,'teaching pulse',C.io,'right',8.5);
+    label(tx+tw,base+16,'one trial ('+(Tp*1000|0)+' ms) — cue at left',C.faint,'right',8);
   }
 
   /* ---- gaze / retinal-slip trace with a shrinking amplitude envelope ---- */
@@ -246,7 +284,7 @@
     const grTop=H*0.56, grBot=H*0.68;                       // granular layer
     const x0=W*0.13, x1=W*0.50, span=x1-x0;
     const fw=span/NPC*1.15, fh=molBot-molTop;
-    const grAvg=Math.min(1,(S.grActive*1.6));
+    let gaSum=0; for(const g of S.gr) gaSum+=g.act; const grAvg=Math.min(1,gaSum/S.gr.length*1.8);
     // layer guide band
     ctx.fillStyle=rgba(C.pf,0.02);ctx.fillRect(x0-W*0.03,molTop,span+W*0.07,fh);
     label(x0-W*0.025, molTop-6, 'MOLECULAR LAYER', C.faint, 'left', 8);
@@ -304,8 +342,9 @@
     label(ox,oy+rr+16,'INFERIOR OLIVE',C.io,'center',9);
     label(ox,oy+rr+28,'gap-junction R='+S.ioR.toFixed(2),C.faint,'center',8);
     label(ox,oy-rr-10,'climbing fibres (error)',C.cf,'center',8);
-    // retinal slip drives the olive
-    conn(W*0.50,H*0.30, ox+rr*0.6,oy-rr, C.io, 0.2+Math.min(0.6,Math.abs(S.slip)), -30);
+    // error drives the olive: retinal slip (VOR) or the teaching pulse (timing)
+    const errDrive=St.mode==='timing' ? (S.us||0) : Math.abs(S.slip||0);
+    conn(W*0.50,H*0.30, ox+rr*0.6,oy-rr, C.io, 0.2+Math.min(0.6,errDrive), -30);
   }
   function ioX(){ return W*0.30; }
   function ioY(){ return H*0.855; }
@@ -334,23 +373,25 @@
     label(mnX,mnY-rr-8,'OCULOMOTOR',C.eye,'center',8.5); label(mnX,mnY+rr+10,'MOTONEURONS',C.eye,'center',8.5);
     // → extraocular muscle (a little contractile bundle)
     conn(mnX+rr*0.6,mnY+rr*0.6, muX-8,muY-6, C.eye, 0.3+dcnAct*0.4, 6);
-    const mus=0.5+0.5*Math.sin(S.t*TAU*S.P.fHead);   // muscle length modulates with the eye command
+    const timing=(St.mode==='timing');
+    const eyeDrive=timing ? (S.eyePos*2-1) : S.eye;    // timing: gaze POSITION (saccade); VOR: velocity
     ctx.strokeStyle=rgba(C.warn,.7);ctx.lineWidth=2;
     for(let b=-1;b<=1;b++){ ctx.beginPath();ctx.moveTo(muX-10,muY-8+b*4);
-      ctx.quadraticCurveTo(muX,muY-8+b*4 + (S.eye)*5, muX+10,muY+8+b*4);ctx.stroke(); }
+      ctx.quadraticCurveTo(muX,muY-8+b*4 + eyeDrive*5, muX+10,muY+8+b*4);ctx.stroke(); }
     label(muX,muY+20,'EXTRAOCULAR',C.warn,'center',8);label(muX,muY+30,'MUSCLE',C.warn,'center',8);
-    // → eye (gaze indicator, counter-rotating the head)
+    // → eye (gaze indicator)
     conn(muX+8,muY+6, eyeX-er, eyeY-er*0.4, C.warn, 0.4);
     ctx.beginPath();ctx.arc(eyeX,eyeY,er,0,TAU);ctx.strokeStyle=rgba(C.eye,.55);ctx.lineWidth=1.6;ctx.stroke();
-    const eyeAng=Math.PI/2 - S.eye*0.9;
+    const eyeAng=Math.PI/2 - eyeDrive*0.9;
     ctx.save();ctx.beginPath();ctx.arc(eyeX,eyeY,er,0,TAU);ctx.clip();
     ctx.beginPath();ctx.arc(eyeX+Math.cos(eyeAng-Math.PI/2)*er*0.5, eyeY-Math.sin(eyeAng-Math.PI/2)*er*0.5, er*0.42,0,TAU);
     ctx.fillStyle=rgba(C.eye,.9);ctx.fill();ctx.restore();
     label(eyeX,eyeY+er+13,'EYE',C.eye,'center',9);
-    // head-velocity arrow (what the eye must counter)
-    const hv=S.head; ctx.strokeStyle=rgba(C.io,.5);ctx.lineWidth=2;
-    ctx.beginPath();ctx.moveTo(eyeX-hv*er*0.9,eyeY-er-12);ctx.lineTo(eyeX+hv*er*0.9,eyeY-er-12);ctx.stroke();
-    label(eyeX,eyeY-er-18,'head',C.faint,'center',7.5);
+    if(!timing){ // head-velocity arrow (what the eye must counter) — VOR only
+      const hv=S.head; ctx.strokeStyle=rgba(C.io,.5);ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(eyeX-hv*er*0.9,eyeY-er-12);ctx.lineTo(eyeX+hv*er*0.9,eyeY-er-12);ctx.stroke();
+      label(eyeX,eyeY-er-18,'head',C.faint,'center',7.5);
+    } else if(S.sacFired){ label(eyeX,eyeY-er-14,'saccade!',C.eye,'center',8); }
   }
 
   /* ---------------- learning curve + weight profile (panel canvases) ---------------- */
@@ -361,6 +402,16 @@
   let CW,WW;
   function drawCurve(){
     const {w,h}=CW; cctx.clearRect(0,0,w,h);
+    if(St.mode==='timing'){                       // CR timeline with T* marker
+      const xstar=w*clamp(S.P.Tstar/S.P.Tperiod,0,1);
+      cctx.strokeStyle=rgba(C.dcn,.45);cctx.setLineDash([3,3]);cctx.beginPath();cctx.moveTo(xstar,0);cctx.lineTo(xstar,h);cctx.stroke();cctx.setLineDash([]);
+      cctx.fillStyle=rgba(C.dcn,.7);cctx.font='8px '+FM;cctx.textAlign='left';cctx.fillText('T*',xstar+3,10);
+      cctx.beginPath();
+      for(let b=0;b<NB;b++){ const x=w*b/(NB-1), y=h-4-curBurst[b]*(h-8); if(b===0)cctx.moveTo(x,y);else cctx.lineTo(x,y); }
+      cctx.strokeStyle=rgba(C.dcn,.95);cctx.lineWidth=1.6;cctx.stroke();
+      cctx.fillStyle=rgba(C.dcn,.9);cctx.textAlign='right';cctx.fillText('nucleus burst → saccade',w-4,11);
+      return;
+    }
     // demand line + gain history
     const g2y=g=>h-6-(g/2.2)*(h-12);
     cctx.strokeStyle=rgba(C.eye,.5);cctx.setLineDash([3,3]);cctx.lineWidth=1;
@@ -406,9 +457,46 @@
   bind('s-gap','v-gap',v=>v.toFixed(2),v=>S.P.gGap=v,false);
   bind('s-no','v-no',v=>v.toFixed(2),v=>{ if(!lesioned) S.P.nucleoOlive=v; },false);
   bind('s-spd','v-spd',v=>v.toFixed(1)+'×',v=>St.speed=v,false);
-  $('btn-reset').onclick=()=>{ for(let k=0;k<S.w.length;k++) S.w[k]=0; S.ehAvg=S.hhAvg=S.ssAvg=0; S.gainEst=S.P.g0; };
+  bind('s-tstar','v-tstar',v=>(v*1000|0)+' ms',v=>{ if(Stim) Stim.P.Tstar=v; },false);
+  $('btn-reset').onclick=()=>{ for(let k=0;k<S.w.length;k++) S.w[k]=0;
+    if(St.mode==='timing'){ for(let k=0;k<S.w.length;k++) S.w[k]=0; } else { S.ehAvg=S.hhAvg=S.ssAvg=0; S.gainEst=S.P.g0; } };
+
+  // task switch (VOR ↔ timed saccade)
+  const mw=$('mode');
+  mw.querySelectorAll('button').forEach(b=>b.onclick=()=>switchMode(b.dataset.m));
+  function switchMode(m){
+    if(m===St.mode) return;
+    St.mode=m;
+    if(m==='timing' && !Stim) Stim=M.createTiming({Tstar:parseFloat($('s-tstar').value)});
+    S = (m==='timing') ? Stim : Svor;
+    mw.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+    const T=(m==='timing');
+    $('pre').style.display=T?'none':'';
+    $('row-dem').style.display=T?'none':'flex';
+    $('row-tstar').style.display=T?'flex':'none';
+    $('ctl-h').firstChild.textContent=T?'Task · timed saccade ':'Visual world ';
+    $('ctl-hint').textContent=T?'teach a saccade at the target time':'goggles set the demanded gain';
+    $('btn-reset').textContent=T?'↺ Reset the learned timing (naïve)':'↺ Reset the learned gain (naïve cerebellum)';
+    $('rd-k1').textContent=T?'Response time':'VOR gain';
+    $('rd-k2').textContent=T?'CR amplitude':'Retinal slip';
+    $('rl-dem').textContent=T?'target T*':'demand G*';
+    $('rl-gain').textContent=T?'response':'VOR gain';
+    $('rl-slip').textContent=T?'CR amp':'retinal slip';
+    $('ttl').textContent=T?'Cerebellum · Timed Saccade':'Cerebellum · VOR Adaptation';
+    $('sub').innerHTML=T
+      ? 'A <b class="g">cue</b> starts each trial; granule <em>time cells</em> tile the interval. A climbing-fibre teaching pulse at <b class="g">T*</b> teaches a well-timed Purkinje pause → the nucleus bursts → a <b class="g">saccade</b> at the learned time.'
+      : 'Head rotates → eyes counter-rotate to hold gaze. <b class="e">Retinal slip</b> is the error; the <b class="e">inferior olive</b> reports it as climbing-fibre complex spikes driving <em>parallel-fibre → Purkinje</em> LTD until the <b class="g">VOR gain</b> matches the goggles.';
+    document.body.classList.remove('lesion'); $('pill-lz').classList.remove('on');
+    updateNote(); updateUI();
+  }
 
   function updateNote(){
+    if(St.mode==='timing'){
+      const S2=S;
+      $('note').innerHTML='<b>Timed saccade.</b> After each cue, granule <em>time cells</em> tile the interval. A climbing-fibre teaching pulse at <b class="g">T*</b> carves a well-timed Purkinje pause → the nucleus bursts → a <b class="g">saccade at T*</b>. The learned response cancels the teaching pulse (nucleo-olivary), so the error self-extinguishes.';
+      $('ionote').innerHTML='Here the <b style="color:var(--ink)">nucleo-olivary</b> loop is essential: the learned response cancels its own teaching signal, so the complex spike returns to baseline and the timing self-stabilises.';
+      return;
+    }
     document.body.classList.toggle('lesion',lesioned);
     $('pill-lz').classList.toggle('on',lesioned);
     let t;
@@ -421,6 +509,16 @@
   }
 
   function updateUI(){
+    if(St.mode==='timing'){
+      const rt=(S.peakTime>=0?S.peakTime:0);
+      $('r-dem').textContent=(S.P.Tstar*1000|0)+'ms';
+      const rg=$('r-gain'); rg.textContent=(rt*1000|0)+'ms'; rg.className=Math.abs(rt-S.P.Tstar)<0.06?'ok':'hot';
+      $('r-slip').textContent=S.peakBurst.toFixed(2);
+      $('r-cs').textContent=S.csRate.toFixed(2); $('r-ior').textContent=S.ioR.toFixed(2);
+      $('rd-gain').innerHTML=(rt*1000|0)+'<small>ms</small>';
+      $('rd-slip').textContent=S.peakBurst.toFixed(2);
+      drawCurve(); drawWeights(); return;
+    }
     $('r-dem').textContent=S.P.demand.toFixed(2);
     const rg=$('r-gain'); rg.textContent=S.gainEst.toFixed(2); rg.className=Math.abs(S.gainEst-S.P.demand)<0.15?'ok':'hot';
     $('r-slip').textContent=S.slipEst.toFixed(2);
@@ -437,9 +535,20 @@
     let dt=(now-last)/1000; last=now; dt=Math.min(dt,0.05);
     carry+=dt*St.speed;
     let steps=Math.min(120,Math.round(carry/S.P.dt)); carry-=steps*S.P.dt;
-    for(let s=0;s<steps;s++){ M.step(S); St.t+=S.P.dt;
-      slipEnv += (S.P.dt/0.5)*(Math.abs(S.slip)*1.35 - slipEnv);      // smoothed slip amplitude
-      hAcc+=S.P.dt; if(hAcc>=0.02){ hAcc=0; headH[hp]=S.head; slipH[hp]=S.slip; gainH[hp]=S.gainEst; envH[hp]=slipEnv; hp=(hp+1)%HIST; } }
+    for(let s=0;s<steps;s++){
+      if(St.mode==='timing'){
+        const prevT=S.tcue; M.stepTiming(S); St.t+=S.P.dt;
+        if(S.tcue<prevT){ prevBurst.set(curBurst); prevSacBin=sacBin; curBurst.fill(0); curUs.fill(0); sacBin=-1; }
+        const b=Math.min(NB-1,Math.floor(S.tcue/S.P.Tperiod*NB));
+        if(S.burst>curBurst[b]) curBurst[b]=S.burst;
+        if(S.us>curUs[b]) curUs[b]=S.us;
+        if(S.sacFired && sacBin<0) sacBin=Math.floor(S.sacTime/S.P.Tperiod*NB);
+      } else {
+        M.step(S); St.t+=S.P.dt;
+        slipEnv += (S.P.dt/0.5)*(Math.abs(S.slip)*1.35 - slipEnv);      // smoothed slip amplitude
+        hAcc+=S.P.dt; if(hAcc>=0.02){ hAcc=0; headH[hp]=S.head; slipH[hp]=S.slip; gainH[hp]=S.gainEst; envH[hp]=slipEnv; hp=(hp+1)%HIST; }
+      }
+    }
     draw();
     ui+=dt; if(ui>0.08){ui=0;updateUI();}
     requestAnimationFrame(frame);
