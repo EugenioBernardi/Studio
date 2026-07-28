@@ -1,160 +1,200 @@
-# The loop — sensory cortex ⇄ entorhinal ⇄ hippocampus
+# The loop — sensory cortex ⇄ entorhinal ⇄ hippocampus ⇄ thalamus
 
 A single, numerically validated dynamical model of the **encode → replay → consolidate**
-cycle. A sequence of sensory stimuli forms cortical assemblies; the hippocampus binds an
-index to each and stores their order; during sharp-wave-ripple states it **replays** the
-sequence and reinstates the cortical assemblies in order, time-compressed; replay-driven
-co-activation writes **cortico-cortical** links so that, after enough replay, the cortex
-recalls the sequence **without the hippocampus** — the systems-consolidation gradient.
+cycle, with the sensory front end, the sleep state that gates it, and the lateralised
+structures whose damage produces recognisable clinical syndromes. Headless, plain JavaScript,
+**no dependencies**.
+
+```bash
+node --version    # ≥ 16, nothing else needed
+npm test          # stages 1–4: the memory loop end to end
+```
+
+No build step, no install, nothing to fetch. `npm test` runs `node`.
 
 ## What this is (and is not)
 
-This is a **synthesis of established mechanisms integrated into one coupled, interactive,
-numerically testable circuit** — not a claim of new biology. Each component is a textbook
-mechanism (hippocampal index theory; DG pattern separation and mossy-fibre detonation;
-ACh-gated encoding/retrieval; CA3 attractor completion; sharp-wave-ripple replay and its
-STDP-directed order; systems consolidation; the thalamocortical slow oscillation and
-spindles). The contribution is that they run **together in one model**, each interface is
-principled rather than glue, and every step reproduces a **published experimental number**
-rather than a scripted animation. The value is a working, inspectable substrate for asking
-"what happens to consolidation if I change X" — a tools/methods contribution, in the spirit
-of eNeuro's Open Source Tools and Methods track.
+This is a **synthesis of established mechanisms integrated into one coupled, numerically
+testable circuit** — not a claim of new biology. Each component is a textbook mechanism
+(hippocampal index theory; DG pattern separation and mossy-fibre detonation; ACh-gated
+encoding/retrieval; CA3 attractor completion; sharp-wave-ripple replay and its directed order;
+systems consolidation; the thalamocortical slow oscillation and spindles; Kinsbourne's
+opponent processor; the circuit of Papez; Aggleton & Brown's dual-process account). The
+contribution is that they run **together in one model**, each interface is principled rather
+than glue, and the failures are reported as carefully as the successes. The value is a
+working, inspectable substrate for asking "what happens to X if I lesion Y" — a tools/methods
+contribution.
 
-Every italicised phenomenon above is checked against a specific experimental number, and
-nothing that should be emergent is scripted: sparsity comes from feedback inhibition, the
-replay order comes from learned CA3 transition weights, the consolidation gradient comes from
-how much cortico-cortical weight a memory has accumulated.
+Nothing that should be emergent is scripted: sparsity comes from feedback inhibition, replay
+order from learned CA3 transition weights, the consolidation gradient from accumulated
+cortico-cortical weight, extinction from interhemispheric competition.
 
 ## Scale
 
-~5,880 principal cells with per-field feedback inhibition (PV-like pools), no k-winners
-shortcuts:
+At shipped defaults — ~9 600 principal cells with per-field feedback inhibition (PV-like
+pools), no k-winners shortcuts. Hippocampal field ratios are **human** stereology (West &
+Gundersen 1990; Šimić 1997; Gómez-Isla 1996), whose signature is CA1 ≈ 5.5× CA3 — the
+expansion is at the output/comparator stage, not the attractor.
 
 | field | N | role |
-|-------|---|------|
-| neocortex | 1600 | recurrent, plastic — assemblies (auto-associative) |
-| entorhinal (EC) | 600 | bidirectional hub cortex⇄hippocampus |
-| dentate gyrus (DG) | 2000 | pattern separation (sparsest) |
-| CA3 | 960 | index + sequence store (auto-assoc + directed transitions) |
-| CA1 | 720 | back-projection relay to EC |
+|---|---|---|
+| neocortex | 1600 | recurrent, plastic — auto-associative assemblies |
+| EC layer II / III / deep | 300 / 300 / 800 | bidirectional hub, cortex ⇄ hippocampus |
+| dentate gyrus | 2700 | pattern separation (sparsest field) |
+| CA3 | 480 | index + sequence store |
+| CA1 | 2640 | back-projection relay and comparator |
+| subiculum | 800 | output stage |
 
-Stage 5 adds a validated **thalamocortical sheet** (333 populations, 9 cell classes ×
-37 columns — the faithful extraction of `apps/thalamocortical-3d.html`) as the NREM state
-generator that gates the loop. Its column count is orthogonal to the loop's neuron count and
-is kept at 37 (rather than 61) so a full night stays tractable; the sheet reproduces the same
-states at any ring count.
+The lesion suites (stages 8, 10, 13–15) run at **NC = 800** for tractability. Stage 13b checks
+that the material-specificity result survives doubling to 1600 — it does, and grows.
+
+Stage 5 adds a thalamocortical sheet (37 columns × 9 cell classes, the headless extraction of
+`apps/thalamocortical-3d.html`) as the NREM state generator.
 
 **Scale-invariance is a designed property, not luck.** Sparsity is set by mean-field feedback
 inhibition (a fraction, independent of N), and every projection is *convergence-preserving*
-(its connection probability scales as 1/N_presynaptic), so the per-cell input statistics — and
-therefore assembly sparsity, index separation, reinstatement, replay, and the consolidation
-rate — are unchanged by scale. The validated numbers are identical at 400, 800, and 1600
-cortical cells; the sizes above are the shipped 4×-baseline configuration.
+(connection probability scales as 1/N_presynaptic), so per-cell input statistics — and
+therefore sparsity, index separation, reinstatement, replay and consolidation rate — are
+unchanged by scale. Designed, and in one place measured (stage 13b); not measured everywhere.
 
-## Layout
+## Running the suites
 
-    src/cortex.js        neocortical assemblies (stage 1)
-    src/hippocampus.js   EC/DG/CA3/CA1 fields, forward/backward/replay dynamics
-    src/loop.js          orchestrator: encode+bind, reinstate, ripple-paced replay
-    src/consolidate.js   cortico-cortical consolidation + HP-independent cortical recall
-    test/stage{1..4}.js  numeric acceptance tests (run with `npm test`)
+| command | what it checks | result |
+|---|---|---|
+| `npm test` | 1–4 · assemblies, index binding, replay, consolidation | 31/31 |
+| `npm run test:cross-scale` | 5 · SO Up-states trigger replay, spindles gate it | 9/9 |
+| `npm run test:vision` | 6 · ventral + dorsal streams | 7/7 |
+| `npm run test:pathology` | 8 · TGRA, AD, DG disinhibition, TLE two-hit | 11/11 |
+| `npm run test:spatial` | 9 · egocentric ⇄ allocentric transform | 11/11 |
+| `npm run test:mst` | 10 · Mnemonic Similarity Task | 5/5 |
+| `npm run test:visual-pathology` | 11 · perimetry, Mach bands, Charles Bonnet | 9/10 † |
+| `npm run test:chiasm` | 12 · six localising lesions, per-eye fields | 14/14 |
+| `npm run test:bilateral` | 13 · material specificity, H.M., Wada | 15/15 |
+| `npm run test:bilateral-scale` | 13b · the same crossover at 2× cortex | 5/5 |
+| `npm run test:neglect` | 14 · extinction, bisection, the paradox | 15/15 † |
+| `npm run test:papez` | 15 · diencephalic amnesia, thalamic neglect | 16/16 |
 
-## Validation — 40 / 40, against real data (at the shipped 2× scale)
+† **Three checks are deliberately red** (stage 7 HMAX, stage 11 tilt illusion, stage 14
+pseudoneglect). Each is a failure with a *named missing mechanism*, kept visible rather than
+quietly relaxed. See `OVERVIEW.md` §3.
 
-Each stage replicates across seeds and includes an ablation proving its mechanism is
-load-bearing (remove it and the target breaks). Numbers below are at 1600 cortical cells;
-the *fractions* are identical at 400 and 800 (scale-invariance, above).
+## What it reproduces
 
-**Stage 1 — cortical assemblies** (8 seeds, 8/8). Feedback inhibition sets sparsity;
-subtractive synaptic normalisation (Miller & MacKay 1994) keeps membership crisp.
-Sparsity **7.3 %** (Barth & Poulet 2012: 2–10 %), assemblies orthogonal (~120 cells,
-xoverlap ~5 %), pattern-completion recall **0.89** from a 50 % cue, off-target 2.7 % of the
-assembly. *Ablations:* no plasticity → recall 0.50 (= cue fraction); no normalisation →
-assemblies merge (overlap 385/385).
+**Memory.** Replay order fidelity ρ 1.00 forward and −1.00 reverse, time-compressed 17.9×
+(Lee & Wilson 2002; Davidson 2009; Diba & Buzsáki 2007). A recent memory is
+hippocampus-dependent and a remote one is not (Kim & Fanselow 1992; Frankland & Bontempi 2005).
 
-**Stage 2 — index binding** (6 seeds, 9/9). Mossy detonator selects a sparse CA3 index;
-bidirectional binding (Wec, Wc1e) ties it to its assembly. CA3 index **6 %** (~56 cells),
-orthogonal; DG separation 4.7 % active; reactivating an index reinstates ITS assembly —
-recall **0.87**, cross-talk **0.06**. *Ablation:* no binding → recall 0.00.
+**Sleep.** Slow oscillation 1.05 Hz with 73 % Down-state occupancy; isolated TC–RTN spindle at
+16.5 Hz. NREM produces spindle-gated replay and the cortex becomes independent (ρ 1.00); wake
+gates nothing (ρ 0.00). The consolidation window is emergent from the rhythm, not hand-set.
 
-**Stage 3 — sharp-wave-ripple replay** (8 seeds, 7/7). CA3 stores order as directed
-transition weights (Rseq, forward ≫ backward, separate from the auto-associator); a ripple
-frame paces the walk, the content is emergent.
+**Vision.** 100 % shape classification over 81 scale × rotation × position conditions; MT
+direction error 0.0° median.
 
-| phenomenon | target | value | source |
-|-----------|--------|-------|--------|
-| forward order fidelity | ρ ≥ 0.8 | **ρ = 1.00** | Lee & Wilson 2002 |
-| time compression | 15–20× | **17.9×** | Davidson et al. 2009 |
-| forward **and** reverse | both occur | ρ +1.00 / −1.00 | Diba & Buzsáki 2007 |
+**Localisation.** Optic nerve, chiasm, tract, Meyer's loop, parietal radiation and occipital
+lesions each produce their own pair of perimetry charts — the chiasm giving a bitemporal defect
+that is non-congruous by construction, impossible without two retinas.
 
-*Ablation:* remove the order links → replay coverage collapses to 1/6.
+**Lateralised syndromes.** Material-specific amnesia after unilateral temporal lobectomy with a
+crossover double dissociation in 6/6 seeds; dense anterograde amnesia with spared remote memory
+after bilateral resection; hemispatial neglect with extinction, ipsilesional bisection bias and
+Kinsbourne's paradoxical relief from a second lesion; diencephalic amnesia with an intact
+hippocampus; the recollection/familiarity double dissociation; thalamic neglect.
 
-**Stage 4 — consolidation gradient** (6 seeds, 7/7). Replay writes directed cortico-cortical
-links; a recent memory (2 replays) is HP-dependent, a remote memory (30 replays) is not.
+## Using the modules
 
-| | HPC-intact | HPC-lesioned (cortex only) |
-|--|-----------|----------------------------|
-| **recent** | ρ = 1.00 | **ρ = 0.00** — recall abolished |
-| **remote** | ρ = 1.00 | **ρ = 1.00** — recall spared |
-
-The lesion abolishes recent but spares remote recall (Kim & Fanselow 1992; Frankland &
-Bontempi 2005). *Ablation:* no consolidation plasticity → cortex never HP-independent (0.00).
-
-**Stage 5 — cross-scale coupling: sleep-dependent consolidation** (`test/stage5.js`, run with
-`npm run test:cross-scale`; 9/9). A validated thalamocortical sheet generates the NREM state
-and *gates* the loop, replacing the hand-set low-ACh window. Its slow-oscillation Up-states
-(Down→Up transitions) trigger hippocampal replay (Sirota 2003; Battaglia 2004), and thalamic
-spindle power gates whether that replay consolidates (Latchoumane 2017; Maingret 2016). The
-consolidation window is therefore **emergent from the thalamocortical rhythm**, and consolidation
-becomes sleep-dependent:
-
-- Part A — the extraction reproduces the documented regimes: wake **gamma-dominant**; NREM
-  **slow oscillation 1.05 Hz** with **73% Down-state occupancy**; isolated TC–RTN **spindle 16.5 Hz**.
-- Part B — **NREM** produces spindle-gated replay events/night → cortex becomes HP-independent
-  (ρ = 1.00); **wake** (persistent Up state, no SO onsets, no spindles) gates nothing → the
-  memory stays HP-dependent (ρ = 0.00). Δρ = 1.00.
-
-This spans micro→meso (thalamocortical conductances and oscillation) → systems (replay gating)
-→ behavioural (sleep-dependent consolidation gradient).
-
-*Open — the pathological arm.* The natural next result is that the thalamic GABA-B spindle→
-spike-wave switch abolishes consolidation (a mechanistic model of the ESES/CSWS cognitive-
-regression syndrome). It is **not** in this build: that switch was validated in a standalone
-thalamic model (`hex-model.js` / epilepsy `VALIDATION.md`) that is absent from this repository
-and no longer available, and it does not express from the app-HTML extraction alone (the burst-
-gated GABA-B never reaches its release threshold in the isolated loop as extracted). Substitute
-epileptogenic perturbations (KCC2/PV loss) make the cortex *more* active, not less, so they do
-not close the spindle gate. Reaching this result needs a from-scratch spiking thalamic model
-that produces validated spindles **and** spike-wave — a substantial separate effort. What ships
-here is the physiological arm, validated end to end.
-
-## Use
+CommonJS, plain options objects, nothing global.
 
 ```js
+const C = require("./src/cortex.js");
+const H = require("./src/hippocampus.js");
 const L = require("./src/loop.js");
 const K = require("./src/consolidate.js");
-const { C, H } = L;
 
-const cortex = C.create({ seed: 1 }); C.encode(cortex);        // learn 8 cortical assemblies
-const hpc = H.createHPC({ seed: 108, NC: cortex.N }); hpc.plastic = true;
-L.encodeSequence(cortex, hpc, [0,1,2,3,4,5]);                  // bind indices + store order
+const cortex = C.create({ seed: 1, NC: 800, nStim: 8 }); C.encode(cortex);
+const hpc = H.createHPC({ seed: 107, NC: cortex.N }); hpc.plastic = true;
 
-L.replaySequencePaced(cortex, hpc, {});            // forward replay  → [0,1,2,3,4,5]
-L.replaySequencePaced(cortex, hpc, { reverse: true });         // reverse replay  → [5,4,3,...]
+L.encodeSequence(cortex, hpc, [0, 1, 2, 3, 4, 5]);
+L.replaySequencePaced(cortex, hpc, {});                  // → [0,1,2,3,4,5], emergent
+L.replaySequencePaced(cortex, hpc, { reverse: true });   // → [5,4,3,…]
 
 const cons = K.createConsolidation(cortex);
-K.consolidate(cortex, hpc, cons, 30, { order: [0,1,2,3,4,5] });// 30 replay events
-K.corticalRecall(cortex, cons, hpc.indices.map(x => x.cortex), {});  // recall WITHOUT hpc
+K.consolidate(cortex, hpc, cons, 30, { order: [0, 1, 2, 3, 4, 5] });
+K.corticalRecall(cortex, cons, hpc.indices.map(x => x.cortex), {});   // recall WITHOUT hpc
 ```
+
+A syndrome is a few lines:
+
+```js
+const B = require("./src/bilateral.js");
+const T = require("./src/limbicthalamus.js");
+const P = require("./src/parietal.js");
+
+const brain = B.createBrain({ seed: 107, NC: cortex.N });
+B.resect(brain, "L");                        // left temporal lobectomy
+
+const limb = T.createLimbic();
+T.lesion(limb, "mb", "both", 1.0);           // bilateral mammillary bodies — Korsakoff
+T.papezReturn(limb, 0.8);                    // → 0: recollection abolished
+
+const par = P.createParietal();
+P.lesionParietal(par, "R", 0.6);             // right parietal
+P.extinction(par, -0.7, +0.7);               // contralesional target, ipsilesional competitor
+```
+
+## Module map
+
+| file | what it is |
+|---|---|
+| `src/cortex.js` | recurrent cortex; feedback inhibition; subtractive normalisation |
+| `src/hippocampus.js` | human-ratio trisynaptic circuit, topographic connectivity |
+| `src/loop.js` | encode → bind → ripple-paced replay |
+| `src/consolidate.js` | cortico-cortical chain; systems consolidation |
+| `src/thalamocortical.js` | 19/37/61-column NREM model, headless |
+| `src/night.js` | SO Up-state triggers replay; spindle power gates consolidation |
+| `src/vision.js` | retina → LGN → V1 → V2 ventral; motion energy dorsal |
+| `src/hmax.js` | multi-scale HMAX S1/C1 front end |
+| `src/visualpathway.js` | two retinas, optic chiasm, six lesion sites |
+| `src/spatial.js` | PPC ⇄ RSC ⇄ ATN egocentric/allocentric transform |
+| `src/bilateral.js` | two lateralised hippocampi + commissure |
+| `src/parietal.js` | two parietal cortices; opponent processor on a coverage gradient |
+| `src/limbicthalamus.js` | circuit of Papez, MD/familiarity route, pulvinar |
+
+## Figures
+
+```bash
+node test/make_figures.js     # recompute figures/data.json from the models
+node figures/build.js         # assemble figures/report.html from template + JSON
+```
+
+The report is **assembled, never hand-edited**: each stage test writes its own JSON beside the
+template and `build.js` merges them, so the figures cannot drift away from the models.
 
 ## Method
 
-Simulate headless, verify numbers, replicate across seeds; never tune a validated constant
-to pass a test. Metrics are chosen so a degenerate solution fails: completion is scored
-against specificity and encoded overlap (so a merged attractor can't pass), replay order
-is Spearman ρ on first-appearance (the experimental measure), and the consolidation gradient
-is a lesion dissociation, not a single curve.
+Full rules in `OVERVIEW.md` §1. In short: simulate headless first and print numbers; register
+predictions — *including predictions of failure* — in the test header before running; report
+negatives with a mechanism; replicate across seeds and print the per-seed count; never sweep a
+parameter until something crosses significance. Metrics are chosen so a degenerate solution
+fails: completion is scored against specificity, replay order by Spearman ρ on first
+appearance, consolidation by a lesion dissociation rather than a single curve.
 
-## License
+## Status and limits
+
+Read `OVERVIEW.md` §7 before relying on any of this. The load-bearing ones:
+
+- Results are **internally consistent, not externally validated**. Very little is compared
+  quantitatively against published datasets; where it is (the MST) the absolute values are off
+  in a documented way (LDI ≈ 0.89 against ≈ 0.3–0.5 in healthy adults).
+- Parameters are tuned to targets with seed replication but **no systematic sensitivity
+  analysis** beyond the one scale check.
+- Human *ratios*, toy *counts*. Rate models throughout; nothing spikes.
+- The thalamus gates consolidation in stage 5 but is **not** wired into the lesion suites;
+  stage 15's diencephalic result uses ungated replay.
+- The pathological cross-scale arm (thalamic GABA-B spindle → spike-wave, the ESES/CSWS
+  mechanism) is **not** in this build: it was validated in a standalone thalamic model absent
+  from this repository, and does not express from the app extraction alone.
+
+## Licence
 
 MIT.

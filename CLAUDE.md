@@ -66,6 +66,33 @@ significance — that is p-hacking and it nearly happened here.
 | `*.html` | single-file apps (model inlined; edit the build script, not the HTML) |
 | `claude-code-brief.md` | expandable-simulator spec **+ validated parameter blocks for chronotaxis (§6.1), basal ganglia (§6.2) and hippocampus (§6.3)** |
 
+### Integrated loop (`integrated-loop/`) — the current line of work
+
+One circuit, headless, no dependencies: sensory cortex ⇄ entorhinal ⇄ hippocampus ⇄
+consolidation, with a thalamocortical NREM stage that gates it, a bilateral visual pathway,
+two lateralised hippocampi, two parietal cortices and the limbic thalamus. Fifteen stage
+suites, ≈2 500 lines of model and ≈2 500 of test. Full record: `integrated-loop/OVERVIEW.md`.
+Run any stage with `npm run test:<name>` from that directory.
+
+### INVENTORY WARNING — this file describes files the repository does not contain
+
+Checked against the working tree; all of the following are **absent**, and every claim about
+them below is memory of work that is not in the repo:
+
+`hex-model.js` · `tc-model.js` · `ventral-model.js` · `motion-model.js` ·
+`pulvinar-gate-model.js` · `overlap-model.js` · `VALIDATION.md` · `VISION-VALIDATION.md` ·
+`HIGHER-ORDER-THALAMUS.md` · `claude-code-brief.md` · `metastable-chronotaxis.html` ·
+`basal-ganglia-selection.html` · `hex-thalamocortical.html` ·
+`thalamocortical-epileptogenesis.html`
+
+Three files named at root live in `apps/` instead: `thalamocortical-3d.html`,
+`visual-cortex-streams.html`, `hippocampus-index-replay.html`.
+
+Consequence, and it is a hard one: **a resource paper can only describe what a reader can
+download.** The epilepsy/spike-wave results, the chronotaxis timing results and the
+higher-order-thalamus negative results are all currently unshippable. Either the files are
+restored or those sections come out of any manuscript.
+
 **Model source availability.** The thalamocortical and vision models have standalone
 `.js` files. The three earliest apps (`metastable-chronotaxis`, `hippocampus-index-replay`,
 `basal-ganglia-selection`) have the model **inlined in the HTML**, intertwined with the
