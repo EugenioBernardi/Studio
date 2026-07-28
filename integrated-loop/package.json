@@ -7,6 +7,7 @@
     "test": "node test/stage1.js && node test/stage2.js && node test/stage3.js && node test/stage4.js",
     "test:vision": "node test/stage6_vision.js",
     "test:pathology": "node test/stage8_pathology.js",
+    "test:spatial": "node test/stage9_spatial.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },
