@@ -15,6 +15,8 @@
     "test:bilateral-scale": "node test/stage13_scale.js",
     "test:neglect": "node test/stage14_neglect.js",
     "test:papez": "node test/stage15_papez.js",
+    "test:sensitivity": "node test/stage16_sensitivity.js",
+    "test:external": "node test/stage17_external.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },
