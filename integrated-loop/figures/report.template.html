@@ -152,6 +152,21 @@
   </section>
 
   <section class="card">
+    <h2>Pathology — the same circuit, lesioned</h2>
+    <p class="why">Each panel is a <em>dissociation</em>, not a decline: a lesion that degrades
+    everything proves nothing, one that abolishes a capacity while sparing another reproduces a
+    clinical syndrome. All four use the same instruments as the healthy validation.</p>
+    <div class="row2">
+      <figure><div id="pTgra"></div><figcaption id="pTgraCap"></figcaption></figure>
+      <figure><div class="legend" id="pAdLeg"></div><div id="pAd"></div><figcaption id="pAdCap"></figcaption></figure>
+    </div>
+    <div class="row2" style="margin-top:14px">
+      <figure><div class="legend" id="pDgLeg"></div><div id="pDg"></div><figcaption id="pDgCap"></figcaption></figure>
+      <figure><div id="pTle"></div><figcaption id="pTleCap"></figcaption></figure>
+    </div>
+  </section>
+
+  <section class="card">
     <h2>All figures, as numbers</h2>
     <div class="scroll"><table id="tbl"></table></div>
   </section>
@@ -424,6 +439,69 @@ document.getElementById('ventralCap').textContent =
     '% on the larger split, above raw pixels ('+M.confirm.raw.toFixed(1)+'%). But the same change costs the '+
     'shape task 100% → '+M.filters[2].shape.toFixed(1)+'%. One fixed filter bank cannot serve both; real V1 '+
     'carries many scales in parallel, and that is the fix this measurement points to.';
+})();
+
+/* ---------- pathology ---------- */
+(function(){
+  const p=S(), P=D.pathology;
+  const W=470,H=210,L=48,R=14,T=12,B=52;
+  function lineChart(host,xs,series,xlab,ylab,ymax,cap){
+    const X=v=>L+(W-L-R)*(v/Math.max(...xs)), Y=v=>T+(H-T-B)*(1-v/ymax);
+    let s=svgEl(W,H);
+    for(let g=0;g<=4;g++){const y=T+(H-T-B)*(1-g/4);
+      s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${p.grid}" stroke-width="1"/>`;
+      s+=`<text x="${L-7}" y="${y+4}" fill="${p.dim}" font-size="10" text-anchor="end" font-family="ui-monospace,monospace">${(ymax*g/4).toFixed(ymax<=1?2:0)}</text>`;}
+    series.forEach(([vals,c,nm])=>{
+      s+=`<path d="${vals.map((v,i)=>`${i?'L':'M'}${X(xs[i]).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')}" fill="none" stroke="${c}" stroke-width="2.5" stroke-linejoin="round"/>`;
+      vals.forEach((v,i)=>{s+=`<circle cx="${X(xs[i]).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="4" fill="${c}" stroke="${p.panel}" stroke-width="2"><title>${nm} ${xs[i]} → ${v}</title></circle>`;});
+    });
+    xs.forEach(v=>{s+=`<text x="${X(v).toFixed(1)}" y="${H-B+16}" fill="${p.dim}" font-size="10" text-anchor="middle" font-family="ui-monospace,monospace">${v}</text>`;});
+    s+=`<text x="${(L+W-R)/2}" y="${H-10}" fill="${p.muted}" font-size="11" text-anchor="middle">${xlab}</text>`;
+    s+=`<text transform="translate(13,${(T+H-B)/2}) rotate(-90)" fill="${p.muted}" font-size="11" text-anchor="middle">${ylab}</text>`;
+    document.getElementById(host).innerHTML=s+'</svg>';
+  }
+
+  lineChart('pTgra',P.tgra.ages,[[P.tgra.recall,p.s1,'recall']],
+    'memory age (replay events)','recall after HPC lesion',1);
+  document.getElementById('pTgraCap').textContent =
+    'P1 · Hippocampal lesion. A memory younger than ~4 replay events is abolished (ρ 0.00); one older than ~6 is intact (ρ 1.00). Temporally graded retrograde amnesia — Scoville & Milner 1957; Squire & Alvarez 1995.';
+
+  lineChart('pAd',P.ad.fracs,[[P.ad.consolidated,p.s3,'consolidated'],[P.ad.distinct,p.s2,'new index'],[P.ad.cue,p.s1,'cue-driven']],
+    'entorhinal layer II lost (%)','performance',1);
+  document.getElementById('pAdCap').textContent =
+    'P2 · Entorhinal layer II loss — the field lost first in Alzheimer’s (Gómez-Isla 1996). Cue-driven hippocampal retrieval falls 53% and new indices lose distinctness, while the already-consolidated cortical store is untouched: anterograde ≫ retrograde.';
+
+  document.getElementById('pAdLeg').innerHTML =
+    `<span><i class="sw" style="background:${p.s3}"></i>consolidated recall (cortex only)</span>`+
+    `<span><i class="sw" style="background:${p.s2}"></i>new index distinctness</span>`+
+    `<span><i class="sw" style="background:${p.s1}"></i>cue-driven retrieval</span>`;
+  document.getElementById('pDgLeg').innerHTML =
+    `<span><i class="sw" style="background:${p.s2}"></i>index overlap (of 20%)</span>`+
+    `<span><i class="sw" style="background:${p.s1}"></i>retrieval crosstalk</span>`;
+  lineChart('pDg',P.dg.inh.map(v=>100-v),[[P.dg.overlap.map(v=>v/20),p.s2,'index overlap'],[P.dg.cross,p.s1,'crosstalk']],
+    'dentate inhibition LOST (%)','fraction',1);
+  document.getElementById('pDgCap').textContent =
+    'P3 · Dentate disinhibition. Index overlap rises 10.8% → 16.9% and retrieval crosstalk 0.09 → 0.16: separation fails and retrieval becomes promiscuous — the overgeneralisation phenotype (Yassa & Stark 2011; Small 2011).';
+
+  // TLE bar chart
+  {
+    const items=P.tle.labels.map((n,i)=>({name:n,v:P.tle.active[i]}));
+    const iw=(W-L-R)/items.length, bw=Math.min(40,iw-18), ymax=60;
+    let s=svgEl(W,H);
+    for(let g=0;g<=4;g++){const y=T+(H-T-B)*(1-g/4);
+      s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${p.grid}" stroke-width="1"/>`;
+      s+=`<text x="${L-7}" y="${y+4}" fill="${p.dim}" font-size="10" text-anchor="end" font-family="ui-monospace,monospace">${(ymax*g/4).toFixed(0)}%</text>`;}
+    items.forEach((it,i)=>{
+      const x=L+i*iw+iw/2-bw/2, h=(H-T-B)*(it.v/ymax);
+      const c=it.v>=40?p.s2:p.s1;
+      s+=`<rect x="${x}" y="${H-B-h}" width="${bw}" height="${Math.max(1.5,h)}" rx="4" fill="${c}"><title>${it.name} ${it.v}%</title></rect>`;
+      s+=`<text x="${x+bw/2}" y="${H-B-h-6}" fill="${p.muted}" font-size="10" text-anchor="middle" font-family="ui-monospace,monospace">${it.v.toFixed(1)}</text>`;
+      s+=`<text x="${x+bw/2}" y="${H-B+17}" fill="${p.ink}" font-size="11" text-anchor="middle">${esc(it.name)}</text>`;});
+    s+=`<text transform="translate(13,${(T+H-B)/2}) rotate(-90)" fill="${p.muted}" font-size="11" text-anchor="middle">CA3 active after release</text>`;
+    document.getElementById('pTle').innerHTML=s+'</svg>';
+  }
+  document.getElementById('pTleCap').textContent =
+    'P4 · Temporal-lobe epilepsy. Ignite one index, release the drive, wait 1.2 s. Healthy CA3 and PV loss alone both fall silent; sprouted recurrence alone smoulders at 28.7%; only sprouting AND PV loss together give self-sustaining runaway at 48.1%. Two hits are required.';
 })();
 
 /* ---------- table ---------- */
