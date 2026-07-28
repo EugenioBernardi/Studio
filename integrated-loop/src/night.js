@@ -51,7 +51,8 @@ function runNight(cortex, hpc, cons, tcState, opts) {
   const spindleThr = opts.spindleThr == null ? 0.30 : opts.spindleThr; // spindle-gate threshold
   const order = opts.order;
 
-  const net = TC.create(Object.assign({ seed: opts.seed == null ? 7 : opts.seed, arousal: 0.08 }, tcState));
+  const net = TC.create(Object.assign({ seed: opts.seed == null ? 7 : opts.seed, arousal: 0.08,
+    rings: opts.rings == null ? 3 : opts.rings }, tcState));
   Object.assign(net.M, tcState || {}); TC.rebuild(net);
   for (let i = 0; i < Math.round(2000 / DT); i++) TC.stepNet(net);   // settle into NREM
 

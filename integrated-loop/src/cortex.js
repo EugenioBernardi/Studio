@@ -35,7 +35,7 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 function defaults() {
   return {
     seed: 7,
-    NC: 400,            // cortical excitatory cells
+    NC: 800,            // cortical excitatory cells (2× scaled; dynamics are scale-invariant)
     nStim: 8,           // distinct sensory stimuli
     pIn: 0.10,          // fraction of cortex a stimulus drives (feedforward)
     inDrive: 1.0,       // feedforward drive amplitude (crisp: driven cells go clearly on)

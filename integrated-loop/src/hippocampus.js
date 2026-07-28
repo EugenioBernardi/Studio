@@ -35,7 +35,7 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 function hdefaults() {
   return {
     seed: 101,
-    NEC: 150, NDG: 500, NCA3: 240, NCA1: 180,
+    NEC: 300, NDG: 1000, NCA3: 480, NCA1: 360,   // 2× scaled; connectivity below is convergence-preserving
     // structural projection densities
     pCE: 0.12,   // cortex→EC
     pED: 0.06,   // EC→DG (sparse perforant)
@@ -83,17 +83,22 @@ function randSparse(rnd, nPost, nPre, p, w0) {
 function createHPC(opts) {
   const P = Object.assign(hdefaults(), opts || {});
   const rnd = mulberry32(P.seed);
+  const NCcx = opts && opts.NC ? opts.NC : 400;
+  // convergence-preserving connectivity: scale each projection's probability inversely with its
+  // presynaptic population (relative to the baseline sizes), so the mean number of inputs a cell
+  // receives — and therefore the sparsity/separation the inhibition sets — is scale-invariant.
+  const sc = (p, nPre, basePre) => Math.min(1, p * basePre / nPre);
   // structural projections
-  const Wce = randSparse(rnd, P.NEC, opts && opts.NC ? opts.NC : 400, P.pCE, P.wCE);
-  const Wed = randSparse(rnd, P.NDG, P.NEC, P.pED, P.wED);
-  const Wdc = randSparse(rnd, P.NCA3, P.NDG, P.pDC, P.wDC);
-  const Wc31 = randSparse(rnd, P.NCA1, P.NCA3, P.pC31, P.wC31);
+  const Wce = randSparse(rnd, P.NEC, NCcx, sc(P.pCE, NCcx, 400), P.wCE);
+  const Wed = randSparse(rnd, P.NDG, P.NEC, sc(P.pED, P.NEC, 150), P.wED);
+  const Wdc = randSparse(rnd, P.NCA3, P.NDG, sc(P.pDC, P.NDG, 500), P.wDC);
+  const Wc31 = randSparse(rnd, P.NCA1, P.NCA3, sc(P.pC31, P.NCA3, 240), P.wC31);
   // CA3 recurrent (plastic, starts silent). Rca3 = symmetric auto-association (holds/completes
   // an index); Rseq = DIRECTED transition weights (forward≫backward), kept in a SEPARATE matrix
   // so subtractive normalisation of the auto-associator never corrupts the forward:backward ratio.
-  const Rca3 = randSparse(rnd, P.NCA3, P.NCA3, P.pRec3, 0);
+  const Rca3 = randSparse(rnd, P.NCA3, P.NCA3, sc(P.pRec3, P.NCA3, 240), 0);
   for (let i = 0; i < P.NCA3; i++) for (let k = 0; k < Rca3.wt[i].length; k++) Rca3.wt[i][k] = 0;
-  const Rseq = randSparse(rnd, P.NCA3, P.NCA3, P.pRec3, 0);
+  const Rseq = randSparse(rnd, P.NCA3, P.NCA3, sc(P.pRec3, P.NCA3, 240), 0);
   for (let i = 0; i < P.NCA3; i++) for (let k = 0; k < Rseq.wt[i].length; k++) Rseq.wt[i][k] = 0;
   // plastic back-projections start silent, all-to-all (learned sparsely by Hebb)
   const Wc1e = { idx: [], wt: [] };  // EC ← CA1

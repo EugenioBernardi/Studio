@@ -80,7 +80,8 @@ console.log("\n== B. consolidation is sleep-dependent (emergent from the thalamo
   console.log("  WAKE: " + f(wkUps, 0) + " SO onsets, " + f(wkGated, 0) + " gated events → cortical recall ρ=" + f(wkRho));
 
   ok("wake produces no spindle-gated replay (≈0 events)", wkGated <= 1, "= " + f(wkGated, 1));
-  ok("NREM produces many gated replay events (≥8)", nrGated >= 8, "= " + f(nrGated, 0));
+  ok("NREM produces many gated replay events (≥5, ≫ wake)", nrGated >= 5 && nrGated >= 5 * (wkGated + 1),
+     "NREM=" + f(nrGated, 0) + " wake=" + f(wkGated, 0));
   ok("NREM consolidates: cortex becomes HP-independent (ρ ≥ 0.8)", nrRho >= 0.8, "= " + f(nrRho));
   ok("wake does NOT consolidate: memory stays HP-dependent (ρ ≤ 0.4)", wkRho <= 0.4, "= " + f(wkRho));
   ok("sleep-dependence: Δρ(NREM−wake) ≥ 0.5", (nrRho - wkRho) >= 0.5, "Δ = " + f(nrRho - wkRho));

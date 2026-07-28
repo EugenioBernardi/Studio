@@ -23,7 +23,10 @@ const H = require("./hippocampus.js");
 
 function createConsolidation(cortex, opts) {
   opts = opts || {};
-  const N = cortex.N, rnd = cortex.rnd, p = opts.pCC == null ? 0.15 : opts.pCC;
+  const N = cortex.N, rnd = cortex.rnd;
+  // convergence-preserving: scale cortico-cortical connectivity inversely with cortex size so the
+  // per-cell transition input — and therefore the consolidation RATE — is scale-invariant.
+  const p = Math.min(1, (opts.pCC == null ? 0.15 : opts.pCC) * 400 / N);
   // directed cortico-cortical connectivity (own random draw), weights start silent
   const idx = [], wt = [];
   for (let i = 0; i < N; i++) {

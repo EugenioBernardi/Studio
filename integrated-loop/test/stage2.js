@@ -66,18 +66,19 @@ const mean = k => R.reduce((a, r) => a + r[k], 0) / R.length;
 const worstLo = k => R.reduce((w, r) => r[k] < w ? r[k] : w, R[0][k]);
 const worstHi = k => R.reduce((w, r) => r[k] > w ? r[k] : w, R[0][k]);
 
+const HP = H.hdefaults(), NCA3 = HP.NCA3, NDG = HP.NDG;
 const mSz = mean("sz"), mIo = mean("io"), mDgo = mean("dgo"), mRc = mean("rc"), mCr = mean("cross");
 console.log("\n== index code + binding (" + SEEDS.length + " seeds) ==");
-console.log("  CA3 index≈" + f(mSz, 0) + " cells (" + f(mSz / 2.4, 1) + "% of 240)  xoverlap=" + f(mIo, 1) +
-            "   DG≈" + f(mean("dgSz") * 500, 0) + " cells xoverlap=" + f(mDgo, 1));
+console.log("  CA3 index≈" + f(mSz, 0) + " cells (" + f(100 * mSz / NCA3, 1) + "% of " + NCA3 + ")  xoverlap=" + f(mIo, 1) +
+            "   DG≈" + f(mean("dgSz") * NDG, 0) + " cells xoverlap=" + f(mDgo, 1));
 console.log("  reinstatement recall=" + f(mRc) + "  cross-talk=" + f(mCr));
 
 ok("six indices bound", R.every(r => r.nIdx === 6), "");
-ok("CA3 index sparse (3–15%)", mSz / 240 >= 0.03 && mSz / 240 <= 0.15, "= " + f(mSz / 2.4, 1) + "%");
+ok("CA3 index sparse (3–15%)", mSz / NCA3 >= 0.03 && mSz / NCA3 <= 0.15, "= " + f(100 * mSz / NCA3, 1) + "%");
 ok("indices orthogonal (xoverlap ≤ 20% of size)", mIo <= 0.20 * mSz, "overlap " + f(mIo, 1) + " / size " + f(mSz, 0));
 ok("DG sparse & separated (≤8% active, overlap ≤15% of size)",
-   mean("dgSz") <= 0.08 && mDgo <= 0.15 * (mean("dgSz") * 500),
-   f(mean("dgSz") * 100, 1) + "% active, overlap " + f(mDgo, 1) + " / size " + f(mean("dgSz") * 500, 0));
+   mean("dgSz") <= 0.08 && mDgo <= 0.15 * (mean("dgSz") * NDG),
+   f(mean("dgSz") * 100, 1) + "% active, overlap " + f(mDgo, 1) + " / size " + f(mean("dgSz") * NDG, 0));
 ok("reinstatement recall ≥ 0.80 (mean)", mRc >= 0.80, "= " + f(mRc));
 ok("reinstatement recall worst-seed ≥ 0.72", worstLo("rc") >= 0.72, "= " + f(worstLo("rc")));
 ok("reinstatement specific: cross-talk ≤ 0.15", mCr <= 0.15, "= " + f(mCr));

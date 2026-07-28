@@ -216,7 +216,7 @@ function step(S, M, W, inj) {
 
 // ---- convenience wrapper: one network instance ----
 function create(opts) {
-  initNet(2);
+  initNet(opts && opts.rings != null ? opts.rings : 2);
   const M = Object.assign(defaults(), opts || {});
   const S = makeState(opts && opts.seed != null ? opts.seed : 7);
   const W = buildConn(M);
