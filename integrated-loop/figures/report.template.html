@@ -642,7 +642,7 @@ document.getElementById('ventralCap').textContent =
     let s=svgEl(W,H)+grid();
     if(floor!=null){const y=Y(floor);
       s+=`<line x1="${LM}" y1="${y}" x2="${W-RM}" y2="${y}" stroke="${p.dim}" stroke-width="2" stroke-dasharray="5 4"/>`;
-      s+=`<text x="${W-RM-3}" y="${y-6}" fill="${p.dim}" font-size="10" text-anchor="end" font-family="ui-monospace,monospace">${floorLab} ${floor.toFixed(2)}</text>`;}
+      s+=`<text x="${LM+4}" y="${T+11}" fill="${p.dim}" font-size="10" text-anchor="start" font-family="ui-monospace,monospace">${floorLab} ${floor.toFixed(2)}</text>`;}
     items.forEach((it,i)=>{
       const x0=LM+i*iw;
       [['V',p.s1],['D',p.s2]].forEach(([k,c],j)=>{
@@ -711,12 +711,16 @@ document.getElementById('ventralCap').textContent =
       'loses ventral material ('+Wd.encodeOff.V.toFixed(2)+' vs '+Wd.intact.V.toFixed(2)+'): what the '+
       'left hippocampus never encoded, having it back cannot recover. That is why the Wada test asks '+
       'whether the REMAINING side can carry memory, and why the answer has to be obtained before the '+
-      'operation rather than after.';
+      'operation rather than after. The two lesion bars are identical, and necessarily so: a '+
+      'hippocampus with no bound output contributes exactly what an absent one does — measured at '+
+      Wd.engramSynapses.toFixed(0)+' bound synapses after encoding without it. That is the Wada '+
+      'premise rather than an emergent finding; with no partial engram, this model cannot dissociate '+
+      'encoding failure from retrieval failure.';
   }
 
   /* --- 4. the commissure, reported against seed noise --- */
   {
-    const rows=Bi.commissure;
+    const rows=Bi.commissure.rows, share=Bi.commissure.share;
     const xs=rows.map(r=>r.gComm), mx=Math.max(...xs);
     const X=v=>LM+(W-LM-RM)*(mx?v/mx:0);
     let s=svgEl(W,H)+grid();
@@ -730,13 +734,18 @@ document.getElementById('ventralCap').textContent =
     rows.forEach(r=>{ s+=`<text x="${X(r.gComm).toFixed(1)}" y="${H-BM+18}" fill="${p.ink}" font-size="11" text-anchor="middle">${r.gComm}</text>`; });
     s+=`<text x="${(LM+W-RM)/2}" y="${H-BM+38}" fill="${p.muted}" font-size="11" text-anchor="middle">commissural gain</text>`;
     document.getElementById('biComm').innerHTML=s+'</svg>';
-    const span=Math.max(...rows.map(r=>(r.V+r.D)/2))-Math.min(...rows.map(r=>(r.V+r.D)/2));
+    const span=Bi.commissure.span, sh=share[0];
     document.getElementById('biCommCap').textContent =
-      'The honest one. In the rat the ventral hippocampal commissure is substantial; in humans it is '+
-      'sparse and its functional role is not established, so a small or null effect was the prediction '+
-      'registered before running. Across a 0 → '+rows[rows.length-1].gComm+' sweep the whole span is '+
-      span.toFixed(2)+', against a between-seed spread of '+rows[0].sdV.toFixed(2)+
-      '. No parameter was swept to make this significant; it is reported as it came out.';
+      'The honest one, and it is a NULL. In the rat the ventral hippocampal commissure is substantial; '+
+      'in humans it is sparse and its functional role is not established, so a small or null effect was '+
+      'the prediction registered before running. Across a 0 → '+rows[rows.length-1].gComm+' sweep the '+
+      'whole span is '+span.toFixed(3)+', against a between-seed spread of '+rows[0].sdV.toFixed(2)+'. '+
+      'A flat line is a dead-wire signature, so the wire was measured rather than trusted: peak CA3 drive '+
+      'is mossy '+sh.mossy.toFixed(0)+', perforant '+sh.perforant.toFixed(1)+', recurrent '+
+      sh.recurrent.toFixed(1)+', commissural '+sh.commissural.toFixed(2)+' — the current arrives, it is '+
+      'simply '+sh.pct.toFixed(1)+'% of CA3 drive. The DG→CA3 mossy fibre is a detonator synapse, which '+
+      'is the point of the architecture, and a sparse commissure cannot outvote it. No parameter was '+
+      'swept to make this significant.';
   }
 })();
 
