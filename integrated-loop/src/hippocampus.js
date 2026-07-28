@@ -196,6 +196,7 @@ function createHPC(opts) {
     dg: new Float64Array(P.NDG), ca3: new Float64Array(P.NCA3),
     ca1: new Float64Array(P.NCA1), sub: new Float64Array(P.NSUB),
     adapt3: new Float64Array(P.NCA3),
+    commIn: null,                      // set by bilateral.js; null = an isolated hippocampus
     iEC2: 0, iEC3: 0, iECd: 0, iDG: 0, iCA3: 0, iCA1: 0, iSUB: 0,
     ecReinstate: new Float64Array(NCcx),
     indices: [], plastic: false,
@@ -226,8 +227,12 @@ function forwardStep(H, cortexA) {
   fieldStep(H, H.ec3, i => dot(H.Wce3, i, cortexA), P.gEC, "iEC3");
   fieldStep(H, H.dg, i => dot(H.Wed, i, H.ec2), P.gDG, "iDG");
   const achRec = 1 - 0.85 * P.ach;             // recurrence gated off while encoding (Hasselmo)
+  // H.commIn is optional per-cell CA3 drive from the OTHER hippocampus (see bilateral.js). It is
+  // gated by ACh exactly as the local recurrence is: the commissural/associational system is
+  // suppressed while encoding and released during retrieval, being the same class of synapse.
+  const comm = H.commIn;
   fieldStep(H, H.ca3, i => dot(H.Wdc, i, H.dg) + dot(H.Wec3, i, H.ec2)
-                          + achRec * dot(H.Rca3, i, H.ca3), P.gCA3, "iCA3");
+                          + achRec * (dot(H.Rca3, i, H.ca3) + (comm ? comm[i] : 0)), P.gCA3, "iCA3");
   // CA1: Schaffer drives (proximal dendrites); temporoammonic GATES (distal dendrites)
   fieldStep(H, H.ca1, i => {
     const sch = dot(H.Wc31, i, H.ca3);
@@ -252,10 +257,10 @@ function backwardStep(H) {
 // REPLAY: CA3 recurrent + directed transitions, with adaptation; then the output pass
 function replayStep(H) {
   const P = H.P, ca3 = H.ca3, N = ca3.length, dt = P.dt;
-  const achRec = 1 - 0.85 * P.ach;
+  const achRec = 1 - 0.85 * P.ach, comm = H.commIn;
   let sum = 0; const nx = new Float64Array(N);
   for (let i = 0; i < N; i++) {
-    const auto = dot(H.Rca3, i, ca3), seq = dot(H.Rseq, i, ca3);
+    const auto = dot(H.Rca3, i, ca3) + (comm ? comm[i] : 0), seq = dot(H.Rseq, i, ca3);
     const drive = achRec * auto + P.seqGain * seq - P.thr - P.gCA3rep * H.iCA3 - P.adaptGain3 * H.adapt3[i];
     nx[i] = drive > 0 ? clamp(P.gain * drive, 0, 1.3) : 0;
   }
