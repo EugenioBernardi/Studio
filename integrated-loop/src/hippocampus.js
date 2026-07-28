@@ -35,7 +35,7 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 function hdefaults() {
   return {
     seed: 101,
-    NEC: 300, NDG: 1000, NCA3: 480, NCA1: 360,   // 2× scaled; connectivity below is convergence-preserving
+    NEC: 600, NDG: 2000, NCA3: 960, NCA1: 720,   // 4× baseline; connectivity below is convergence-preserving
     // structural projection densities
     pCE: 0.12,   // cortex→EC
     pED: 0.06,   // EC→DG (sparse perforant)

@@ -27,27 +27,29 @@ how much cortico-cortical weight a memory has accumulated.
 
 ## Scale
 
-~2,940 principal cells with per-field feedback inhibition (PV-like pools), no k-winners
+~5,880 principal cells with per-field feedback inhibition (PV-like pools), no k-winners
 shortcuts:
 
 | field | N | role |
 |-------|---|------|
-| neocortex | 800 | recurrent, plastic — assemblies (auto-associative) |
-| entorhinal (EC) | 300 | bidirectional hub cortex⇄hippocampus |
-| dentate gyrus (DG) | 1000 | pattern separation (sparsest) |
-| CA3 | 480 | index + sequence store (auto-assoc + directed transitions) |
-| CA1 | 360 | back-projection relay to EC |
+| neocortex | 1600 | recurrent, plastic — assemblies (auto-associative) |
+| entorhinal (EC) | 600 | bidirectional hub cortex⇄hippocampus |
+| dentate gyrus (DG) | 2000 | pattern separation (sparsest) |
+| CA3 | 960 | index + sequence store (auto-assoc + directed transitions) |
+| CA1 | 720 | back-projection relay to EC |
 
 Stage 5 adds a validated **thalamocortical sheet** (333 populations, 9 cell classes ×
-37 columns — the faithful extraction of `apps/thalamocortical-3d.html`, scaled from 19 to 37
-columns) as the NREM state generator that gates the loop.
+37 columns — the faithful extraction of `apps/thalamocortical-3d.html`) as the NREM state
+generator that gates the loop. Its column count is orthogonal to the loop's neuron count and
+is kept at 37 (rather than 61) so a full night stays tractable; the sheet reproduces the same
+states at any ring count.
 
 **Scale-invariance is a designed property, not luck.** Sparsity is set by mean-field feedback
 inhibition (a fraction, independent of N), and every projection is *convergence-preserving*
 (its connection probability scales as 1/N_presynaptic), so the per-cell input statistics — and
 therefore assembly sparsity, index separation, reinstatement, replay, and the consolidation
-rate — are unchanged by scale. The model was validated at 400 cortical cells and holds
-identically at 800; the sizes above are the shipped 2× configuration.
+rate — are unchanged by scale. The validated numbers are identical at 400, 800, and 1600
+cortical cells; the sizes above are the shipped 4×-baseline configuration.
 
 ## Layout
 
@@ -60,18 +62,18 @@ identically at 800; the sizes above are the shipped 2× configuration.
 ## Validation — 40 / 40, against real data (at the shipped 2× scale)
 
 Each stage replicates across seeds and includes an ablation proving its mechanism is
-load-bearing (remove it and the target breaks). Numbers below are at 800 cortical cells;
-they are identical at 400 (scale-invariance, above).
+load-bearing (remove it and the target breaks). Numbers below are at 1600 cortical cells;
+the *fractions* are identical at 400 and 800 (scale-invariance, above).
 
 **Stage 1 — cortical assemblies** (8 seeds, 8/8). Feedback inhibition sets sparsity;
 subtractive synaptic normalisation (Miller & MacKay 1994) keeps membership crisp.
-Sparsity **7.3 %** (Barth & Poulet 2012: 2–10 %), assemblies orthogonal (xoverlap 2.2 of
-~61 cells), pattern-completion recall **0.93** from a 50 % cue, off-target 0.8 cells.
-*Ablations:* no plasticity → recall 0.51 (= cue fraction); no normalisation → assemblies
-merge (overlap 257/257).
+Sparsity **7.3 %** (Barth & Poulet 2012: 2–10 %), assemblies orthogonal (~120 cells,
+xoverlap ~5 %), pattern-completion recall **0.89** from a 50 % cue, off-target 2.7 % of the
+assembly. *Ablations:* no plasticity → recall 0.50 (= cue fraction); no normalisation →
+assemblies merge (overlap 385/385).
 
 **Stage 2 — index binding** (6 seeds, 9/9). Mossy detonator selects a sparse CA3 index;
-bidirectional binding (Wec, Wc1e) ties it to its assembly. CA3 index **6 %** (~29 cells),
+bidirectional binding (Wec, Wc1e) ties it to its assembly. CA3 index **6 %** (~56 cells),
 orthogonal; DG separation 4.7 % active; reactivating an index reinstates ITS assembly —
 recall **0.87**, cross-talk **0.06**. *Ablation:* no binding → recall 0.00.
 

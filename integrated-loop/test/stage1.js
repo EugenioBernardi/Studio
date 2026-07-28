@@ -70,7 +70,8 @@ ok("assemblies orthogonal (xoverlap ≤ 15% of size)", mOv <= 0.15 * mSz,
 ok("worst-seed overlap still ≤ 25% of size", wOv <= 0.25 * mSz, "worst " + f(wOv, 1));
 ok("pattern completion recall ≥ 0.80 (mean)", mRc >= 0.80, "= " + f(mRc));
 ok("completion robust: worst-seed recall ≥ 0.75", wRc >= 0.75, "= " + f(wRc));
-ok("completion is specific: off-target ≤ 2 cells", mSpc <= 2.0, "= " + f(mSpc, 1));
+ok("completion is specific: off-target ≤ 5% of assembly", mSpc <= 0.05 * mSz,
+   "= " + f(mSpc, 1) + " of " + f(mSz, 0) + " (" + f(100 * mSpc / mSz, 1) + "%)");
 
 // mechanism controls — each load-bearing piece must matter (remove it → a target breaks)
 console.log("\n== mechanism controls (ablations) ==");

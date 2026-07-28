@@ -35,7 +35,7 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 function defaults() {
   return {
     seed: 7,
-    NC: 800,            // cortical excitatory cells (2× scaled; dynamics are scale-invariant)
+    NC: 1600,           // cortical excitatory cells (4× baseline; dynamics are scale-invariant)
     nStim: 8,           // distinct sensory stimuli
     pIn: 0.10,          // fraction of cortex a stimulus drives (feedforward)
     inDrive: 1.0,       // feedforward drive amplitude (crisp: driven cells go clearly on)
@@ -68,11 +68,15 @@ function create(opts) {
     stim.push(v);
   }
 
-  // sparse recurrent connectivity: presynaptic index/weight lists per postsynaptic cell
+  // sparse recurrent connectivity: presynaptic index/weight lists per postsynaptic cell.
+  // convergence-preserving: pRec scales as 1/N (relative to the 400-cell baseline) so each cell
+  // keeps a fixed ~60 recurrent inputs regardless of scale. This holds within-assembly recurrence
+  // (hence pattern completion) constant AND makes the per-step cost O(N) instead of O(N²).
+  const pRecEff = Math.min(1, P.pRec * 400 / N);
   const preIdx = [], preW = [];
   for (let i = 0; i < N; i++) {
     const idx = [], w = [];
-    for (let j = 0; j < N; j++) if (j !== i && rnd() < P.pRec) { idx.push(j); w.push(P.wRecInit); }
+    for (let j = 0; j < N; j++) if (j !== i && rnd() < pRecEff) { idx.push(j); w.push(P.wRecInit); }
     preIdx.push(Int32Array.from(idx)); preW.push(Float64Array.from(w));
   }
 
