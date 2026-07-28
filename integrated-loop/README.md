@@ -7,10 +7,23 @@ sequence and reinstates the cortical assemblies in order, time-compressed; repla
 co-activation writes **cortico-cortical** links so that, after enough replay, the cortex
 recalls the sequence **without the hippocampus** — the systems-consolidation gradient.
 
-Every italicised phenomenon is checked against a specific experimental number. Nothing that
-should be emergent is scripted: sparsity comes from feedback inhibition, the replay order
-comes from learned CA3 transition weights, the consolidation gradient comes from how much
-cortico-cortical weight a memory has accumulated.
+## What this is (and is not)
+
+This is a **synthesis of established mechanisms integrated into one coupled, interactive,
+numerically testable circuit** — not a claim of new biology. Each component is a textbook
+mechanism (hippocampal index theory; DG pattern separation and mossy-fibre detonation;
+ACh-gated encoding/retrieval; CA3 attractor completion; sharp-wave-ripple replay and its
+STDP-directed order; systems consolidation; the thalamocortical slow oscillation and
+spindles). The contribution is that they run **together in one model**, each interface is
+principled rather than glue, and every step reproduces a **published experimental number**
+rather than a scripted animation. The value is a working, inspectable substrate for asking
+"what happens to consolidation if I change X" — a tools/methods contribution, in the spirit
+of eNeuro's Open Source Tools and Methods track.
+
+Every italicised phenomenon above is checked against a specific experimental number, and
+nothing that should be emergent is scripted: sparsity comes from feedback inhibition, the
+replay order comes from learned CA3 transition weights, the consolidation gradient comes from
+how much cortico-cortical weight a memory has accumulated.
 
 ## Scale
 

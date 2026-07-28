@@ -1,12 +1,15 @@
 # The loop: sensory cortex ⇄ entorhinal ⇄ hippocampus — encode · replay · consolidate
 
-**Scientific claim (the result, not a demo).** A sequence of sensory stimuli forms cortical
-assemblies; the hippocampus binds an index to each and stores their order; during low-ACh
-sharp-wave-ripple states the hippocampus **replays** the sequence and, through the entorhinal
-back-projection, **reinstates the cortical assemblies in the encoded order, time-compressed**;
-replay-driven co-activation strengthens **cortico-cortical** associations so that, after enough
-replay, the **cortex recalls the sequence without the hippocampus** — a systems-consolidation
-gradient. Each italicised phenomenon is validated against a specific experimental number.
+**What this integrates (established mechanisms, one circuit — not a new-biology claim).** A
+sequence of sensory stimuli forms cortical assemblies; the hippocampus binds an index to each
+and stores their order; during low-ACh sharp-wave-ripple states the hippocampus **replays** the
+sequence and, through the entorhinal back-projection, **reinstates the cortical assemblies in the
+encoded order, time-compressed**; replay-driven co-activation strengthens **cortico-cortical**
+associations so that, after enough replay, the **cortex recalls the sequence without the
+hippocampus** — a systems-consolidation gradient. Every one of these is a textbook mechanism;
+the point of this spec is that they run *together* in one coupled circuit, each interface
+principled, and each italicised phenomenon reproduces a specific **published** experimental
+number. The deliverable is an interactive, testable synthesis — a tools/methods contribution.
 
 ## Principled interfaces (not glue)
 
@@ -38,6 +41,8 @@ feedback/feed-forward inhibitory pools (PV/SOM) setting sparsity — not k-WTA s
 | 6 | ripple band | 150–250 Hz during SWR | Buzsáki 2015 |
 | 7 | cortical sparsity | assemblies 2–10 % active, orthogonal across stimuli | Barth & Poulet 2012 |
 
-Targets **1, 2, 5** are the crux — they turn "I connected modules" into "this loop predicts the
-consolidation gradient." Build order: cortex assemblies (7) → encode+bind → replay+reinstatement
-(1,2,3,4,6) → consolidation gradient (5). Validate each before the next; replicate across seeds.
+Targets **1, 2, 5** are the ones that show the *integration* works end to end — that a single
+coupled circuit reproduces the encoded order, the compression, and the consolidation gradient
+together, each matching its published number. Build order: cortex assemblies (7) → encode+bind →
+replay+reinstatement (1,2,3,4,6) → consolidation gradient (5). Validate each before the next;
+replicate across seeds.
