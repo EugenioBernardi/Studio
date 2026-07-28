@@ -25,6 +25,10 @@ shortcuts:
 | CA3 | 240 | index + sequence store (auto-assoc + directed transitions) |
 | CA1 | 180 | back-projection relay to EC |
 
+Stage 5 adds a validated **thalamocortical sheet** (171 populations, 9 cell classes ×
+19 columns — the faithful extraction of `apps/thalamocortical-3d.html`) as the NREM state
+generator that gates the loop.
+
 ## Layout
 
     src/cortex.js        neocortical assemblies (stage 1)
@@ -72,6 +76,26 @@ links; a recent memory (2 replays) is HP-dependent, a remote memory (30 replays)
 
 The lesion abolishes recent but spares remote recall (Kim & Fanselow 1992; Frankland &
 Bontempi 2005). *Ablation:* no consolidation plasticity → cortex never HP-independent (0.00).
+
+**Stage 5 — cross-scale coupling: sleep-dependent consolidation** (`test/stage5.js`, run with
+`npm run test:cross-scale`; 9/9). A validated thalamocortical sheet generates the NREM state
+and *gates* the loop, replacing the hand-set low-ACh window. Its slow-oscillation Up-states
+(Down→Up transitions) trigger hippocampal replay (Sirota 2003; Battaglia 2004), and thalamic
+spindle power gates whether that replay consolidates (Latchoumane 2017; Maingret 2016). The
+consolidation window is therefore **emergent from the thalamocortical rhythm**, and consolidation
+becomes sleep-dependent:
+
+- Part A — the extraction reproduces the documented regimes: wake **gamma-dominant**; NREM
+  **slow oscillation 1.05 Hz** with **73% Down-state occupancy**; isolated TC–RTN **spindle 16.5 Hz**.
+- Part B — **NREM** produces ~13 spindle-gated replay events/night → cortex becomes
+  HP-independent (ρ = 1.00); **wake** (persistent Up state, no SO onsets, no spindles) gates
+  nothing → the memory stays HP-dependent (ρ = 0.00). Δρ = 1.00.
+
+This spans micro→meso (thalamocortical conductances and oscillation) → systems (replay gating)
+→ behavioural (sleep-dependent consolidation gradient). *Known limit:* the pathological arm —
+the thalamic GABA-B spindle→spike-wave switch abolishing consolidation (the ESES/CSWS story) —
+is not reproduced here: that regime was validated in a standalone thalamic model not present in
+this tree, and does not express from the app extraction alone.
 
 ## Use
 
