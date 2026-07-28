@@ -12,6 +12,8 @@
     "test:visual-pathology": "node test/stage11_visual.js",
     "test:chiasm": "node test/stage12_chiasm.js",
     "test:bilateral": "node test/stage13_bilateral.js",
+    "test:bilateral-scale": "node test/stage13_scale.js",
+    "test:neglect": "node test/stage14_neglect.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },
