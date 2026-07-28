@@ -1,0 +1,10 @@
+{
+  "name": "integrated-loop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sensory cortex ⇄ entorhinal ⇄ hippocampus: encode · replay · consolidate. Numerically validated against experimental data.",
+  "scripts": {
+    "test": "node test/stage1.js"
+  },
+  "license": "MIT"
+}
