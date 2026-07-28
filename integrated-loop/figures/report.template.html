@@ -146,6 +146,9 @@
       <figure><div id="mnStages"></div><figcaption id="mnStagesCap"></figcaption></figure>
       <figure><div id="mnFilters"></div><figcaption id="mnFiltersCap"></figcaption></figure>
     </div>
+    <div style="margin-top:16px">
+      <figure><div id="mnFront"></div><figcaption id="mnFrontCap"></figcaption></figure>
+    </div>
   </section>
 
   <section class="card">
@@ -401,6 +404,18 @@ document.getElementById('ventralCap').textContent =
     'With the shipped (shape-tuned) filters the hierarchy is subtractive: V1 '+M.stages[1].acc.toFixed(1)+
     '% and V2 '+M.stages[2].acc.toFixed(1)+'% both fall below raw pixels at '+M.stages[0].acc.toFixed(1)+
     '%. A front-end that loses to its own input is not yet earning its place.';
+
+  const FR=M.frontends;
+  document.getElementById('mnFront').innerHTML =
+    bars(null, FR.map(x=>({name:x.name, shape:x.shape, mnist:x.mnist})),
+         [['shape',p.s2],['mnist',p.s1]], null);
+  document.getElementById('mnFrontCap').textContent =
+    'Scored with ONE readout-independent classifier for every front-end (leave-one-out nearest '+
+    'centroid on the V2 population vector), so no result depends on hand-tuned thresholds. Each '+
+    'single-scale bank collapses off the task it was tuned for — the fine bank falls to '+
+    FR[1].shape.toFixed(1)+'% on shapes, near the 33% chance level. HMAX is the only bank good at '+
+    'both. It does give up ~5 points of MNIST versus a bank tuned only for digits: that is the '+
+    'price of invariance, and it is the right trade.';
 
   document.getElementById('mnFilters').innerHTML =
     bars(null, M.filters, [['mnist',p.s1],['shape',p.s2]], M.rawSweep);
