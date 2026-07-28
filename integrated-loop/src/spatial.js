@@ -8,8 +8,18 @@
 
      ATN   anterior thalamic nuclei — head-direction ring (Taube). Also the Papez relay:
            subiculum → mammillary bodies → ATN → retrosplenial/cingulate → parahippocampal.
-     PPC   posterior parietal — EGOCENTRIC (body-centred) bearing map, driven by
-           somatosensory/proprioceptive body state.
+     PPC   posterior parietal — EGOCENTRIC bearing map.
+
+           OVERCLAIM CORRECTED. This said "body-centred … driven by somatosensory/
+           proprioceptive body state". It is not, and never was. The egocentric map here is
+           produced ENTIRELY by the retrosplenial transform — allocentric bearings rotated by
+           head direction — with no somatosensory, proprioceptive or vestibular input of any
+           kind. Grep the source: there is no body in this model. The frame is head-referenced,
+           not body-referenced, and calling it body-centred imported a claim the code does not
+           support. Consequence worth stating: the depersonalisation thread this file's header
+           gestures at is NOT supported by what is built, because the "self" pole of the
+           egocentric frame is empty. A real S1/S2 with a somatotopic body map and a
+           proprioceptive posture signal is the missing piece, and it is a build, not a comment.
      RSC   retrosplenial — the TRANSFORM itself, a gain-field population indexed by
            (allocentric bearing × head direction). Each unit projects to the egocentric
            bin (allo − HD), so the population performs the rotation. Bidirectional:

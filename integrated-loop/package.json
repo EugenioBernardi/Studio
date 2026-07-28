@@ -18,6 +18,7 @@
     "test:sensitivity": "node test/stage16_sensitivity.js",
     "test:external": "node test/stage17_external.js",
     "test:syndromes": "node test/stage18_visualsyndromes.js",
+    "test:auditory": "node test/stage19_auditory.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },
