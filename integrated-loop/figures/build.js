@@ -22,6 +22,7 @@ const SOURCES = [
   ["chiasm.json",      d => ({ chiasm: d })],   // bilateral pathway, per-eye field charts
   ["mst.json",         d => ({ mst: d })],      // mnemonic similarity task
   ["bilateral.json",   d => ({ bilateral: d })],// two hippocampi: material specificity, H.M., Wada
+  ["neglect.json",     d => ({ neglect: d })],  // two parietal cortices: extinction, bisection, the paradox
   ["hmax.json",        d => ({ hmax: d })],
 ];
 
