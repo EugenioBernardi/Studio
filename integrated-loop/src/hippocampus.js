@@ -42,12 +42,13 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 function hdefaults() {
   return {
     seed: 101,
-    // sizes at human ratios (development scale; CA3 = 240 sets the rest)
+    // sizes at human ratios (CA3 = 480 sets the rest). At CA3 240 the ~15-cell indices
+    // are small-number noisy: worst-seed reinstatement 0.72 vs 0.81 here — scale fixed the cause.
     // EC is sized as the INTERFACE to the whole neocortex, not only by hippocampal ratio:
     // layer II is ~0.65×10⁶ cells in absolute terms, and a ratio-only EC (60 cells here) is a
     // bottleneck that no downstream plasticity can undo (verified: recall 0.76→0.82, cross 0.12→0.08).
-    NEC2: 150, NEC3: 150, NECd: 400,
-    NDG: 1350, NCA3: 240, NCA1: 1320, NSUB: 400,
+    NEC2: 300, NEC3: 300, NECd: 800,
+    NDG: 2700, NCA3: 480, NCA1: 2640, NSUB: 800,
     // target in-degrees per pathway (anatomically ordered: mossy fewest, recurrent/Schaffer most)
     kPPdg: 30, kPPca3: 25, kMF: 12, kRec: 100, kSch: 60, kTA: 20, kSub: 50, kSubEcd: 30, kCa1Ecd: 40,
     // pathway weights (mean of the lognormal)
