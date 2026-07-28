@@ -61,6 +61,13 @@
   th,td{text-align:right;padding:5px 10px;border-bottom:1px solid var(--grid)}
   th:first-child,td:first-child{text-align:left}
   th{font-weight:600;color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+  .chGrid{display:grid;gap:14px 18px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+  .chCase{border:1px solid var(--grid);border-radius:8px;padding:10px 12px 11px}
+  .chCase .site{font-size:12px;font-weight:600;margin-bottom:1px}
+  .chCase .dx{font-size:11.5px;color:var(--muted);margin-bottom:8px}
+  .chEyes{display:flex;gap:12px;align-items:flex-start}
+  .chEyes figure{text-align:center;flex:1}
+  .chNums{font-size:11px;color:var(--muted);margin-top:7px;display:flex;gap:14px;flex-wrap:wrap}
   .polars{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(96px,1fr))}
   .polars figure{text-align:center}
   svg{display:block;max-width:100%}
@@ -180,6 +187,18 @@
   </section>
 
   <section class="card">
+    <h2>Localisation — two retinas and a real chiasm</h2>
+    <p class="why">A field defect localises a lesion only because the two eyes are wired
+    asymmetrically: nasal fibres cross, temporal fibres do not. With one retina every defect
+    below collapses into “part of the field is missing”. With two, the pattern names the site.
+    Each pair is a static-perimetry sweep — a probe stepped over a 12 × 12 grid and scored by
+    the LGN response, per eye, in the patient’s field coordinates.</p>
+    <div class="legend" id="chLegend"></div>
+    <div id="chiasm" class="chGrid"></div>
+    <figcaption id="chCap"></figcaption>
+  </section>
+
+  <section class="card">
     <h2>All figures, as numbers</h2>
     <div class="scroll"><table id="tbl"></table></div>
   </section>
@@ -203,7 +222,7 @@ const svgEl = (w,h) => `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" 
 function drawAll(){
   // every container that is APPENDED to (rather than assigned) must be cleared here, or the
   // theme-change redraw stacks a second copy underneath the first
-  ['ventral','polars','perimetry'].forEach(id=>{
+  ['ventral','polars','perimetry','chiasm'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.innerHTML='';
   });
 
@@ -540,8 +559,8 @@ document.getElementById('ventralCap').textContent =
       s+=`<rect x="${gx*cell}" y="${gy*cell}" width="${cell-1.5}" height="${cell-1.5}" rx="2" fill="${col}"><title>${names[k]} — sensitivity ${v.toFixed(2)}</title></rect>`;
     }
     // meridians
-    s+=`<line x1="${W/2}" y1="0" x2="${W/2}" y2="${H}" stroke="${p.muted}" stroke-width="1" stroke-dasharray="3 3" opacity="0.6"/>`;
-    s+=`<line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="${p.muted}" stroke-width="1" stroke-dasharray="3 3" opacity="0.6"/>`;
+    s+=`<line x1="${W/2}" y1="0" x2="${W/2}" y2="${H}" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="3 3" style="mix-blend-mode:difference"/>`;
+    s+=`<line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="3 3" style="mix-blend-mode:difference"/>`;
     s+='</svg>';
     host.insertAdjacentHTML('beforeend',
       `<figure>${s}<div class="tag" style="margin-top:6px">${names[k]}</div></figure>`);
@@ -589,6 +608,84 @@ document.getElementById('ventralCap').textContent =
   }
 })();
 
+/* ---------- localisation: bilateral pathway ---------- */
+(function(){
+  const p=S(), Ch=D.chiasm; if(!Ch) return;
+  const G=Ch.G, host=document.getElementById('chiasm');
+  const reg=(c,pred)=>{let s=0,n=0;for(let gy=0;gy<G;gy++)for(let gx=0;gx<G;gx++)
+    if(pred(gx/G,gy/G)){s+=c[gy][gx];n++;} return n?s/n:0;};
+  const LEFT=u=>u<0.5, RIGHT=u=>u>=0.5, SUP=v=>v<0.5, INF=v=>v>=0.5, ANY=()=>true;
+  const half=(c,up,vp)=>reg(c,(u,v)=>up(u)&&(vp||ANY)(v));
+  // the fovea straddles the vertical meridian, so foveal sensitivity is sampled INSIDE the
+  // affected hemifield — averaging across the meridian mixes in the intact side
+  const fov=c=>reg(c,(u,v)=>LEFT(u)&&Math.hypot(u-0.5,v-0.5)<0.16);
+  const per=c=>reg(c,(u,v)=>LEFT(u)&&Math.hypot(u-0.5,v-0.5)>0.3);
+  const q=x=>x.toFixed(2);
+  const ramp=v=>{const c0=hex(p.h0),c1=hex(p.h1);
+    return `rgb(${Math.round(c0[0]+(c1[0]-c0[0])*v)},${Math.round(c0[1]+(c1[1]-c0[1])*v)},${Math.round(c0[2]+(c1[2]-c0[2])*v)})`;};
+
+  const chart=(m,label)=>{
+    const cell=14, W=G*cell, H=G*cell;
+    let s=svgEl(W,H);
+    for(let gy=0;gy<G;gy++)for(let gx=0;gx<G;gx++){
+      const v=Math.max(0,Math.min(1,m[gy][gx]));
+      s+=`<rect x="${gx*cell}" y="${gy*cell}" width="${cell-1.5}" height="${cell-1.5}" rx="2" fill="${ramp(v)}"><title>${esc(label)} — sensitivity ${v.toFixed(2)}</title></rect>`;
+    }
+    s+=`<line x1="${W/2}" y1="0" x2="${W/2}" y2="${H}" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="3 3" style="mix-blend-mode:difference"/>`;
+    s+=`<line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="3 3" style="mix-blend-mode:difference"/>`;
+    return s+'</svg>';
+  };
+
+  const CASES=[
+    ['intact','normal fields',null],
+    ['left optic nerve','monocular blindness · prechiasmal',null],
+    ['chiasm','bitemporal hemianopia · the only NON-congruous defect',null],
+    ['right optic tract','left homonymous hemianopia · retrochiasmal',null],
+    ["right Meyer's loop",'left superior quadrantanopia · “pie in the sky”',
+      c=>'left field: superior '+q(half(c,LEFT,SUP))+' · inferior '+q(half(c,LEFT,INF))],
+    ['right parietal radiation','left inferior quadrantanopia',
+      c=>'left field: superior '+q(half(c,LEFT,SUP))+' · inferior '+q(half(c,LEFT,INF))],
+    ['right occipital','left homonymous hemianopia, macula involved',
+      c=>'blind side: fovea '+q(fov(c))+' · periphery '+q(per(c))],
+    ['right occipital, macula spared','left homonymous hemianopia, macula spared',
+      c=>'blind side: fovea '+q(fov(c))+' · periphery '+q(per(c))],
+  ];
+
+  // OD is printed first, as on a clinical field report; both charts are in field coordinates
+  for(const [key,dx,extra] of CASES){
+    const ch=Ch.charts[key]; if(!ch) continue;
+    const eyes=[['OD · right eye',ch.R],['OS · left eye',ch.L]];
+    let s='<div class="chCase"><div class="site">'+esc(key)+'</div><div class="dx">'+dx+'</div>';
+    s+='<div class="chEyes">'+eyes.map(([lab,m])=>
+      `<figure>${chart(m,key+' · '+lab)}<div class="tag">${esc(lab)}</div></figure>`).join('')+'</div>';
+    s+='<div class="chNums">'+eyes.map(([lab,m])=>
+      `<span class="n">${lab.slice(0,2)} &nbsp;L ${q(half(m,LEFT))} · R ${q(half(m,RIGHT))}</span>`).join('')+'</div>';
+    if(extra) s+='<div class="chNums"><span class="n">'+extra(ch.L)+'</span></div>';
+    host.insertAdjacentHTML('beforeend',s+'</div>');
+  }
+
+  document.getElementById('chLegend').innerHTML =
+    [['blind 0.00',0],['0.50',0.5],['normal 1.00',1]].map(([t,v])=>
+      `<span><i class="sw" style="background:${ramp(v)};border:1px solid ${p.line}"></i>${t}</span>`).join('')+
+    `<span>dashed lines: vertical and horizontal meridians</span>`;
+
+  const C0=Ch.charts, cap=[];
+  cap.push('Chiasm: the left eye loses its LEFT field ('+q(half(C0['chiasm'].L,LEFT))+
+    ') while the right eye loses its RIGHT ('+q(half(C0['chiasm'].R,RIGHT))+
+    ') — opposite halves, which no single lesion behind the chiasm can produce.');
+  cap.push('Optic tract: both eyes lose the SAME half ('+q(half(C0['right optic tract'].L,LEFT))+
+    ' / '+q(half(C0['right optic tract'].R,LEFT))+') — congruous, homonymous.');
+  cap.push("Meyer's loop takes the superior quadrant ("+q(half(C0["right Meyer's loop"].L,LEFT,SUP))+
+    ' vs '+q(half(C0["right Meyer's loop"].L,LEFT,INF))+
+    ') and the parietal radiation the inferior one ('+q(half(C0['right parietal radiation'].L,LEFT,INF))+
+    ' vs '+q(half(C0['right parietal radiation'].L,LEFT,SUP))+') — the two halves of the same radiation.');
+  cap.push('Occipital sparing is measured INSIDE the blind hemifield: fovea '+
+    q(fov(C0['right occipital'].L))+' → '+q(fov(C0['right occipital, macula spared'].L))+
+    ' while the periphery stays at '+q(per(C0['right occipital, macula spared'].L))+
+    '. The fovea straddles the vertical meridian, so averaging across it makes an unspared macula read as preserved.');
+  document.getElementById('chCap').textContent=cap.join(' ');
+})();
+
 /* ---------- table ---------- */
 (function(){
   const rows=[];
@@ -602,6 +699,18 @@ document.getElementById('ventralCap').textContent =
   rows.push(['Replay · compression', D.replay.compression.toFixed(1)+'×','vs '+D.replay.encodeMsPerItem+' ms/item encoding']);
   D.consolidation.events.forEach((e,i)=>rows.push(['Consolidation · '+e+' replay events','ρ '+D.consolidation.mean[i].toFixed(2),
     'seeds '+D.consolidation.curves.map(r=>r[i].toFixed(2)).join(', ')]));
+  if(D.chiasm){
+    const G=D.chiasm.G;
+    const reg=(c,pred)=>{let s=0,n=0;for(let gy=0;gy<G;gy++)for(let gx=0;gx<G;gx++)
+      if(pred(gx/G,gy/G)){s+=c[gy][gx];n++;} return n?s/n:0;};
+    const hf=(c,lo)=>reg(c,u=>lo?u<0.5:u>=0.5);
+    for(const k of Object.keys(D.chiasm.charts)){
+      const c=D.chiasm.charts[k];
+      rows.push(['Localisation · '+k,
+        'OD L '+hf(c.R,1).toFixed(2)+' · R '+hf(c.R,0).toFixed(2),
+        'OS L '+hf(c.L,1).toFixed(2)+' · R '+hf(c.L,0).toFixed(2)]);
+    }
+  }
   document.getElementById('tbl').innerHTML =
     '<thead><tr><th>quantity</th><th>value</th><th>detail</th></tr></thead><tbody>'+
     rows.map(r=>`<tr><td>${esc(r[0])}</td><td class="num">${esc(r[1])}</td><td class="num" style="color:var(--muted)">${esc(r[2])}</td></tr>`).join('')+
