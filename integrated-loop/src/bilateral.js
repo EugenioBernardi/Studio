@@ -225,8 +225,13 @@ function retrieveSplit(cortex, brain, sp, opts) {
       const h = brain[s], g = brain.gain[s];
       for (let t = 0; t < (opts.backMs || 40); t++) H.backwardStep(h);
       // lateralised RETURN path — see the header note; this is what makes the deficit
-      // material-specific rather than merely global
-      for (let i = 0; i < cortex.N; i++) drive[i] += scale * g[i] * h.ecReinstate[i];
+      // material-specific rather than merely global.
+      // papez: the recollective gain returned by the extended hippocampal circuit
+      // (subiculum → fornix → mammillary bodies → MTT → ATN → retrosplenial → entorhinal).
+      // It multiplies the reinstatement, so breaking that circuit abolishes recollection
+      // with the hippocampus itself untouched — which is what diencephalic amnesia is.
+      const pz = opts.papez == null ? 1 : opts.papez;
+      for (let i = 0; i < cortex.N; i++) drive[i] += pz * scale * g[i] * h.ecReinstate[i];
     }
     cortex.a.fill(0); cortex.inh = 0;
     C.setExt(cortex, drive); C.run(cortex, opts.dur == null ? 0.20 : opts.dur);
