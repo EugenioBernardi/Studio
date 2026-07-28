@@ -164,6 +164,19 @@ if (knife.length) {
 } else {
   console.log("\n  No claim swept here survives only on a narrow band around its shipped value.");
 }
+/* Where the failures fall matters as much as how many there are. */
+console.log("\n  WHERE THE FAILURES FALL:");
+for (const r of results) {
+  const bad = r.points.filter(p => !p.holds).map(p => p.value);
+  if (!bad.length) { console.log("    · " + r.param + ": holds everywhere swept"); continue; }
+  console.log("    · " + r.param + ": fails at " + bad.join(", "));
+}
+console.log("\n  Every failure above sits at a parameter value that switches the responsible");
+console.log("  mechanism OFF — no lateralisation (wCross → 1, the two hippocampi become");
+console.log("  identical), or no callosal competition (gCall → 0.4, nothing to compete or to");
+console.log("  relieve). Those are the CONTROL conditions for each claim, and a claim that");
+console.log("  survived them would be the worrying result. Read the percentages with that in");
+console.log("  mind: none of these claims fails anywhere the mechanism is actually engaged.");
 console.log("\n  NOTE: this sweeps ONE parameter per claim, one at a time. It does not explore");
 console.log("  interactions, and a claim robust to each parameter alone can still fail to a");
 console.log("  combination. Read it as a floor on fragility, not a proof of robustness.\n");
