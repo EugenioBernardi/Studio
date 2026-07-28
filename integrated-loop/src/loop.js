@@ -5,7 +5,7 @@
 
    Encoding (high ACh, theta): drive each stimulus in the sequence into cortex,
    let its assembly settle, push it forward through EC→DG→CA3 to select a sparse
-   index, then bind bidirectionally (Wec: EC→cortex; Wc1e: CA1→EC) and store the
+   index, then bind the output stage (Wec: EC deep → cortex) and store the
    ORDER as asymmetric CA3 recurrent links I_k→I_{k+1}.
 
    Replay (low ACh, SWR): ignite the first index; CA3 asymmetric recurrence walks
@@ -18,8 +18,9 @@ const H = require("./hippocampus.js");
 
 // settle the hippocampal fields to the pattern for the CURRENT cortical activity
 function settleForward(hpc, cortexA, ms) {
-  hpc.ec.fill(0); hpc.dg.fill(0); hpc.ca3.fill(0); hpc.ca1.fill(0);
-  hpc.iEC = hpc.iDG = hpc.iCA3 = hpc.iCA1 = 0;
+  hpc.ec2.fill(0); hpc.ec3.fill(0); hpc.ecd.fill(0);
+  hpc.dg.fill(0); hpc.ca3.fill(0); hpc.ca1.fill(0); hpc.sub.fill(0);
+  hpc.iEC2 = hpc.iEC3 = hpc.iECd = hpc.iDG = hpc.iCA3 = hpc.iCA1 = hpc.iSUB = 0;
   for (let t = 0; t < (ms || 80); t++) H.forwardStep(hpc, cortexA);
 }
 
@@ -84,9 +85,17 @@ function encodeSequence(cortex, hpc, order, opts) {
     settleForward(hpc, cortex.a, opts.settleMs || 80);
     const idxCells = H.activeSet(hpc.ca3, actThr);
 
-    // bidirectional binding: index ↔ EC ↔ cortex
-    bindDense(hpc.Wec,  cortex.a, hpc.ec,  actThr, hpc.P.lrBind, hpc.P.wBindMax, hpc.P.wBudgetBind);
-    bindDense(hpc.Wc1e, hpc.ec,   hpc.ca1, actThr, hpc.P.lrBind, hpc.P.wBindMax, hpc.P.wBudgetBind);
+    // Bind the output stage (EC deep → cortex) to the EC-deep pattern that RETRIEVAL will
+    // actually produce: seed CA3 with the index and run the output pass, exactly as replay does.
+    // (Binding to the forward-pass EC deep instead fails, because the forward CA1 carries
+    // temporoammonic drive that is absent during replay — encode and retrieve would disagree.)
+    const ca3Save = Float64Array.from(hpc.ca3);
+    hpc.ca3.fill(0); for (const c of idxCells) hpc.ca3[c] = 1.0;
+    hpc.ca1.fill(0); hpc.sub.fill(0); hpc.ecd.fill(0);
+    hpc.iCA1 = hpc.iSUB = hpc.iECd = 0;
+    for (let t = 0; t < (opts.backMs || 40); t++) H.backwardStep(hpc);
+    bindDense(hpc.Wec, cortex.a, hpc.ecd, actThr, hpc.P.lrBind, hpc.P.wBindMax, hpc.P.wBudgetBind);
+    hpc.ca3.set(ca3Save);
     bindCA3sym(hpc, actThr);
     if (prevSet) bindCA3asym(hpc, prevSet, prevCells, idxCells);
 
@@ -104,11 +113,15 @@ function reinstateFromIndex(cortex, hpc, k, opts) {
   const idx = hpc.indices[k];
   // seed CA3 with the index pattern
   hpc.ca3.fill(0); for (const c of idx.cells) hpc.ca3[c] = 1.0;
-  hpc.ca1.fill(0); hpc.ec.fill(0); hpc.iCA1 = 0; hpc.iEC = 0;
+  hpc.ca1.fill(0); hpc.sub.fill(0); hpc.ecd.fill(0);
+  hpc.iCA1 = 0; hpc.iSUB = 0; hpc.iECd = 0;
   for (let t = 0; t < (opts.backMs || 40); t++) H.backwardStep(hpc);   // CA1→EC→ecReinstate
   // drive cortex with the reinstatement current, let cortical recurrence complete
   cortex.a.fill(0); cortex.inh = 0;
-  const scale = opts.driveScale == null ? 1.8 : opts.driveScale;
+  // The structured (topographic) output path is more correlated across memories than a random
+  // projection, so reinstatement uses a WEAKER drive: strong drive lets the wrong memory clear
+  // threshold and cortical completion then amplifies it into a full, spurious assembly.
+  const scale = opts.driveScale == null ? 0.45 : opts.driveScale;
   const drive = new Float64Array(cortex.N);
   for (let i = 0; i < cortex.N; i++) drive[i] = scale * hpc.ecReinstate[i];
   C.setExt(cortex, drive);
@@ -143,7 +156,8 @@ function replaySequence(cortex, hpc, opts) {
   const start = opts.reverse ? nIdx - 1 : (opts.start == null ? 0 : opts.start);
   // ignite the seed index
   hpc.ca3.fill(0); for (const c of hpc.indices[start].cells) hpc.ca3[c] = 1.0;
-  hpc.ca1.fill(0); hpc.ec.fill(0); hpc.iCA3 = hpc.iEC = hpc.iCA1 = 0;
+  hpc.ca1.fill(0); hpc.sub.fill(0); hpc.ecd.fill(0);
+  hpc.iCA3 = hpc.iCA1 = hpc.iSUB = hpc.iECd = 0;
   if (opts.trackCortex) { cortex.a.fill(0); cortex.inh = 0; }
 
   const seq = [], times = [], cortexSeq = [], cortexTimes = [];
@@ -157,7 +171,7 @@ function replaySequence(cortex, hpc, opts) {
     if (opts.trackCortex) {
       // drive cortex from the ongoing EC reinstatement current and let it settle a little
       const drive = new Float64Array(cortex.N);
-      const sc = opts.driveScale == null ? 1.8 : opts.driveScale;
+      const sc = opts.driveScale == null ? 0.45 : opts.driveScale;
       for (let i = 0; i < cortex.N; i++) drive[i] = sc * hpc.ecReinstate[i];
       C.setExt(cortex, drive); C.step(cortex);
       // which assembly is dominant in cortex now?
@@ -234,7 +248,7 @@ function replaySequencePaced(cortex, hpc, opts) {
       const got = reinstateFromIndex(cortex, hpc, win, { driveScale: opts.driveScale });
       // (dominant assembly is `win` by construction of reinstateFromIndex; log its onset)
       if (win !== lastCortex) { cortexSeq.push(win); cortexTimes.push(t); lastCortex = win; }
-      // reinstateFromIndex overwrote hpc.ca3/ca1/ec; restore the index seed for the next frame
+      // reinstateFromIndex overwrote the output fields; restore the index seed for the next frame
       hpc.ca3.fill(0); for (const c of current) hpc.ca3[c] = 1.0;
     }
   }

@@ -1,27 +1,34 @@
 "use strict";
 /* =====================================================================
-   Hippocampus + entorhinal bridge (stages 2–3 of the loop).
+   Hippocampal formation — human cell ratios, structured (non-random) connectivity.
 
-   The shared currency is the cortical ASSEMBLY. The entorhinal cortex (EC) is
-   the literal anatomical hub and carries traffic both ways:
+   FIELDS (human stereology: West & Gundersen 1990; Šimić 1997; Harding 1998;
+   EC layer II from Gómez-Isla 1996). Ratios to CA3 = 1:
+     DG 5.6 · CA3 1 · CA1 5.5 · subiculum 1.7 · EC LII 0.24
+   Note the human signature: CA1 ≈ 5.5× CA3 (rat ≈ 1.6×) — the expansion is at the
+   OUTPUT/comparator stage, not the attractor stage.
 
-     forward  (encode):  cortex assembly A_k → EC e_k → DG (separate) → CA3 index I_k
-     backward (replay):  CA3 index I_k → CA1 → EC e_k → cortex assembly A_k
+   ENTORHINAL is split superficial/deep, and lateral/medial — the real loop, not a wire:
+     LEC/MEC layer II  → DG + CA3        ("what" / "where" input streams)
+     LEC/MEC layer III → CA1 (temporoammonic, distal dendrites)
+     CA1 + subiculum   → EC deep (V/VI)  → neocortex   (output)
 
-   Structural (fixed random) projections — the anatomy:
-     Wce   cortex → EC        (feedforward; gives each assembly a distinct EC pattern)
-     Wed   EC → DG            (perforant path; expansion 150→500 for pattern separation)
-     Wdc   DG → CA3           (mossy fibres; sparse + powerful = detonator index select)
-     Wc31  CA3 → CA1          (Schaffer collaterals)
+   PATHWAYS (in-degrees scaled from anatomy; convergence-preserving so cost is O(N)):
+     EC II  → DG      perforant, LEC→outer / MEC→middle molecular layer
+     EC II  → CA3     direct perforant (cue-driven completion route)
+     DG     → CA3     mossy fibres: FEW, STRONG, LAMELLAR (narrow septotemporal)
+     CA3    → CA3     recurrent: BROAD septotemporal spread
+     CA3    → CA1     Schaffer, transverse map INVERTED (Ishizuka 1990)
+     EC III → CA1     temporoammonic: MEC→proximal CA1, LEC→distal CA1
+     CA1    → Sub     transverse map inverted again
+     CA1/Sub→ EC deep → neocortex (plastic; carries reinstatement)
 
-   Plastic (Hebbian, encode only, ACh-gated) — the memory:
-     Rca3  CA3 recurrent      symmetric auto-association + ASYMMETRIC I_k→I_{k+1} (order)
-     Wc1e  CA1 → EC           regenerate e_k from the index (back-projection)
-     Wec   EC → cortex        regenerate assembly A_k from e_k  (reinstatement)
-
-   Sparsity everywhere is set by FEEDBACK INHIBITION (per field), not k-WTA. DG is the
-   sparsest (pattern separation); the mossy detonator makes CA3 sparser still. ACh gates
-   encoding vs retrieval (Hasselmo): high ACh during theta encoding, low ACh during SWR.
+   STRUCTURE, not Erdős–Rényi. Every cell has transverse t∈[0,1] (proximodistal) and
+   longitudinal l∈[0,1] (septotemporal) coordinates; connection probability is a
+   topographic Gaussian kernel with pathway-specific widths and target mapping. Weights
+   are LOGNORMAL (Song 2005; Buzsáki & Mizuseki 2014). In-degree is then normalised to the
+   anatomical target — so the kernel decides WHO connects and normalisation decides HOW
+   MANY, keeping the model structured, scale-invariant, and linear in cost.
    ===================================================================== */
 
 function mulberry32(a) {
@@ -35,46 +42,87 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 function hdefaults() {
   return {
     seed: 101,
-    NEC: 600, NDG: 2000, NCA3: 960, NCA1: 720,   // 4× baseline; connectivity below is convergence-preserving
-    // structural projection densities
-    pCE: 0.12,   // cortex→EC
-    pED: 0.06,   // EC→DG (sparse perforant)
-    pDC: 0.018,  // DG→CA3 mossy (few but strong)
-    pC31: 0.10,  // CA3→CA1
-    pRec3: 0.15, // CA3 recurrent connectivity
-    // structural weights
-    wCE: 0.9, wED: 1.3, wDC: 6.0, wC31: 1.1,
-    // per-field feedback inhibition gains (set sparsity: EC≈15%, DG≈3% (separation), CA3≈7% index)
-    gEC: 24.0, gDG: 120.0, gCA3: 150.0, gCA1: 30.0,
-    // CA3 inhibition during REPLAY: the recurrent attractor drive is ~4× smaller than the
-    // mossy detonator drive, so the ripple-state inhibition is correspondingly lower.
-    gCA3rep: 4.0,
+    // sizes at human ratios (development scale; CA3 = 240 sets the rest)
+    // EC is sized as the INTERFACE to the whole neocortex, not only by hippocampal ratio:
+    // layer II is ~0.65×10⁶ cells in absolute terms, and a ratio-only EC (60 cells here) is a
+    // bottleneck that no downstream plasticity can undo (verified: recall 0.76→0.82, cross 0.12→0.08).
+    NEC2: 150, NEC3: 150, NECd: 400,
+    NDG: 1350, NCA3: 240, NCA1: 1320, NSUB: 400,
+    // target in-degrees per pathway (anatomically ordered: mossy fewest, recurrent/Schaffer most)
+    kPPdg: 30, kPPca3: 25, kMF: 12, kRec: 100, kSch: 60, kTA: 20, kSub: 50, kSubEcd: 30, kCa1Ecd: 40,
+    // pathway weights (mean of the lognormal)
+    wPPdg: 1.30, wPPca3: 0.55, wMF: 6.0, wSch: 0.55, wTA: 0.30, wSub: 0.55,
+    wCE: 0.9,                    // cortex → EC superficial
+    lnSigma: 0.6,                // lognormal weight spread
+    // per-field feedback inhibition gains — tuned so each field hits its anatomical sparsity
+    // (EC ~15%, DG ~3% sparsest/most-separated, CA3 ~6%, CA1 ~10%, subiculum ~15%)
+    gEC: 29.1, gDG: 377.0, gCA3: 202.4, gCA1: 46.0, gSUB: 32.5, gECd: 29.1,
+    gCA3rep: 4.0,                // CA3 inhibition during ripple replay
     // thresholds / gains
     thr: 0.14, gain: 1.5,
     tauA: 0.020, tauI: 0.006, dt: 0.001,
+    taGate: 0.45,                // temporoammonic GATES rather than drives (distal dendrite)
     // plasticity
-    lrBind: 3.0,      // Wc1e, Wec binding rate
-    lrRec3: 3.0,      // CA3 symmetric auto-association
-    lrAsym: 0.9,      // CA3 directed transition weight (forward, per synapse) in Rseq
-    asymBack: 0.35,   // backward transition weight, as a fraction of forward (enables reverse replay)
-    seqGain: 1.0,     // gain of the directed transition drive during replay
-    wRecMax3: 1.4, wBudget3: 2.0,   // CA3 recurrent cap + subtractive budget
-    wBindMax: 1.6, wBudgetBind: 2.2,
-    actThr: 0.30,
-    ach: 1.0,         // 1 = encode (plastic on), low = retrieve
-    // replay: spike-frequency adaptation lets the active index fatigue and hand off to the
-    // next via the asymmetric I_k→I_{k+1} links (Hasselmo/Tsodyks sequence read-out). The
-    // AHP current builds fast (tauAdaptUp) but recovers slowly (tauAdaptDn) — so a just-
-    // visited index stays refractory while the wave passes, instead of ping-ponging back.
+    lrBind: 3.0, lrRec3: 3.0, lrAsym: 0.9, asymBack: 0.35, seqGain: 1.0,
+    wRecMax3: 1.4, wBudget3: 2.0, wBindMax: 1.6, wBudgetBind: 2.2,
+    actThr: 0.30, ach: 1.0,
     tauAdaptUp: 0.015, tauAdaptDn: 0.280, adaptGain3: 0.6,
   };
 }
 
-function randSparse(rnd, nPost, nPre, p, w0) {
+/* ---- coordinates: tile each field on a transverse × longitudinal sheet ---- */
+function coords(N) {
+  const nT = Math.max(1, Math.round(Math.sqrt(N))), nL = Math.ceil(N / nT);
+  const t = new Float64Array(N), l = new Float64Array(N);
+  for (let i = 0; i < N; i++) { t[i] = ((i % nT) + 0.5) / nT; l[i] = (Math.floor(i / nT) + 0.5) / nL; }
+  return { t, l };
+}
+
+/* ---- lognormal weight with prescribed mean ---- */
+function lognorm(rnd, mean, sigma) {
+  let u = 0, v = 0; while (u === 0) u = rnd(); while (v === 0) v = rnd();
+  const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  return mean * Math.exp(sigma * z - sigma * sigma / 2);
+}
+
+/* ---- structured projection: topographic Gaussian kernel + fixed in-degree ----
+   opts: { map }  t_target(t_post) — 'id' | 'inv' | number (fixed band centre)
+         { sT, sL } kernel widths;  { kOf }  optional per-post in-degree modulation
+         { preStream, want } restrict presynaptic pool to a stream label            */
+function project(rnd, post, pre, K, w0, o) {
+  o = o || {};
+  const sT = o.sT == null ? 0.25 : o.sT, sL = o.sL == null ? 0.30 : o.sL;
   const idx = [], wt = [];
-  for (let i = 0; i < nPost; i++) {
-    const id = [], w = [];
-    for (let j = 0; j < nPre; j++) if (rnd() < p) { id.push(j); w.push(w0 * (0.6 + 0.8 * rnd())); }
+  const pool = [];
+  for (let j = 0; j < pre.N; j++) {
+    if (o.preStream && o.preStream[j] !== o.want) continue;
+    pool.push(j);
+  }
+  for (let i = 0; i < post.N; i++) {
+    // topographic target on the transverse axis
+    let tT;
+    if (o.map === "inv") tT = 1 - post.t[i];
+    else if (typeof o.map === "number") tT = o.map;
+    else tT = post.t[i];
+    // kernel over the (possibly stream-restricted) presynaptic pool
+    const p = new Float64Array(pool.length); let tot = 0;
+    for (let a = 0; a < pool.length; a++) {
+      const j = pool[a];
+      const dt = pre.t[j] - tT, dl = pre.l[j] - post.l[i];
+      const v = Math.exp(-(dt * dt) / (2 * sT * sT)) * Math.exp(-(dl * dl) / (2 * sL * sL));
+      p[a] = v; tot += v;
+    }
+    let k = o.kOf ? Math.max(1, Math.round(K * o.kOf(post.t[i]))) : K;
+    k = Math.min(k, pool.length);
+    // sample k distinct presynaptic cells ∝ kernel (roulette without replacement)
+    const chosen = new Set(), id = [], w = [];
+    let guard = 0;
+    while (id.length < k && guard++ < k * 40 && tot > 0) {
+      let r = rnd() * tot, a = 0;
+      while (a < pool.length - 1 && (r -= p[a]) > 0) a++;
+      if (chosen.has(a)) continue;
+      chosen.add(a); id.push(pool[a]); w.push(lognorm(rnd, w0, o.lnSigma == null ? 0.6 : o.lnSigma));
+    }
     idx.push(Int32Array.from(id)); wt.push(Float64Array.from(w));
   }
   return { idx, wt };
@@ -83,44 +131,77 @@ function randSparse(rnd, nPost, nPre, p, w0) {
 function createHPC(opts) {
   const P = Object.assign(hdefaults(), opts || {});
   const rnd = mulberry32(P.seed);
-  const NCcx = opts && opts.NC ? opts.NC : 400;
-  // convergence-preserving connectivity: scale each projection's probability inversely with its
-  // presynaptic population (relative to the baseline sizes), so the mean number of inputs a cell
-  // receives — and therefore the sparsity/separation the inhibition sets — is scale-invariant.
-  const sc = (p, nPre, basePre) => Math.min(1, p * basePre / nPre);
-  // structural projections
-  const Wce = randSparse(rnd, P.NEC, NCcx, sc(P.pCE, NCcx, 400), P.wCE);
-  const Wed = randSparse(rnd, P.NDG, P.NEC, sc(P.pED, P.NEC, 150), P.wED);
-  const Wdc = randSparse(rnd, P.NCA3, P.NDG, sc(P.pDC, P.NDG, 500), P.wDC);
-  const Wc31 = randSparse(rnd, P.NCA1, P.NCA3, sc(P.pC31, P.NCA3, 240), P.wC31);
-  // CA3 recurrent (plastic, starts silent). Rca3 = symmetric auto-association (holds/completes
-  // an index); Rseq = DIRECTED transition weights (forward≫backward), kept in a SEPARATE matrix
-  // so subtractive normalisation of the auto-associator never corrupts the forward:backward ratio.
-  const Rca3 = randSparse(rnd, P.NCA3, P.NCA3, sc(P.pRec3, P.NCA3, 240), 0);
-  for (let i = 0; i < P.NCA3; i++) for (let k = 0; k < Rca3.wt[i].length; k++) Rca3.wt[i][k] = 0;
-  const Rseq = randSparse(rnd, P.NCA3, P.NCA3, sc(P.pRec3, P.NCA3, 240), 0);
-  for (let i = 0; i < P.NCA3; i++) for (let k = 0; k < Rseq.wt[i].length; k++) Rseq.wt[i][k] = 0;
-  // plastic back-projections start silent, all-to-all (learned sparsely by Hebb)
-  const Wc1e = { idx: [], wt: [] };  // EC ← CA1
-  for (let i = 0; i < P.NEC; i++) { Wc1e.idx.push(null); Wc1e.wt.push(new Float64Array(P.NCA1)); }
-  const Wec = { idx: [], wt: [] };   // cortex ← EC
-  const NC = opts && opts.NC ? opts.NC : 400;
-  for (let i = 0; i < NC; i++) { Wec.idx.push(null); Wec.wt.push(new Float64Array(P.NEC)); }
+  const NCcx = opts && opts.NC ? opts.NC : 800;
+
+  // fields with coordinates
+  const F = {};
+  const mk = N => Object.assign({ N }, coords(N));
+  F.ec2 = mk(P.NEC2); F.ec3 = mk(P.NEC3); F.ecd = mk(P.NECd);
+  F.dg = mk(P.NDG); F.ca3 = mk(P.NCA3); F.ca1 = mk(P.NCA1); F.sub = mk(P.NSUB);
+  // EC stream labels: 0 = LEC ("what", ventral), 1 = MEC ("where", dorsal)
+  const streamII = new Int8Array(P.NEC2), streamIII = new Int8Array(P.NEC3);
+  for (let i = 0; i < P.NEC2; i++) streamII[i] = i < P.NEC2 / 2 ? 0 : 1;
+  for (let i = 0; i < P.NEC3; i++) streamIII[i] = i < P.NEC3 / 2 ? 0 : 1;
+
+  // cortex is split into ventral ("what") and dorsal ("where") halves; vision fills these later
+  const cx = mk(NCcx);
+  const ventral = opts && opts.ventralIdx ? opts.ventralIdx : null;
+  const cxStream = new Int8Array(NCcx);
+  for (let i = 0; i < NCcx; i++) cxStream[i] = ventral ? (ventral.has(i) ? 0 : 1) : (i < NCcx / 2 ? 0 : 1);
+
+  // --- cortex → EC superficial, stream-respecting (ventral→LEC, dorsal→MEC) ---
+  const Wce2 = project(rnd, F.ec2, cx, 40, P.wCE, { sT: 0.35, sL: 0.35, lnSigma: P.lnSigma });
+  const Wce3 = project(rnd, F.ec3, cx, 40, P.wCE, { sT: 0.35, sL: 0.35, lnSigma: P.lnSigma });
+
+  // --- EC II → DG (perforant); LEC→outer / MEC→middle molecular layer ---
+  const Wed = project(rnd, F.dg, F.ec2, P.kPPdg, P.wPPdg, { sT: 0.30, sL: 0.20, lnSigma: P.lnSigma });
+  // --- EC II → CA3 (direct perforant: the cue-driven completion route) ---
+  const Wec3 = project(rnd, F.ca3, F.ec2, P.kPPca3, P.wPPca3, { sT: 0.30, sL: 0.25, lnSigma: P.lnSigma });
+  // --- DG → CA3 mossy fibres: few, strong, LAMELLAR, biased to proximal CA3 (CA3c/b) ---
+  const Wdc = project(rnd, F.ca3, F.dg, P.kMF, P.wMF, {
+    sT: 0.10, sL: 0.05, lnSigma: P.lnSigma,
+    kOf: t => 0.5 + 1.0 * Math.exp(-(t * t) / (2 * 0.35 * 0.35)),   // proximal bias
+  });
+  // --- CA3 → CA1 Schaffer: transverse map INVERTED (proximal CA3 → distal CA1) ---
+  const Wc31 = project(rnd, F.ca1, F.ca3, P.kSch, P.wSch, { map: "inv", sT: 0.25, sL: 0.30, lnSigma: P.lnSigma });
+  // --- EC III → CA1 temporoammonic: MEC→proximal CA1, LEC→distal CA1 ---
+  const WtaM = project(rnd, F.ca1, F.ec3, Math.round(P.kTA / 2), P.wTA,
+    { map: 0.25, sT: 0.20, sL: 0.30, preStream: streamIII, want: 1, lnSigma: P.lnSigma });
+  const WtaL = project(rnd, F.ca1, F.ec3, Math.round(P.kTA / 2), P.wTA,
+    { map: 0.75, sT: 0.20, sL: 0.30, preStream: streamIII, want: 0, lnSigma: P.lnSigma });
+  // --- CA1 → subiculum: transverse map inverted again ---
+  const Wc1s = project(rnd, F.sub, F.ca1, P.kSub, P.wSub, { map: "inv", sT: 0.20, sL: 0.25, lnSigma: P.lnSigma });
+
+  // --- CA3 recurrent: BROAD septotemporal spread; plastic, starts silent ---
+  const Rca3 = project(rnd, F.ca3, F.ca3, P.kRec, 0, { sT: 0.35, sL: 0.50 });
+  for (let i = 0; i < P.NCA3; i++) Rca3.wt[i].fill(0);
+  const Rseq = project(rnd, F.ca3, F.ca3, P.kRec, 0, { sT: 0.35, sL: 0.50 });
+  for (let i = 0; i < P.NCA3; i++) Rseq.wt[i].fill(0);
+
+  // --- output path: Sub → EC deep is STRUCTURAL; EC deep → neocortex is the PLASTIC stage
+  // that carries reinstatement. (One plastic stage, not two: subicular→entorhinal projections
+  // are fixed anatomy, and it avoids a chicken-and-egg where EC deep can never activate.)
+  const Wse = project(rnd, F.ecd, F.sub, P.kSubEcd, P.wSub, { sT: 0.30, sL: 0.30, lnSigma: P.lnSigma });
+  // CA1 → EC deep DIRECT, in parallel with the subicular route (Amaral): CA1 is the better-
+  // separated field, so this is what keeps distinct memories distinct at the output stage.
+  const Wc1d = project(rnd, F.ecd, F.ca1, P.kCa1Ecd, P.wSub, { sT: 0.30, sL: 0.30, lnSigma: P.lnSigma });
+  const Wec = { idx: [], wt: [] };
+  for (let i = 0; i < NCcx; i++) { Wec.idx.push(null); Wec.wt.push(new Float64Array(P.NECd)); }
 
   return {
-    P, rnd, NC,
-    Wce, Wed, Wdc, Wc31, Rca3, Rseq, Wc1e, Wec,
-    ec: new Float64Array(P.NEC), dg: new Float64Array(P.NDG),
-    ca3: new Float64Array(P.NCA3), ca1: new Float64Array(P.NCA1),
-    adapt3: new Float64Array(P.NCA3),   // CA3 spike-frequency adaptation (replay hand-off)
-    iEC: 0, iDG: 0, iCA3: 0, iCA1: 0,   // per-field inhibition
-    ecReinstate: new Float64Array(NC),  // EC→cortex drive (reinstatement current)
-    indices: [],                        // recorded CA3 index cell-sets, in encode order
-    plastic: false,
+    P, rnd, NC: NCcx, F, streamII, streamIII, cxStream,
+    Wce2, Wce3, Wed, Wec3, Wdc, Wc31, WtaM, WtaL, Wc1s, Rca3, Rseq, Wse, Wc1d, Wec,
+    ec2: new Float64Array(P.NEC2), ec3: new Float64Array(P.NEC3), ecd: new Float64Array(P.NECd),
+    dg: new Float64Array(P.NDG), ca3: new Float64Array(P.NCA3),
+    ca1: new Float64Array(P.NCA1), sub: new Float64Array(P.NSUB),
+    adapt3: new Float64Array(P.NCA3),
+    iEC2: 0, iEC3: 0, iECd: 0, iDG: 0, iCA3: 0, iCA1: 0, iSUB: 0,
+    ecReinstate: new Float64Array(NCcx),
+    indices: [], plastic: false,
   };
 }
 
-// one settle of a field: x ← relu(gain*(input - thr - g*inh)); inhibition tracks mean
+/* ---- dynamics ---- */
 function fieldStep(H, arr, inputFn, g, key) {
   const P = H.P, N = arr.length, dt = P.dt;
   let sum = 0; const nx = new Float64Array(N);
@@ -132,53 +213,53 @@ function fieldStep(H, arr, inputFn, g, key) {
   for (let i = 0; i < N; i++) { arr[i] += (dt / P.tauA) * (nx[i] - arr[i]); sum += arr[i]; }
   H[key] += (dt / P.tauI) * (sum / N - H[key]);
 }
-
 const dot = (proj, i, src) => { const id = proj.idx[i], w = proj.wt[i]; let s = 0;
   for (let k = 0; k < id.length; k++) s += w[k] * src[id[k]]; return s; };
 const dotDense = (proj, i, src) => { const w = proj.wt[i]; let s = 0;
   for (let j = 0; j < w.length; j++) s += w[j] * src[j]; return s; };
 
-// FORWARD pass: cortex activity → EC → DG → CA3 (+ recurrent) → CA1. One dt.
+// FORWARD: cortex → EC II/III → DG + CA3 → CA1 (Schaffer + temporoammonic) → subiculum
 function forwardStep(H, cortexA) {
   const P = H.P;
-  fieldStep(H, H.ec,  i => dot(H.Wce, i, cortexA), P.gEC,  "iEC");
-  fieldStep(H, H.dg,  i => dot(H.Wed, i, H.ec),    P.gDG,  "iDG");
-  const achRec = 1 - 0.85 * P.ach;   // recurrence gated OFF during encode (Hasselmo)
-  fieldStep(H, H.ca3, i => dot(H.Wdc, i, H.dg) + achRec * dot(H.Rca3, i, H.ca3), P.gCA3, "iCA3");
-  fieldStep(H, H.ca1, i => dot(H.Wc31, i, H.ca3), P.gCA1, "iCA1");
+  fieldStep(H, H.ec2, i => dot(H.Wce2, i, cortexA), P.gEC, "iEC2");
+  fieldStep(H, H.ec3, i => dot(H.Wce3, i, cortexA), P.gEC, "iEC3");
+  fieldStep(H, H.dg, i => dot(H.Wed, i, H.ec2), P.gDG, "iDG");
+  const achRec = 1 - 0.85 * P.ach;             // recurrence gated off while encoding (Hasselmo)
+  fieldStep(H, H.ca3, i => dot(H.Wdc, i, H.dg) + dot(H.Wec3, i, H.ec2)
+                          + achRec * dot(H.Rca3, i, H.ca3), P.gCA3, "iCA3");
+  // CA1: Schaffer drives (proximal dendrites); temporoammonic GATES (distal dendrites)
+  fieldStep(H, H.ca1, i => {
+    const sch = dot(H.Wc31, i, H.ca3);
+    const ta = dot(H.WtaM, i, H.ec3) + dot(H.WtaL, i, H.ec3);
+    return sch + P.taGate * ta;
+  }, P.gCA1, "iCA1");
+  fieldStep(H, H.sub, i => dot(H.Wc1s, i, H.ca1), P.gSUB, "iSUB");
+  // the loop is closed during encoding too: subiculum → EC deep is active, giving EC deep the
+  // pattern that the plastic EC-deep → neocortex stage binds to the active cortical assembly
+  fieldStep(H, H.ecd, i => dot(H.Wse, i, H.sub) + dot(H.Wc1d, i, H.ca1), P.gECd, "iECd");
 }
 
-// BACKWARD (replay) pass: CA3 index → CA1 → EC (via learned Wc1e) → cortex-reinstatement (via Wec).
+// BACKWARD (output): CA3 → CA1 → subiculum → EC deep → neocortex reinstatement
 function backwardStep(H) {
   const P = H.P;
   fieldStep(H, H.ca1, i => dot(H.Wc31, i, H.ca3), P.gCA1, "iCA1");
-  fieldStep(H, H.ec,  i => dotDense(H.Wc1e, i, H.ca1), P.gEC, "iEC");
-  for (let i = 0; i < H.NC; i++) H.ecReinstate[i] = dotDense(H.Wec, i, H.ec);
+  fieldStep(H, H.sub, i => dot(H.Wc1s, i, H.ca1), P.gSUB, "iSUB");
+  fieldStep(H, H.ecd, i => dot(H.Wse, i, H.sub) + dot(H.Wc1d, i, H.ca1), P.gECd, "iECd");
+  for (let i = 0; i < H.NC; i++) H.ecReinstate[i] = dotDense(H.Wec, i, H.ecd);
 }
 
-// CA3 recurrent walk (replay): recurrence ON (low ACh), asymmetric links advance the index.
-function recurStep(H) {
-  const P = H.P;
-  fieldStep(H, H.ca3, i => dot(H.Rca3, i, H.ca3), P.gCA3, "iCA3");
-  backwardStep(H);
-}
-
-// REPLAY step: CA3 recurrent dynamics with spike-frequency adaptation, then the
-// backward reinstatement pass. Adaptation fatigues the currently-active index so the
-// asymmetric I_k→I_{k+1} links move activity forward — a self-advancing sequence walk.
+// REPLAY: CA3 recurrent + directed transitions, with adaptation; then the output pass
 function replayStep(H) {
   const P = H.P, ca3 = H.ca3, N = ca3.length, dt = P.dt;
-  const achRec = 1 - 0.85 * P.ach;          // low ACh → recurrence engaged
+  const achRec = 1 - 0.85 * P.ach;
   let sum = 0; const nx = new Float64Array(N);
   for (let i = 0; i < N; i++) {
-    const auto = dot(H.Rca3, i, ca3);          // symmetric: holds the current index
-    const seq = dot(H.Rseq, i, ca3);           // directed: pushes toward the next index
+    const auto = dot(H.Rca3, i, ca3), seq = dot(H.Rseq, i, ca3);
     const drive = achRec * auto + P.seqGain * seq - P.thr - P.gCA3rep * H.iCA3 - P.adaptGain3 * H.adapt3[i];
     nx[i] = drive > 0 ? clamp(P.gain * drive, 0, 1.3) : 0;
   }
   for (let i = 0; i < N; i++) {
     ca3[i] += (dt / P.tauA) * (nx[i] - ca3[i]); sum += ca3[i];
-    // asymmetric kinetics: adapt tracks activity — rises fast (tauUp), recovers slowly (tauDn)
     const tau = ca3[i] > H.adapt3[i] ? P.tauAdaptUp : P.tauAdaptDn;
     H.adapt3[i] += (dt / tau) * (ca3[i] - H.adapt3[i]);
   }
@@ -188,24 +269,19 @@ function replayStep(H) {
 
 function activeSet(arr, thr) { const s = []; for (let i = 0; i < arr.length; i++) if (arr[i] > thr) s.push(i); return s; }
 
-// subtractive normalisation of a plastic row to a budget. The excess is shared over the
-// NONZERO synapses (the ones actually carrying weight), not the full row length — dividing
-// by the full length on a sparse row leaves the budget effectively unenforced. Iterated a
-// few times so that synapses driven to zero don't strand residual excess on the survivors.
 function normSparse(wt, budget) {
   for (let pass = 0; pass < 6; pass++) {
     let s = 0, nz = 0;
     for (let k = 0; k < wt.length; k++) if (wt[k] > 0) { s += wt[k]; nz++; }
     const ex = s - budget;
     if (ex <= 1e-9 || nz === 0) return;
-    const d = ex / nz;
-    let clipped = false;
+    const d = ex / nz; let clipped = false;
     for (let k = 0; k < wt.length; k++) if (wt[k] > 0) {
       if (wt[k] > d) wt[k] -= d; else { wt[k] = 0; clipped = true; }
     }
-    if (!clipped) return;    // no synapse hit the floor → budget met exactly, done
+    if (!clipped) return;
   }
 }
 
-module.exports = { createHPC, hdefaults, forwardStep, backwardStep, recurStep, replayStep,
-  fieldStep, activeSet, normSparse, mulberry32, dot, dotDense };
+module.exports = { createHPC, hdefaults, forwardStep, backwardStep, replayStep,
+  fieldStep, activeSet, normSparse, mulberry32, dot, dotDense, project, coords, lognorm };
