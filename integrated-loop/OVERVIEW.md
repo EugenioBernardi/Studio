@@ -72,6 +72,7 @@ The rules the work is held to, in the order they bind:
 | 15 | limbic thalamus: diencephalic amnesia, recollection/familiarity, thalamic neglect | 16/16 |
 | 16 | sensitivity: does each claim depend on a parameter I chose? | 4 robust · 2 moderate · **0 knife-edge** |
 | 17 | external calibration audit against published ranges | **8/16 in range** |
+| 18 | visual syndromes: blindsight, akinetopsia, the two agnosias | **10/10 + 2 predicted failures** |
 
 ### The deliberate failures, and why they stay red
 
