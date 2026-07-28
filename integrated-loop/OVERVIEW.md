@@ -44,6 +44,7 @@ The rules the work is held to, in the order they bind:
 | `src/spatial.js` | 157 | PPC ⇄ RSC ⇄ ATN egocentric/allocentric transform |
 | `src/bilateral.js` | 258 | two lateralised hippocampi joined by a commissure |
 | `src/parietal.js` | 197 | two parietal cortices; opponent processor on a coverage gradient |
+| `src/limbicthalamus.js` | 197 | circuit of Papez, MD/familiarity route, pulvinar |
 
 ≈2 500 lines of model, ≈2 500 lines of test.
 
@@ -68,6 +69,9 @@ The rules the work is held to, in the order they bind:
 | 13 | two hippocampi: material specificity, H.M., Wada | 15/15 |
 | 13b | the same crossover at 2× cortex | 5/5 |
 | 14 | neglect: extinction, bisection, the paradox, the differential | **15/15 + 1 predicted failure** |
+| 15 | limbic thalamus: diencephalic amnesia, recollection/familiarity, thalamic neglect | 16/16 |
+| 16 | sensitivity: does each claim depend on a parameter I chose? | 4 robust · 2 moderate · **0 knife-edge** |
+| 17 | external calibration audit against published ranges | **8/16 in range** |
 
 ### The deliberate failures, and why they stay red
 
@@ -129,6 +133,52 @@ against 0.04 in hemianopia.
 
 ---
 
+## 4b. Calibration — the honest status of the word "validated"
+
+Stage 17 puts the model's numbers beside published ones. **8 of 16 fall inside range, and the
+split is not random.**
+
+| in range | outside |
+|---|---|
+| cortical sparsity 7.6 % (2–10) | MST LDI **0.89** (0.25–0.55) |
+| dentate 3.3 % (1–5) · CA3 6.3 % · CA1 10.8 % | line bisection **50.6 %** of half-line (5–25) |
+| CA1:CA3 = 5.5 (4.5–6.5) | pseudoneglect **+3.7 %** (−0.5 to −3, sign wrong) |
+| replay compression 17.9× (5–20) | MST REC 1.00 (0.55–0.90) |
+| order fidelity +1.00 / −1.00 | MT error **0.0°** (1–15) |
+|  | SO 1.05 Hz · spindle 16.5 Hz (near misses) |
+
+Everything **structural** is in range; everything **behavioural** is off. That is a diagnosis,
+not a list of misses: circuit-level quantities were built to anatomical and physiological
+targets, while the behavioural readouts are internal instruments with arbitrary thresholds and
+scales that were never asked to land anywhere real. An MT error of 0.0° is *worse* than a large
+one — it sits below the human floor, which is a failure of realism, not a success.
+
+None of these ranges was used as a tuning target, so agreement means something where it occurs.
+The reference ranges are **provisional** — recorded from the literature but not checked against
+primary sources — and the audit deliberately does not fail the build, because a red build would
+invite tuning the model to the references, which is exactly what must not happen.
+
+**On this evidence the right word is CALIBRATED, not VALIDATED.**
+
+## 4c. Sensitivity
+
+Seed replication answers "is this noise?"; it does not answer "does this depend on a number I
+chose?". Stage 16 sweeps the parameter each headline claim most plausibly rests on:
+
+| claim | parameter | holds over | verdict |
+|---|---|---|---|
+| assembly sparsity in 2–10 % | gI | 88 % | ROBUST |
+| DG sparser than EC/CA3/CA1 | gDG | 100 % | ROBUST |
+| material-specificity crossover | wCross | 71 % | moderate |
+| contralesional target extinguished | gCall | 88 % | ROBUST |
+| a second lesion relieves neglect | gCall | 75 % | moderate |
+| proximal Papez lesions cost more | per-stage gain | 100 % | ROBUST |
+
+**Zero knife-edge claims**, and every failure sits where the responsible mechanism is switched
+*off* — wCross → 1 makes the two hippocampi identical, gCall → 0.4 removes the competition.
+Those are the control conditions; a claim that survived its own control would be the worrying
+result. One parameter at a time, no interactions: a floor on fragility, not a proof of robustness.
+
 ## 5. Negative results, with mechanisms
 
 These are load-bearing, not apologies.
@@ -148,6 +198,12 @@ These are load-bearing, not apologies.
 - **Pseudoneglect has the wrong sign** — see §3.
 - **The tilt illusion is exactly 0.0°** — see §3.
 - **V1 does not beat raw pixels on MNIST** — see §4.
+- **Unilateral Papez compensation is COMPLETE** here, where clinically a left anterior thalamic
+  lesion impairs verbal memory. The circuit is not lateralised by material the way the
+  hippocampi are.
+- **Thalamic and cortical neglect are equivalent at the bedside BY CONSTRUCTION** — the pulvinar
+  enters as a gain on the same parietal capacity. The consequence, that perimetry separates
+  neither, is not by construction.
 
 ---
 
@@ -192,5 +248,9 @@ Each cost real time and each is a diagnostic pattern, not a typo.
 6. **Scale.** Cortex 800–1600 units, hippocampus ≈7 700. Human *ratios*, toy *counts*.
 7. **The lateralisation mapping is an analogue.** ventral↔verbal is a stand-in; the spatial
    half (right hemisphere ↔ spatial) is literal, the verbal half is not.
-8. **Parameters are tuned to targets with seed replication but no systematic sensitivity
-   analysis.** Stage 13b is the only scale check that exists.
+8. **Scale is checked in one place only** (stage 13b). Sensitivity is now swept for six claims
+   (stage 16) but one parameter at a time, with no interaction terms.
+9. **The behavioural readouts are uncalibrated** (stage 17). Fixing them means giving each
+   instrument a real scale — bisection in mm of a real line length, MST with perceptually
+   confusable stimuli from the MNIST front end, MT with a decision noise floor — not retuning
+   the circuits behind them.
