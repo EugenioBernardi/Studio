@@ -51,12 +51,22 @@ function form(L) {
   return { acc: 100 * ok2 / n, percept: pe / n, ori: oe / n };
 }
 function motion(L) {
-  let e = 0, coh = 0;
-  for (const d of DIRS) {
+  // PER-TRIAL errors are kept, not just their mean. A 2AFC score computed by thresholding the
+  // MEAN error is wrong: a chance-level estimator averages 90 degrees, and any mean below that
+  // reads as "correct" under a 90-degree rule even when no direction signal exists at all.
+  const errs = DIRS.map(d => {
     const r = S.motionPath("bar", { size: 0.42, rot: 0 }, { type: "translate", dir: d, speed: 0.5 }, L);
-    e += S.dirErr(r.dir, d); coh += r.coherence;
-  }
-  return { err: e / DIRS.length, coh: coh / DIRS.length };
+    return { err: S.dirErr(r.dir, d), coh: r.coherence, total: r.total };
+  });
+  const e = errs.map(x => x.err), coh = errs.map(x => x.coh);
+  // a trial counts as correct only if there is a direction signal to read AND it is on the
+  // right side of the axis; with no signal the observer is guessing, which is 50%
+  const hasSignal = errs.map(x => x.coh > 0.05);
+  const correct = errs.filter((x, i) => hasSignal[i] && x.err < 90).length;
+  const guessing = hasSignal.filter(x => !x).length;
+  return { err: e.reduce((a, b) => a + b, 0) / e.length,
+           coh: coh.reduce((a, b) => a + b, 0) / coh.length,
+           errs: e, acc2afc: 100 * (correct + 0.5 * guessing) / errs.length };
 }
 
 /* ---------------- 1–2. blindsight and akinetopsia ---------------- */
@@ -73,9 +83,11 @@ console.log("\n== 1. occipital: blindsight, cortical blindness, akinetopsia ==")
   console.log("  condition          form identification   motion direction error");
   for (const [name, L] of conds) {
     const F = form(L), M = motion(L);
-    r[name] = { acc: F.acc, err: M.err, coh: M.coh, percept: F.percept };
+    r[name] = { acc: F.acc, err: M.err, coh: M.coh, percept: F.percept,
+                acc2afc: M.acc2afc, errs: M.errs };
     console.log("  " + name.padEnd(18) + f(F.acc).padStart(6) + "%              " +
-                f(M.err).padStart(6) + "°   coherence " + f(M.coh, 2));
+                f(M.err).padStart(6) + "°   coherence " + f(M.coh, 2) +
+                "   2AFC " + f(M.acc2afc).padStart(5) + "%");
   }
   out.occipital = r;
   const I = r["intact"], B = r["V1 complete"], CB = r["V1 + pulvinar"], A = r["MT complete"];
