@@ -1,0 +1,11 @@
+{
+  "name": "hippocampus-index-replay",
+  "version": "1.0.0",
+  "description": "Trisynaptic hippocampal index-and-replay model: sparse coding, PV-titrated hypersynchrony, septal theta, ACh-gated encoding/replay. Runs headlessly (Node) and interactively (browser).",
+  "main": "src/model.js",
+  "scripts": { "test": "node test/validate.js" },
+  "keywords": ["hippocampus","CA3","index theory","replay","sharp-wave ripple","theta","computational neuroscience","seizure"],
+  "author": "Eugenio Bernardi",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/EugenioBernardi/hippocampus-index-replay" }
+}

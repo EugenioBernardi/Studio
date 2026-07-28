@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this model, please cite it as below."
+title: "Hippocampal index-and-replay model"
+abstract: "A minimal, numerically validated trisynaptic hippocampal circuit (EC-DG-CA3-CA2-CA1-subiculum) reproducing sparse coding, PV-titrated hypersynchrony, septal theta control, orthogonal index binding, and ACh-gated encoding/replay. Self-contained; runs headlessly and in the browser."
+authors:
+  - family-names: Bernardi
+    given-names: Eugenio
+type: software
+version: 1.0.0
+license: MIT
+date-released: 2026-07-25
+# doi: 10.5281/zenodo.XXXXXXX   # minted against the v1.0.0 release tag
+repository-code: "https://github.com/EugenioBernardi/hippocampus-index-replay"
