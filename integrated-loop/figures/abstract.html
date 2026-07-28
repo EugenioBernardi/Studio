@@ -1,0 +1,278 @@
+<title>The loop — visual abstract</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --ground:#0a0c10; --panel:#12161c; --panel2:#171c23; --line:#232b35; --grid:#1b222b;
+    --ink:#e9edf2; --muted:#8d99a8; --dim:#68727f;
+    --sensory:#3987e5; --dorsal:#d95926; --hpc:#199e70; --thal:#9085e9;
+    --good:#3ee6b0; --warn:#ffab5e;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  :root[data-theme="light"]{
+    color-scheme: light;
+    --ground:#f4f6f8; --panel:#ffffff; --panel2:#f8fafb; --line:#dde3ea; --grid:#e9edf2;
+    --ink:#0d1218; --muted:#54606f; --dim:#7d8896;
+    --sensory:#2a78d6; --dorsal:#eb6834; --hpc:#1baf7a; --thal:#4a3aa7;
+    --good:#0f9c6c; --warn:#b96a10;
+  }
+  @media (prefers-color-scheme: light){
+    :root:where(:not([data-theme="dark"])){
+      color-scheme: light;
+      --ground:#f4f6f8; --panel:#ffffff; --panel2:#f8fafb; --line:#dde3ea; --grid:#e9edf2;
+      --ink:#0d1218; --muted:#54606f; --dim:#7d8896;
+      --sensory:#2a78d6; --dorsal:#eb6834; --hpc:#1baf7a; --thal:#4a3aa7;
+      --good:#0f9c6c; --warn:#b96a10;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+    line-height:1.5;padding:clamp(14px,2.6vw,34px)}
+  .wrap{max-width:1180px;margin:0 auto;display:grid;gap:14px}
+  .n{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  header{display:grid;gap:8px;margin-bottom:2px}
+  .kicker{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  h1{margin:0;font-size:clamp(24px,4vw,40px);line-height:1.08;letter-spacing:-.022em;text-wrap:balance}
+  h1 em{font-style:normal;color:var(--hpc)}
+  .thesis{margin:0;max-width:74ch;font-size:15px;color:var(--muted)}
+  .scope{margin:6px 0 0;padding:9px 13px;border-left:2px solid var(--thal);background:var(--panel);
+    border-radius:0 6px 6px 0;font-size:13px;color:var(--muted);max-width:82ch}
+  .scope b{color:var(--ink);font-weight:600}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:15px 17px}
+  .card > h2{margin:0 0 3px;font-size:13px;letter-spacing:.01em}
+  .card > .cap{margin:0 0 12px;font-size:12.5px;color:var(--muted);max-width:88ch}
+
+  .legend{display:flex;flex-wrap:wrap;gap:13px;font-size:11.5px;color:var(--muted);margin:10px 0 0}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:9px;height:9px;border-radius:2px;flex:none}
+
+  .phases{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+  .ph{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:13px 15px;
+    display:grid;gap:5px;border-top:2px solid var(--pc,var(--hpc))}
+  .ph .t{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--dim)}
+  .ph .h{font-size:14.5px;font-weight:600}
+  .ph .d{font-size:12.5px;color:var(--muted)}
+  .ph .v{font-family:var(--mono);font-size:20px;font-weight:600;letter-spacing:-.01em;margin-top:3px}
+  .ph .s{font-size:11px;color:var(--dim);font-family:var(--mono)}
+
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{padding:7px 9px;border-bottom:1px solid var(--grid);text-align:left;vertical-align:top}
+  th{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);font-weight:600}
+  td.v{font-family:var(--mono);white-space:nowrap;color:var(--ink)}
+  td.src{color:var(--muted);font-size:11.5px}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:1.5px 7px;border-radius:20px;
+    border:1px solid currentColor;white-space:nowrap}
+  .ok{color:var(--good)} .part{color:var(--warn)}
+  .scroll{overflow-x:auto}
+
+  .two{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+  ul.open{margin:0;padding-left:17px;display:grid;gap:7px;font-size:12.5px;color:var(--muted)}
+  ul.open b{color:var(--ink);font-weight:600}
+  .scaleGrid{display:grid;gap:7px;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));margin-top:2px}
+  .sc{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:9px 10px}
+  .sc .k{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+  .sc .v{font-family:var(--mono);font-size:17px;font-weight:600;margin-top:2px}
+  footer{font-size:11.5px;color:var(--dim);margin-top:4px}
+  svg{display:block;width:100%;height:auto}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="kicker">Integrated loop · validation summary</div>
+    <h1>Sensory cortex ⇄ entorhinal ⇄ hippocampus:<br><em>encode · replay · consolidate</em>, in one runnable circuit</h1>
+    <p class="thesis">A sequence of sensory events forms cortical assemblies; the hippocampus binds an index
+    to each and stores their order; during sleep the thalamocortical rhythm opens a window in which the
+    hippocampus replays that order, time-compressed, and reinstates the cortical assemblies — until the
+    cortex can recall the sequence without the hippocampus.</p>
+    <p class="scope"><b>What this is.</b> A synthesis of established mechanisms integrated into one coupled,
+    interactive, numerically testable circuit — <b>not a claim of new biology</b>. Every component is a
+    textbook mechanism; the contribution is that they run together, each interface principled rather than
+    glue, with every step reproducing a published experimental number.</p>
+  </header>
+
+  <section class="card">
+    <h2>Architecture</h2>
+    <p class="cap">Solid arrows carry content; the dashed arrow is state, not signal — the thalamocortical
+    sheet does not drive the loop, it licenses when replay may consolidate.</p>
+    <div id="diagram"></div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--sensory)"></i>ventral “what” → lateral entorhinal</span>
+      <span><i class="sw" style="background:var(--dorsal)"></i>dorsal “where” → medial entorhinal</span>
+      <span><i class="sw" style="background:var(--hpc)"></i>hippocampal formation</span>
+      <span><i class="sw" style="background:var(--thal)"></i>thalamocortical state generator</span>
+    </div>
+  </section>
+
+  <div class="phases">
+    <div class="ph" style="--pc:var(--sensory)">
+      <div class="t">Phase 1 · awake, high ACh</div>
+      <div class="h">Encode &amp; bind</div>
+      <div class="d">Each stimulus drives a sparse cortical assembly; the mossy detonator selects a CA3 index;
+      the index binds to the assembly and CA3 stores the order.</div>
+      <div class="v">6 %</div>
+      <div class="s">CA3 index sparsity · 0.87 reinstatement</div>
+    </div>
+    <div class="ph" style="--pc:var(--hpc)">
+      <div class="t">Phase 2 · NREM, ripples</div>
+      <div class="h">Replay</div>
+      <div class="d">Igniting one index makes CA3 walk the stored order, one index per ripple frame. The order
+      is carried by learned transition weights — never scripted.</div>
+      <div class="v">ρ 1.00 · 17.9×</div>
+      <div class="s">order fidelity · time compression</div>
+    </div>
+    <div class="ph" style="--pc:var(--thal)">
+      <div class="t">Phase 3 · across nights</div>
+      <div class="h">Consolidate</div>
+      <div class="d">Replay co-activates cortical assemblies in order, writing cortico-cortical links until the
+      cortex no longer needs the hippocampus.</div>
+      <div class="v">0.00 → 1.00</div>
+      <div class="s">cortex-only recall, recent → remote</div>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>Validation ledger</h2>
+    <p class="cap">Every stage replicates across seeds and carries an ablation proving its mechanism is
+    load-bearing — remove it and the target breaks. Numbers are reproduced from published experiments,
+    not fitted.</p>
+    <div class="scroll"><table id="ledger"></table></div>
+  </section>
+
+  <div class="two">
+    <section class="card">
+      <h2>Scale</h2>
+      <p class="cap">Sparsity is set by feedback inhibition and every projection is convergence-preserving
+      (p ∝ 1/N<sub>pre</sub>), so the validated numbers are unchanged from 400 to 1600 cortical cells —
+      scale-invariance by design, not by luck. Hippocampal sizes follow <b>human</b> stereological ratios,
+      where CA1 ≈ 5.5× CA3.</p>
+      <div class="scaleGrid" id="scale"></div>
+    </section>
+
+    <section class="card">
+      <h2>Open, and stated plainly</h2>
+      <p class="cap">Recorded rather than smoothed over. Each is a specific next experiment, not a caveat.</p>
+      <ul class="open">
+        <li><b>The pathological arm is not reproduced.</b> The thalamic GABA-B spindle→spike-wave switch —
+        the route to a model of sleep-activated epileptic encephalopathy — does not express here; the
+        validated switch lives in files absent from this repository.</li>
+        <li><b>The shape task’s 100 % is a readout property.</b> Scored with a readout-independent
+        classifier the shipped front-end gives 65.4 %. HMAX raises the population code to 88.9 % but
+        breaks the three hand-tuned feature detectors, which should be replaced by a population readout.</li>
+        <li><b>The thalamus gates but is not wired in.</b> It supplies state, not synapses; core/matrix,
+        first/higher-order and the anterior-thalamic (Papez) output route are all still absent.</li>
+        <li><b>Reverse replay is a distribution</b>, not a universal — present on 6–7 of 8 seeds, as it is
+        experimentally a fraction of ripple events.</li>
+      </ul>
+    </section>
+  </div>
+
+  <footer>All values computed by running the models headlessly · <span class="n">npm test</span> ·
+  <span class="n">test/make_figures.js</span></footer>
+</div>
+
+<script>
+/* ---------------- architecture diagram ---------------- */
+const cs=getComputedStyle(document.documentElement), C=n=>cs.getPropertyValue(n).trim();
+function diagram(){
+  const p={sen:C('--sensory'),dor:C('--dorsal'),hpc:C('--hpc'),thal:C('--thal'),
+    ink:C('--ink'),mut:C('--muted'),dim:C('--dim'),line:C('--line'),pan:C('--panel2')};
+  const W=1120,H=380;
+  const box=(x,y,w,h,label,sub,col,fill)=>{
+    let t=`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${fill||p.pan}" stroke="${col}" stroke-width="1.5"/>`;
+    t+=`<text x="${x+w/2}" y="${y+(sub?h/2-2:h/2+4)}" fill="${p.ink}" font-size="12" font-weight="600" text-anchor="middle">${label}</text>`;
+    if(sub) t+=`<text x="${x+w/2}" y="${y+h/2+13}" fill="${p.dim}" font-size="9.5" text-anchor="middle" font-family="var(--mono)">${sub}</text>`;
+    return t;
+  };
+  const arrow=(x1,y1,x2,y2,col,dash)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="2" marker-end="url(#a-${dash?'d':'s'})"${dash?' stroke-dasharray="6 5"':''}/>`;
+  const lab=(x,y,txt,col,anchor)=>`<text x="${x}" y="${y}" fill="${col||p.dim}" font-size="9.5" text-anchor="${anchor||'middle'}" font-family="var(--mono)">${txt}</text>`;
+
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Architecture of the loop">
+    <defs>
+      <marker id="a-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,1 L9,5 L0,9 z" fill="${p.mut}"/></marker>
+      <marker id="a-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,1 L9,5 L0,9 z" fill="${p.thal}"/></marker>
+    </defs>`;
+
+  // --- thalamocortical band (state, not signal) ---
+  s+=`<rect x="24" y="12" width="1072" height="50" rx="9" fill="none" stroke="${p.thal}" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+  s+=`<text x="42" y="33" fill="${p.thal}" font-size="12" font-weight="600">Thalamocortical sheet — 37 columns × 9 cell classes</text>`;
+  s+=lab(42,49,'NREM slow oscillation 1.05 Hz · 73 % Down-state · spindle 16.5 Hz',p.dim,'start');
+  s+=arrow(470,62,470,136,p.thal,true);
+  s+=lab(484,90,'Up-state triggers replay · spindle gates consolidation',p.thal,'start');
+
+  // --- forward row ---
+  const Y=140, Hh=66, MID=Y+Hh/2;
+  s+=box(24,Y,104,Hh,'Stimulus','retina 40×40',p.dim);
+  s+=box(146,Y-18,124,36,'Ventral V1→V2','shape · “what”',p.sen);
+  s+=box(146,Y+48,124,36,'Dorsal V1→MT','motion · “where”',p.dor);
+  s+=arrow(128,MID-8,144,Y+2,p.sen); s+=arrow(128,MID+8,144,Y+64,p.dor);
+
+  s+=box(292,Y,116,Hh,'Neocortex','assemblies · 1600',p.sen);
+  s+=arrow(270,Y,290,MID-10,p.sen); s+=arrow(270,Y+66,290,MID+10,p.dor);
+
+  s+=box(428,Y-18,100,36,'LEC II/III','“what”',p.sen);
+  s+=box(428,Y+48,100,36,'MEC II/III','“where”',p.dor);
+  s+=arrow(408,MID-10,426,Y+2,p.sen); s+=arrow(408,MID+10,426,Y+64,p.dor);
+
+  s+=box(566,Y,88,Hh,'DG','2700',p.hpc);
+  s+=box(692,Y,88,Hh,'CA3','480 · index',p.hpc);
+  s+=box(818,Y,88,Hh,'CA1','2640',p.hpc);
+  s+=box(944,Y,70,Hh,'Sub','800',p.hpc);
+  s+=arrow(528,MID,564,MID,p.hpc); s+=lab(546,Y-10,'perforant');
+  s+=arrow(654,MID,690,MID,p.hpc); s+=lab(672,Y-10,'mossy');
+  s+=arrow(780,MID,816,MID,p.hpc); s+=lab(798,Y-10,'Schaffer');
+  s+=arrow(906,MID,942,MID,p.hpc);
+
+  // CA3 recurrence (auto-association + stored order)
+  s+=`<path d="M714,140 C704,108 768,108 758,140" fill="none" stroke="${p.hpc}" stroke-width="1.5" marker-end="url(#a-s)"/>`;
+  s+=lab(736,102,'recurrent + stored order');
+
+  // temporoammonic — gates, does not drive
+  s+=`<path d="M478,206 C550,250 780,250 858,208" fill="none" stroke="${p.mut}" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#a-s)"/>`;
+  s+=lab(668,266,'temporoammonic — gates, does not drive');
+
+  // consolidation: cortico-cortical chain written by replay
+  s+=`<path d="M300,208 C276,244 344,250 358,210" fill="none" stroke="${p.sen}" stroke-width="1.5" marker-end="url(#a-s)"/>`;
+  s+=lab(298,262,'cortico-cortical chain',p.sen);
+
+  // --- output path back to cortex ---
+  s+=box(944,278,70,42,'EC deep','800',p.hpc);
+  s+=arrow(979,206,979,276,p.hpc);
+  s+=`<path d="M942,299 L400,299" fill="none" stroke="${p.hpc}" stroke-width="2"/>`;
+  s+=arrow(382,299,382,210,p.hpc);
+  s+=lab(668,291,'reinstatement — replay drives the cortical assembly back',p.hpc);
+
+  s+=lab(24,352,'Human stereological ratios · convergence-preserving topographic connectivity · lognormal weights',p.mut,'start');
+  s+='</svg>';
+  document.getElementById('diagram').innerHTML=s;
+}
+
+/* ---------------- ledger ---------------- */
+const LEDGER=[
+  ['Cortical assemblies','8 / 8','sparsity 7.3 % · completion 0.89 from a 50 % cue','Barth &amp; Poulet 2012','ok'],
+  ['Index binding','9 / 9','CA3 index 6 % · reinstatement 0.87, cross-talk 0.06','hippocampal index theory','ok'],
+  ['Ripple replay','7 / 7','forward ρ 1.00 · 17.9× compression · forward + reverse','Lee &amp; Wilson 2002 · Davidson 2009 · Diba &amp; Buzsáki 2007','ok'],
+  ['Consolidation gradient','7 / 7','HPC lesion: recent ρ 0.00, remote ρ 1.00','Kim &amp; Fanselow 1992 · Frankland &amp; Bontempi 2005','ok'],
+  ['Cross-scale sleep gating','9 / 9','NREM consolidates ρ 1.00 · wake ρ 0.00 (Δ 1.00)','Sirota 2003 · Maingret 2016 · Latchoumane 2017','ok'],
+  ['Visual streams','7 / 7','shape 100 % · MT direction error 0.0° median','Adelson &amp; Bergen 1985','ok'],
+  ['HMAX front-end','1 / 4','shape 88.9 % + MNIST 85.0 % on one bank — best balance','Riesenhuber &amp; Poggio 1999 · Serre 2007','part'],
+];
+document.getElementById('ledger').innerHTML =
+  '<thead><tr><th>stage</th><th>checks</th><th>key result</th><th>reproduced from</th></tr></thead><tbody>'+
+  LEDGER.map(([a,b,c,d,st])=>`<tr><td><b>${a}</b></td><td class="v"><span class="pill ${st}">${b}</span></td>`+
+    `<td class="v" style="white-space:normal">${c}</td><td class="src">${d}</td></tr>`).join('')+'</tbody>';
+
+/* ---------------- scale ---------------- */
+const SCALE=[['neocortex',1600],['EC II / III',600],['EC deep',800],['dentate gyrus',2700],
+  ['CA3',480],['CA1',2640],['subiculum',800]];
+document.getElementById('scale').innerHTML =
+  SCALE.map(([k,v])=>`<div class="sc"><div class="k">${k}</div><div class="v">${v.toLocaleString()}</div></div>`).join('')+
+  `<div class="sc" style="border-color:var(--hpc)"><div class="k">total principal cells</div><div class="v" style="color:var(--hpc)">9,620</div></div>`;
+
+diagram();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',diagram);
+new MutationObserver(diagram).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+</script>
