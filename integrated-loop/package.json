@@ -4,7 +4,7 @@
   "private": true,
   "description": "Sensory cortex ⇄ entorhinal ⇄ hippocampus: encode · replay · consolidate. Numerically validated against experimental data.",
   "scripts": {
-    "test": "node test/stage1.js"
+    "test": "node test/stage1.js && node test/stage2.js && node test/stage3.js"
   },
   "license": "MIT"
 }
