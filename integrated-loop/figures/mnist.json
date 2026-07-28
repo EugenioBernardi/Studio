@@ -1,0 +1,1 @@
+{"results":{"raw":{"centroid":75.5,"knn":87.8,"dim":1600},"v1":{"centroid":70.8,"knn":78.3,"dim":4800},"v2":{"centroid":66.8,"knn":76.5,"dim":400}},"nTrain":800,"nTest":400,"N":40,"NORI":12,"NC":20,"V2N":10}

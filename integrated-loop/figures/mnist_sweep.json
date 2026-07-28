@@ -1,0 +1,1 @@
+{"raw":85,"configs":[{"name":"as-shipped  σ3 λ4 γ0.30 (shape-tuned)","acc":71,"dim":4800},{"name":"rounder     σ2 λ4 γ0.60","acc":87.5,"dim":4800},{"name":"fine        σ1.5 λ3 γ0.60","acc":90.5,"dim":4800},{"name":"multi-scale fine+rounder","acc":87.5,"dim":9600},{"name":"multi-scale + weak divisive norm","acc":89.5,"dim":9600}],"nTrain":400,"nTest":200}

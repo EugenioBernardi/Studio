@@ -136,6 +136,19 @@
   </div>
 
   <section class="card">
+    <h2>Challenging the front-end with handwritten digits</h2>
+    <p class="why">MNIST is a far harder item set than four synthetic shapes, and it exposes
+    something the shape task could not: with the shipped filters <em>every stage of the
+    hierarchy loses information relative to raw pixels</em>. Same readout throughout
+    (L2-normalised, cosine k-NN), so the comparison isolates the representation.</p>
+    <div class="legend" id="mnLegend"></div>
+    <div class="row2" style="margin-top:2px">
+      <figure><div id="mnStages"></div><figcaption id="mnStagesCap"></figcaption></figure>
+      <figure><div id="mnFilters"></div><figcaption id="mnFiltersCap"></figcaption></figure>
+    </div>
+  </section>
+
+  <section class="card">
     <h2>All figures, as numbers</h2>
     <div class="scroll"><table id="tbl"></table></div>
   </section>
@@ -348,6 +361,54 @@ document.getElementById('ventralCap').textContent =
   document.getElementById('consCap').textContent =
     'With no replay the memory is entirely hippocampus-dependent (ρ 0.00). It becomes fully hippocampus-independent by '+first1+
     ' replay events. The transition is gradual because it tracks accumulated cortico-cortical weight — it is not a switch.';
+})();
+
+/* ---------- MNIST ---------- */
+(function(){
+  const p=S(), M=D.mnist;
+  document.getElementById('mnLegend').innerHTML =
+    `<span><i class="sw" style="background:${p.s1}"></i>MNIST digits (k-NN, ${M.nTest} test)</span>`+
+    `<span><i class="sw" style="background:${p.s2}"></i>4-shape task</span>`+
+    `<span><i class="sw" style="background:${p.dim}"></i>raw-pixel baseline</span>`;
+
+  function bars(host,items,keys,base){
+    const W=470,H=210,L=40,R=12,T=12,B=64;
+    const iw=(W-L-R)/items.length, bw=Math.min(30,(iw-16)/keys.length);
+    let s=svgEl(W,H);
+    for(let g=0;g<=4;g++){const y=T+(H-T-B)*(1-g/4);
+      s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${p.grid}" stroke-width="1"/>`;
+      s+=`<text x="${L-7}" y="${y+4}" fill="${p.dim}" font-size="10" text-anchor="end" font-family="ui-monospace,monospace">${(g*25)}</text>`;}
+    if(base!=null){const y=T+(H-T-B)*(1-base/100);
+      s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${p.dim}" stroke-width="2" stroke-dasharray="5 4"/>`;
+      s+=`<text x="${L+3}" y="${y-6}" fill="${p.dim}" font-size="10" text-anchor="start" font-family="ui-monospace,monospace">raw pixels ${base.toFixed(1)}%</text>`;}
+    items.forEach((it,i)=>{
+      const x0=L+i*iw;
+      keys.forEach(([k,c],j)=>{
+        const v=it[k]; if(v==null) return;
+        const h=(H-T-B)*(v/100), x=x0+iw/2-(bw*keys.length+6*(keys.length-1))/2+j*(bw+6);
+        s+=`<rect x="${x}" y="${H-B-h}" width="${bw}" height="${Math.max(1,h)}" rx="4" fill="${c}"><title>${esc(it.name)} ${v}%</title></rect>`;
+        s+=`<text x="${x+bw/2}" y="${H-B-h-6}" fill="${p.muted}" font-size="10" text-anchor="middle" font-family="ui-monospace,monospace">${v.toFixed(1)}</text>`;});
+      esc(it.name).split(' · ').forEach((ln,r)=>{
+        s+=`<text x="${x0+iw/2}" y="${H-B+18+r*13}" fill="${r?p.dim:p.ink}" font-size="${r?10:11}" text-anchor="middle">${ln}</text>`;});
+    });
+    return s+'</svg>';
+  }
+
+  document.getElementById('mnStages').innerHTML =
+    bars(null, M.stages.map(x=>({name:x.name.replace(' (shipped filters)',' · shipped'),acc:x.acc})),
+         [['acc',p.s1]], null);
+  document.getElementById('mnStagesCap').textContent =
+    'With the shipped (shape-tuned) filters the hierarchy is subtractive: V1 '+M.stages[1].acc.toFixed(1)+
+    '% and V2 '+M.stages[2].acc.toFixed(1)+'% both fall below raw pixels at '+M.stages[0].acc.toFixed(1)+
+    '%. A front-end that loses to its own input is not yet earning its place.';
+
+  document.getElementById('mnFilters').innerHTML =
+    bars(null, M.filters, [['mnist',p.s1],['shape',p.s2]], M.rawSweep);
+  document.getElementById('mnFiltersCap').textContent =
+    'De-specialising the Gabors reverses it — fine filters reach '+M.confirm.fine.toFixed(1)+
+    '% on the larger split, above raw pixels ('+M.confirm.raw.toFixed(1)+'%). But the same change costs the '+
+    'shape task 100% → '+M.filters[2].shape.toFixed(1)+'%. One fixed filter bank cannot serve both; real V1 '+
+    'carries many scales in parallel, and that is the fix this measurement points to.';
 })();
 
 /* ---------- table ---------- */
