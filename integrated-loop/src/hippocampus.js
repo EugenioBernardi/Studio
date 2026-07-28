@@ -284,5 +284,34 @@ function normSparse(wt, budget) {
   }
 }
 
-module.exports = { createHPC, hdefaults, forwardStep, backwardStep, replayStep,
+/* ---- lesions: anatomically specific damage, for the pathology suite ----
+   A cell is silenced by zeroing its INCOMING structural weights — it then never crosses
+   threshold and cannot contribute downstream, which is what a lost neuron does. Returns the
+   set of silenced indices so a lesion can be reported and reproduced. */
+const INPUTS = {
+  ec2: ["Wce2"], ec3: ["Wce3"], dg: ["Wed"],
+  ca3: ["Wdc", "Wec3", "Rca3", "Rseq"],
+  ca1: ["Wc31", "WtaM", "WtaL"],
+  sub: ["Wc1s"], ecd: ["Wse", "Wc1d"],
+};
+function lesionField(H, field, frac, seed) {
+  const N = H[field].length, rnd = mulberry32(seed == null ? 9091 : seed);
+  const dead = [];
+  for (let i = 0; i < N; i++) if (rnd() < frac) dead.push(i);
+  for (const proj of INPUTS[field] || []) {
+    const P = H[proj]; if (!P) continue;
+    for (const i of dead) if (P.wt[i]) P.wt[i].fill(0);
+  }
+  H.lesions = H.lesions || {}; H.lesions[field] = dead.length / N;
+  return dead;
+}
+
+/* diffuse recurrent sprouting (mossy-fibre / associational reorganisation in TLE):
+   raise the CA3 recurrent weight budget and scale existing weights up. */
+function sprout(H, gain) {
+  H.P.wBudget3 *= gain; H.P.wRecMax3 *= gain;
+  for (let i = 0; i < H.P.NCA3; i++) for (let k = 0; k < H.Rca3.wt[i].length; k++) H.Rca3.wt[i][k] *= gain;
+}
+
+module.exports = { lesionField, sprout, createHPC, hdefaults, forwardStep, backwardStep, replayStep,
   fieldStep, activeSet, normSparse, mulberry32, dot, dotDense, project, coords, lognorm };
