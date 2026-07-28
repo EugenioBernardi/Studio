@@ -1,0 +1,1 @@
+{"results":{"intact":{"LDI":0.888888888888889,"REC":1},"DG disinhibited ×0.5":{"LDI":0.7222222222222223,"REC":1},"DG disinhibited ×0.25":{"LDI":0.5,"REC":1},"EC-II loss 60%":{"LDI":0.16666666666666666,"REC":0},"EC-II loss 90%":{"LDI":0.05555555555555555,"REC":0}},"criteria":{"lo":0.3,"hi":0.75},"seeds":3}
