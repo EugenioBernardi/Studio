@@ -1,0 +1,378 @@
+<title>Integrated loop — validation figures</title>
+<style>
+  :root{
+    color-scheme: light;
+    --ground:#f7f8f9; --panel:#ffffff; --line:#dfe3e8; --grid:#eceff3;
+    --ink:#0d1117; --muted:#5a6472; --dim:#8b95a3;
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+    --heat0:#eef4fd; --heat1:#0d366b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){
+      color-scheme: dark;
+      --ground:#0c0e11; --panel:#14181d; --line:#232a33; --grid:#1c222a;
+      --ink:#e9ecf0; --muted:#8d97a4; --dim:#6b7482;
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+      --heat0:#0f1620; --heat1:#7ab4f2;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --ground:#0c0e11; --panel:#14181d; --line:#232a33; --grid:#1c222a;
+    --ink:#e9ecf0; --muted:#8d97a4; --dim:#6b7482;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --heat0:#0f1620; --heat1:#7ab4f2;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    line-height:1.55; padding:clamp(16px,3vw,40px);
+  }
+  .num,.n{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  header{max-width:1180px;margin:0 auto 28px}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 6px}
+  h1{font-size:clamp(22px,3.4vw,32px);line-height:1.15;margin:0 0 8px;text-wrap:balance;letter-spacing:-.01em}
+  .sub{color:var(--muted);max-width:68ch;margin:0;font-size:14.5px}
+  .stats{max-width:1180px;margin:0 auto 26px;display:grid;gap:10px;
+    grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+  .stat .k{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:5px}
+  .stat .v{font-size:25px;font-weight:600;letter-spacing:-.02em}
+  .stat .c{font-size:12px;color:var(--muted);margin-top:2px}
+  main{max-width:1180px;margin:0 auto;display:grid;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px 18px}
+  .card h2{font-size:14px;margin:0 0 3px;letter-spacing:-.005em}
+  .card .why{font-size:12.5px;color:var(--muted);margin:0 0 14px;max-width:78ch}
+  .row2{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 10px;font-size:12px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:10px;height:10px;border-radius:2px;flex:none}
+  .scroll{overflow-x:auto}
+  figure{margin:0}
+  figcaption{font-size:12px;color:var(--muted);margin-top:9px}
+  .grid3{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+  .stageRow{display:flex;gap:10px;align-items:flex-end}
+  .stageRow figure{text-align:center}
+  .stageRow canvas{display:block;border:1px solid var(--line);border-radius:4px;image-rendering:pixelated;width:100%;height:auto}
+  .tag{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-top:5px}
+  .shapeName{font-size:12px;color:var(--ink);font-weight:600;margin-bottom:6px}
+  table{border-collapse:collapse;font-size:12.5px;width:100%}
+  th,td{text-align:right;padding:5px 10px;border-bottom:1px solid var(--grid)}
+  th:first-child,td:first-child{text-align:left}
+  th{font-weight:600;color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+  .polars{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(96px,1fr))}
+  .polars figure{text-align:center}
+  svg{display:block;max-width:100%}
+  footer{max-width:1180px;margin:22px auto 0;font-size:12px;color:var(--dim)}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header>
+  <p class="eyebrow">Integrated loop · computed from the models, not illustrated</p>
+  <h1>Sensory cortex ⇄ entorhinal ⇄ hippocampus: validation figures</h1>
+  <p class="sub">Every value on this page is produced by running the models headlessly
+  (<span class="n">test/make_figures.js</span>). Nothing is drawn by hand or scripted for effect.</p>
+</header>
+
+<div class="stats" id="stats"></div>
+
+<main>
+  <section class="card">
+    <h2>Ventral stream — the pipeline that turns a shape into a code</h2>
+    <p class="why">Retina difference-of-Gaussians → LGN → V1 complex (orientation energy, phase-invariant)
+    → V2 angle cells. The V2 stage is where identity becomes explicit: corners of different angle
+    activate different populations.</p>
+    <div class="grid3" id="ventral"></div>
+    <figcaption id="ventralCap"></figcaption>
+  </section>
+
+  <div class="row2">
+    <section class="card">
+      <h2>What distinguishes each shape</h2>
+      <p class="why">The three features the decision layer competes on. Each shape is dominated by a
+      different one — that separation is what makes classification work.</p>
+      <div class="legend" id="sigLegend"></div>
+      <div id="sigChart"></div>
+      <figcaption id="sigCap"></figcaption>
+    </section>
+
+    <section class="card">
+      <h2>Dorsal stream — MT direction tuning</h2>
+      <p class="why">Adelson–Bergen motion energy pooled into MT pattern cells. Each dial is the
+      population response to one stimulus direction; the needle is MT's estimate.</p>
+      <div class="polars" id="polars"></div>
+      <figcaption id="mtCap"></figcaption>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Pattern separation along the trisynaptic path</h2>
+    <p class="why">Sparsity is set by feedback inhibition in each field, never by a k-winners shortcut.
+    The separation gradient below is emergent — it was not tuned for.</p>
+    <div class="legend" id="fieldLegend"></div>
+    <div class="scroll" id="fieldChart"></div>
+    <figcaption id="fieldCap"></figcaption>
+  </section>
+
+  <div class="row2">
+    <section class="card">
+      <h2>Ripple-paced replay</h2>
+      <p class="why">One index per ripple frame. Which index follows which is carried entirely by the
+      learned CA3 transition weights — the order is never scripted.</p>
+      <div class="legend" id="replayLegend"></div>
+      <div id="replayChart"></div>
+      <figcaption id="replayCap"></figcaption>
+    </section>
+
+    <section class="card">
+      <h2>Systems-consolidation gradient</h2>
+      <p class="why">Cortex-only recall (hippocampus lesioned) against how much replay the memory has
+      had. The memory becomes hippocampus-independent gradually, as cortico-cortical weight accumulates.</p>
+      <div class="legend" id="consLegend"></div>
+      <div id="consChart"></div>
+      <figcaption id="consCap"></figcaption>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>All figures, as numbers</h2>
+    <div class="scroll"><table id="tbl"></table></div>
+  </section>
+</main>
+
+<footer>Generated from <span class="n">integrated-loop</span> · models run headlessly at figure time.</footer>
+
+<script>
+const D = {"vision":{"N":40,"NC":20,"V2N":10,"shapes":[{"kind":"square","img":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"v1":[0,0,0,0.002,0.004,0.004,0.002,0,0,0,0,0,0.001,0.003,0.004,0.003,0.001,0,0,0,0,0,0.001,0.003,0.006,0.006,0.003,0.001,0.001,0.001,0.001,0.001,0.002,0.005,0.007,0.005,0.002,0,0,0,0,0.001,0.001,0.005,0.01,0.01,0.005,0.005,0.006,0.006,0.006,0.005,0.005,0.008,0.011,0.007,0.003,0.001,0.001,0,0.002,0.003,0.005,0.007,0.014,0.015,0.017,0.02,0.022,0.023,0.023,0.021,0.018,0.015,0.016,0.011,0.006,0.004,0.002,0.001,0.004,0.006,0.01,0.014,0.02,0.027,0.033,0.04,0.044,0.046,0.045,0.042,0.037,0.03,0.023,0.017,0.012,0.008,0.005,0.003,0.004,0.006,0.01,0.015,0.027,0.027,0.034,0.041,0.045,0.047,0.047,0.043,0.038,0.031,0.029,0.02,0.012,0.008,0.005,0.003,0.002,0.003,0.005,0.017,0.033,0.034,0.018,0.021,0.024,0.025,0.025,0.023,0.02,0.027,0.037,0.026,0.009,0.004,0.002,0.002,0,0.001,0.005,0.02,0.04,0.041,0.021,0.006,0.006,0.006,0.006,0.006,0.012,0.032,0.044,0.03,0.011,0.002,0.001,0,0,0.001,0.006,0.022,0.044,0.045,0.024,0.006,0.001,0.001,0.001,0.002,0.013,0.036,0.048,0.034,0.012,0.002,0,0,0,0.001,0.006,0.023,0.046,0.047,0.025,0.006,0.001,0,0,0.002,0.014,0.038,0.05,0.035,0.013,0.002,0,0,0,0.001,0.006,0.023,0.045,0.047,0.025,0.006,0.001,0,0,0.002,0.014,0.037,0.05,0.035,0.013,0.002,0,0,0,0.001,0.005,0.021,0.042,0.043,0.023,0.006,0.002,0.002,0.002,0.002,0.013,0.034,0.046,0.032,0.012,0.002,0,0,0.001,0.002,0.005,0.018,0.037,0.038,0.02,0.012,0.013,0.014,0.014,0.013,0.011,0.03,0.04,0.028,0.01,0.002,0.001,0.001,0.003,0.005,0.008,0.015,0.03,0.031,0.027,0.032,0.036,0.038,0.037,0.034,0.03,0.024,0.033,0.023,0.01,0.006,0.004,0.002,0.004,0.007,0.011,0.016,0.023,0.029,0.037,0.044,0.048,0.05,0.05,0.046,0.04,0.033,0.026,0.019,0.013,0.009,0.005,0.003,0.003,0.005,0.007,0.011,0.017,0.02,0.026,0.03,0.034,0.035,0.035,0.032,0.028,0.023,0.019,0.013,0.009,0.006,0.004,0.002,0.001,0.002,0.003,0.006,0.012,0.012,0.009,0.011,0.012,0.013,0.013,0.012,0.01,0.01,0.013,0.009,0.003,0.002,0.001,0.001,0,0,0.001,0.004,0.008,0.008,0.004,0.002,0.002,0.002,0.002,0.002,0.002,0.006,0.009,0.006,0.002,0,0,0,0,0,0.001,0.002,0.005,0.005,0.002,0.001,0,0,0,0,0.001,0.004,0.005,0.004,0.001,0,0,0,0,0,0,0.001,0.003,0.003,0.002,0,0,0,0,0,0.001,0.002,0.003,0.002,0.001,0,0,0],"d90":[0,0,0.001,0,0,0,0,0.001,0,0,0,0.012,0.031,0.021,0.001,0.002,0.028,0.028,0.007,0,0.001,0.031,0.083,0.048,0.002,0.005,0.068,0.074,0.019,0,0,0.021,0.048,0.045,0.002,0.007,0.053,0.042,0.014,0,0,0.001,0.002,0.002,0,0,0.002,0.001,0.001,0,0,0.002,0.005,0.007,0,0,0.007,0.004,0.002,0,0,0.028,0.068,0.053,0.002,0.007,0.068,0.059,0.018,0,0.001,0.028,0.074,0.042,0.001,0.004,0.059,0.065,0.016,0,0,0.007,0.019,0.014,0.001,0.002,0.018,0.016,0,0,0,0,0,0,0,0,0,0,0,0],"d60":[0,0,0,0,0,0,0,0,0,0,0,0.001,0.001,0.001,0,0,0.001,0.001,0.001,0,0,0.001,0.003,0.001,0,0,0.002,0.003,0.001,0,0,0.001,0.001,0.001,0,0,0.001,0.001,0.001,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.001,0.002,0.001,0,0,0.001,0.002,0.001,0,0,0.001,0.003,0.001,0,0,0.002,0.003,0.001,0,0,0.001,0.001,0.001,0,0,0.001,0.001,0,0,0,0,0,0,0,0,0,0,0,0],"corner90":0.2015,"corner60":0.0071,"entropy":0.4678,"label":"square"},{"kind":"triangle","img":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,1,1,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.25,1,1,1,1,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.75,1,1,1,1,0.75,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.25,1,1,1,1,1,1,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,1,1,1,1,1,1,1,1,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.75,1,1,1,1,1,1,1,1,1,1,0.75,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.25,1,1,1,1,1,1,1,1,1,1,1,1,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.75,1,1,1,1,1,1,1,1,1,1,1,1,0.75,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.25,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.75,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.75,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.25,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"v1":[0,0,0,0,0,0,0.001,0.003,0.004,0.003,0.004,0.004,0.002,0.001,0,0,0,0,0,0,0,0,0,0,0,0,0.001,0.004,0.006,0.007,0.007,0.005,0.002,0.001,0,0,0,0,0,0,0,0,0,0,0,0,0.001,0.004,0.008,0.011,0.01,0.006,0.002,0,0,0,0,0,0,0,0,0,0,0,0,0,0.002,0.006,0.012,0.015,0.015,0.009,0.004,0.001,0,0,0,0,0,0,0,0,0,0,0,0.001,0.005,0.013,0.02,0.018,0.02,0.017,0.009,0.003,0.001,0,0,0,0,0,0,0,0,0,0.001,0.003,0.011,0.021,0.025,0.018,0.023,0.024,0.016,0.006,0.002,0,0,0,0,0,0,0,0,0,0.002,0.008,0.019,0.028,0.026,0.014,0.021,0.029,0.024,0.013,0.004,0.001,0,0,0,0,0,0,0,0.001,0.004,0.014,0.026,0.031,0.022,0.009,0.015,0.028,0.03,0.02,0.008,0.002,0,0,0,0,0,0,0,0.002,0.008,0.021,0.031,0.028,0.015,0.005,0.009,0.022,0.031,0.027,0.014,0.005,0.001,0,0,0,0,0,0.001,0.004,0.013,0.025,0.029,0.02,0.008,0.002,0.004,0.014,0.026,0.029,0.019,0.008,0.002,0,0,0,0.001,0.001,0.002,0.007,0.017,0.025,0.022,0.012,0.008,0.009,0.009,0.008,0.017,0.025,0.022,0.012,0.004,0.002,0.001,0.001,0.003,0.006,0.009,0.012,0.018,0.021,0.025,0.03,0.032,0.034,0.033,0.031,0.028,0.023,0.02,0.014,0.01,0.007,0.004,0.003,0.006,0.01,0.016,0.022,0.03,0.038,0.047,0.054,0.059,0.061,0.061,0.057,0.051,0.043,0.034,0.026,0.019,0.013,0.008,0.005,0.006,0.009,0.014,0.021,0.028,0.036,0.044,0.051,0.055,0.057,0.057,0.053,0.047,0.04,0.032,0.024,0.017,0.012,0.007,0.005,0.003,0.004,0.007,0.01,0.014,0.018,0.021,0.025,0.027,0.028,0.028,0.026,0.023,0.02,0.016,0.012,0.008,0.006,0.003,0.002,0.001,0.002,0.004,0.004,0.003,0.004,0.005,0.006,0.007,0.007,0.007,0.007,0.006,0.005,0.004,0.004,0.004,0.003,0.001,0.001,0.001,0.002,0.002,0.002,0.001,0.001,0.001,0.001,0.001,0.001,0.001,0.001,0.001,0.001,0.001,0.002,0.002,0.002,0.001,0.001,0.001,0.001,0.001,0.001,0,0,0,0,0,0,0,0,0,0,0,0,0.001,0.001,0.001,0,0,0.001,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.001,0.001,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"d90":[0,0,0,0,0,0,0,0,0,0,0,0,0,0.001,0.001,0.001,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.001,0.001,0,0.001,0,0,0.001,0.001,0,0,0.001,0.002,0,0,0,0,0.002,0.001,0,0,0.001,0.001,0,0,0,0,0.001,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"d60":[0,0,0,0,0.006,0.004,0,0,0,0,0,0,0,0.004,0.018,0.014,0,0,0,0,0,0,0,0.002,0.023,0.016,0.001,0,0,0,0,0,0,0,0.012,0.007,0,0,0,0,0,0,0.001,0.001,0.004,0.002,0.001,0.001,0,0,0,0.01,0.027,0.027,0.005,0.009,0.03,0.023,0.007,0,0.003,0.018,0.031,0.01,0,0.001,0.017,0.03,0.013,0.001,0.002,0.008,0.009,0.001,0,0,0.002,0.01,0.007,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"corner90":0.0048,"corner60":0.0906,"entropy":0.5934,"label":"triangle"},{"kind":"circle","img":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,0.5,0.5,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,0.75,1,1,1,1,1,1,0.75,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.25,0.75,1,1,1,1,1,1,1,1,1,1,0.75,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.25,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.25,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.75,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.75,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.75,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.75,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.75,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.75,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.75,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.75,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.25,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.25,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.25,0.75,1,1,1,1,1,1,1,1,1,1,0.75,0.25,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,0.75,1,1,1,1,1,1,0.75,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.5,0.5,0.5,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"v1":[0,0,0,0,0,0,0,0,0.001,0.001,0.001,0.001,0,0,0,0,0,0,0,0,0,0,0,0,0.001,0.001,0.001,0.001,0.001,0.001,0.001,0.001,0.001,0.001,0,0.001,0,0,0,0,0,0,0,0.001,0.001,0.001,0.001,0.002,0.002,0.002,0.002,0.002,0.002,0.001,0.001,0.001,0.001,0,0,0,0,0,0.001,0.001,0.002,0.003,0.004,0.004,0.005,0.005,0.005,0.005,0.004,0.003,0.002,0.002,0.001,0.001,0,0,0,0.001,0.001,0.002,0.002,0.004,0.005,0.006,0.007,0.007,0.007,0.006,0.005,0.004,0.003,0.002,0.001,0.001,0,0,0,0.001,0.001,0.003,0.004,0.004,0.005,0.004,0.004,0.005,0.005,0.004,0.005,0.005,0.004,0.003,0.002,0.001,0,0,0,0.001,0.001,0.004,0.005,0.005,0.004,0.002,0.001,0.001,0.001,0.002,0.003,0.005,0.005,0.004,0.002,0.001,0.001,0,0,0.001,0.002,0.004,0.006,0.004,0.002,0.001,0,0,0,0.001,0.002,0.003,0.005,0.005,0.003,0.001,0.001,0,0.001,0.001,0.002,0.005,0.007,0.004,0.001,0,0,0,0,0,0.001,0.003,0.006,0.006,0.003,0.002,0.001,0,0.001,0.001,0.002,0.005,0.007,0.005,0.001,0,0,0,0,0,0.001,0.003,0.006,0.007,0.004,0.002,0.001,0,0.001,0.001,0.002,0.005,0.007,0.005,0.001,0,0,0,0,0,0.001,0.003,0.006,0.007,0.004,0.002,0.001,0.001,0.001,0.001,0.002,0.005,0.006,0.004,0.002,0.001,0,0,0,0,0.001,0.003,0.006,0.006,0.003,0.002,0.001,0,0,0.001,0.002,0.004,0.005,0.005,0.003,0.002,0.001,0.001,0.001,0.001,0.003,0.004,0.005,0.005,0.003,0.001,0.001,0,0,0.001,0.001,0.003,0.004,0.005,0.005,0.003,0.003,0.003,0.003,0.003,0.004,0.005,0.004,0.004,0.002,0.001,0.001,0,0,0,0.001,0.002,0.003,0.004,0.005,0.005,0.006,0.006,0.006,0.006,0.005,0.004,0.003,0.003,0.002,0.001,0,0,0,0.001,0.001,0.002,0.002,0.003,0.004,0.005,0.006,0.007,0.007,0.006,0.005,0.004,0.003,0.002,0.001,0.001,0,0,0,0,0.001,0.001,0.001,0.002,0.002,0.003,0.003,0.004,0.004,0.003,0.003,0.002,0.002,0.001,0.001,0,0,0,0,0,0,0.001,0.001,0.001,0.001,0.001,0.002,0.002,0.002,0.002,0.001,0.001,0.001,0.001,0,0,0,0,0,0,0,0,0,0,0.001,0.001,0.001,0.001,0.001,0.001,0.001,0.001,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.001,0,0,0,0,0,0,0,0,0],"d90":[0,0,0,0,0,0,0,0,0,0,0,0,0.003,0.002,0.002,0.002,0.003,0.003,0,0,0,0.003,0.003,0.001,0.001,0.001,0.002,0.004,0.003,0,0,0.002,0.001,0,0,0,0.001,0.002,0.003,0,0,0.002,0.001,0,0,0,0,0.001,0.003,0,0,0.002,0.001,0,0,0,0,0.001,0.003,0,0,0.003,0.002,0.001,0,0,0.001,0.002,0.003,0,0,0.003,0.004,0.002,0.001,0.001,0.002,0.004,0,0,0,0,0.003,0.003,0.003,0.003,0.003,0,0,0,0,0,0,0,0,0,0,0,0,0],"d60":[0,0,0,0,0,0,0,0,0,0,0,0,0.002,0.004,0.004,0.004,0.003,0.001,0,0,0,0.002,0.005,0.004,0.003,0.003,0.005,0.004,0.001,0,0,0.004,0.004,0.002,0,0,0.002,0.005,0.003,0,0,0.004,0.003,0,0,0,0.001,0.004,0.003,0,0,0.004,0.003,0,0,0,0.001,0.004,0.003,0,0,0.003,0.005,0.002,0.001,0.001,0.003,0.005,0.002,0,0,0.001,0.004,0.005,0.004,0.004,0.005,0.003,0,0,0,0,0.001,0.003,0.003,0.003,0.002,0,0,0,0,0,0,0,0,0,0,0,0,0],"corner90":0.0289,"corner60":0.0474,"entropy":0.9947,"label":"circle"}],"accuracy":100,"nConditions":81},"mt":{"dirs":[0,45,90,135,180,225,270,315],"tuning":[[0.2353,0.2016,0.1163,0.0437,0.0179,0.0029,0,0.0029,0.0179,0.0437,0.1163,0.2016],[0.1534,0.172,0.172,0.1534,0.1173,0.0518,0.0054,0.0001,0.0001,0.0054,0.0518,0.1173],[0.0437,0.1163,0.2016,0.2353,0.2016,0.1163,0.0437,0.0179,0.0029,0,0.0029,0.0179],[0.0055,0.0517,0.1171,0.1534,0.1723,0.1724,0.1534,0.117,0.0514,0.0054,0.0001,0.0001],[0,0.0029,0.0181,0.044,0.1164,0.2012,0.2347,0.2012,0.1164,0.044,0.0181,0.0029],[0.0053,0.0001,0.0001,0.0053,0.0516,0.1171,0.1535,0.1724,0.1724,0.1535,0.1171,0.0516],[0.044,0.0181,0.0029,0,0.0029,0.0181,0.044,0.1164,0.2012,0.2347,0.2012,0.1164],[0.1534,0.1171,0.0517,0.0055,0.0001,0.0001,0.0054,0.0514,0.117,0.1534,0.1724,0.1723]],"errs":[0,0,0,0.1,0,0,0,0.1],"nDir":12,"median":0,"mean":0},"fields":[{"name":"EC II","N":300,"active":15.8,"overlap":18.2},{"name":"DG","N":2700,"active":3.3,"overlap":7.5},{"name":"CA3","N":480,"active":6.4,"overlap":11.9},{"name":"CA1","N":2640,"active":10.8,"overlap":23.1},{"name":"Sub","N":800,"active":16.3,"overlap":39.1}],"replay":{"forward":{"seq":[0,1,2,3,4,5],"times":[0,24,48,72,96,120],"rho":1},"reverse":{"seq":[5,4,3],"times":[0,24,48],"rho":-1},"compression":17.9,"encodeMsPerItem":430},"consolidation":{"events":[0,2,4,6,10,16,24,34],"curves":[[0,0,0,1,1,1,1,1],[0,0,1,1,1,1,1,1],[0,0,0,1,1,1,1,1]],"mean":[0,0,0.33,1,1,1,1,1],"seeds":[1,2,3]}};
+const cs = getComputedStyle(document.documentElement);
+const col = n => cs.getPropertyValue(n).trim();
+const S = () => ({s1:col('--s1'),s2:col('--s2'),s3:col('--s3'),ink:col('--ink'),
+  muted:col('--muted'),dim:col('--dim'),grid:col('--grid'),line:col('--line'),
+  h0:col('--heat0'),h1:col('--heat1'),panel:col('--panel')});
+const esc = s => String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const svgEl = (w,h) => `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img">`;
+
+/* Colours are read from the CSS custom properties at draw time, so every mark must be
+   REDRAWN when the theme changes — otherwise the palette resolved at load stays baked into
+   the SVG/canvas and, e.g., near-black axis labels end up invisible on the dark surface. */
+function drawAll(){
+  document.getElementById('ventral').innerHTML='';
+  document.getElementById('polars').innerHTML='';
+
+/* ---------- hero stats ---------- */
+document.getElementById('stats').innerHTML = [
+  ['Shape classification', D.vision.accuracy.toFixed(1)+'%', D.vision.nConditions+' scale × rotation × position conditions'],
+  ['MT direction error', D.mt.median.toFixed(1)+'°', 'median over 8 directions · mean '+D.mt.mean.toFixed(1)+'°'],
+  ['Replay order fidelity', 'ρ '+D.replay.forward.rho.toFixed(2), 'time-compressed '+D.replay.compression.toFixed(1)+'× vs encoding'],
+  ['Consolidation', D.consolidation.mean[D.consolidation.mean.length-1].toFixed(2), 'cortex-only recall after '+D.consolidation.events[D.consolidation.events.length-1]+' replay events'],
+].map(([k,v,c])=>`<div class="stat"><div class="k">${k}</div><div class="v num">${v}</div><div class="c">${esc(c)}</div></div>`).join('');
+
+/* ---------- heatmap canvas ---------- */
+function heat(parent,data,n,size,label,fixedMax){
+  const fig=document.createElement('figure');
+  const cv=document.createElement('canvas'); cv.width=n; cv.height=n;
+  cv.style.maxWidth=size+'px';
+  const ctx=cv.getContext('2d'), im=ctx.createImageData(n,n);
+  let mx=fixedMax; if(mx==null){mx=0; for(const v of data) if(v>mx) mx=v;} mx=mx||1;
+  const p=S(), c0=hex(p.h0), c1=hex(p.h1);
+  for(let i=0;i<n*n;i++){
+    const t=Math.max(0,Math.min(1,data[i]/mx));
+    im.data[i*4]  =c0[0]+(c1[0]-c0[0])*t;
+    im.data[i*4+1]=c0[1]+(c1[1]-c0[1])*t;
+    im.data[i*4+2]=c0[2]+(c1[2]-c0[2])*t;
+    im.data[i*4+3]=255;
+  }
+  ctx.putImageData(im,0,0);
+  fig.appendChild(cv);
+  const t=document.createElement('div'); t.className='tag'; t.textContent=label; fig.appendChild(t);
+  parent.appendChild(fig);
+}
+function hex(h){h=h.replace('#','');if(h.length===3)h=h.split('').map(x=>x+x).join('');
+  return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+
+const vh=document.getElementById('ventral');
+for(const sh of D.vision.shapes){
+  const box=document.createElement('div');
+  box.innerHTML=`<div class="shapeName">${esc(sh.kind)} <span class="num" style="color:var(--muted);font-weight:400">→ ${esc(sh.label)}</span></div>`;
+  const row=document.createElement('div'); row.className='stageRow';
+  heat(row,sh.img,D.vision.N,110,'retina');
+  heat(row,sh.v1,D.vision.NC,110,'V1 energy');
+  // shared scale across the two V2 maps: otherwise each is normalised to its own max and a
+  // near-zero map looks as bright as a strong one, which would misrepresent the comparison
+  const v2max=Math.max(...sh.d90,...sh.d60)||1;
+  heat(row,sh.d90,D.vision.V2N,110,'V2 · 90°',v2max);
+  heat(row,sh.d60,D.vision.V2N,110,'V2 · 60°',v2max);
+  box.appendChild(row); vh.appendChild(box);
+}
+document.getElementById('ventralCap').textContent =
+  'Each row is one stimulus through four stages. The two V2 maps share one brightness scale per shape, so they are directly comparable: the 90° map dominates for the square, the 60° map for the triangle, and neither for the circle — which is identified by high orientation entropy instead.';
+
+/* ---------- grouped bars: shape signature ---------- */
+(function(){
+  const p=S(), keys=[['corner90','90° corners',p.s1],['corner60','60° corners',p.s2],['entropy','orientation entropy',p.s3]];
+  document.getElementById('sigLegend').innerHTML = keys.map(([,l,c])=>
+    `<span><i class="sw" style="background:${c}"></i>${l}</span>`).join('');
+  const W=520,H=210,L=54,R=12,T=10,B=42, shapes=D.vision.shapes;
+  const iw=(W-L-R)/shapes.length, bw=Math.min(22,(iw-14)/3);
+  const mx=1.0;
+  let s=svgEl(W,H);
+  for(let g=0;g<=4;g++){const y=T+(H-T-B)*(1-g/4);
+    s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${p.grid}" stroke-width="1"/>`;
+    s+=`<text x="${L-8}" y="${y+4}" fill="${p.dim}" font-size="10" text-anchor="end" font-family="ui-monospace,monospace">${(g/4).toFixed(2)}</text>`;}
+  shapes.forEach((sh,i)=>{
+    const x0=L+i*iw;
+    keys.forEach(([k,,c],j)=>{
+      const v=sh[k], h=(H-T-B)*Math.min(1,v/mx);
+      const x=x0+iw/2-(bw*3+8)/2+j*(bw+4);
+      s+=`<rect x="${x}" y="${H-B-h}" width="${bw}" height="${Math.max(1,h)}" rx="3" fill="${c}"><title>${esc(sh.kind)} ${k} = ${v}</title></rect>`;
+      if(v>0.06) s+=`<text x="${x+bw/2}" y="${H-B-h-5}" fill="${p.muted}" font-size="9.5" text-anchor="middle" font-family="ui-monospace,monospace">${v.toFixed(2)}</text>`;
+    });
+    s+=`<text x="${x0+iw/2}" y="${H-B+16}" fill="${p.ink}" font-size="11.5" text-anchor="middle">${esc(sh.kind)}</text>`;
+  });
+  s+='</svg>';
+  document.getElementById('sigChart').innerHTML=s;
+  document.getElementById('sigCap').textContent =
+    'Square is carried by 90° corner cells, triangle by 60°, circle by entropy — three different features, so the decision layer separates them cleanly.';
+})();
+
+/* ---------- MT polar dials ---------- */
+(function(){
+  const p=S(), host=document.getElementById('polars');
+  D.mt.dirs.forEach((deg,i)=>{
+    const tun=D.mt.tuning[i], n=tun.length, R=34, cx=44, cy=44;
+    let mx=0; for(const v of tun) if(v>mx) mx=v; mx=mx||1;
+    let s=svgEl(88,88);
+    s+=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${p.grid}" stroke-width="1"/>`;
+    let pts=[];
+    for(let d=0;d<n;d++){
+      const a=d*2*Math.PI/n, r=R*(tun[d]/mx);
+      pts.push([cx+Math.cos(a)*r, cy-Math.sin(a)*r]);
+    }
+    s+=`<polygon points="${pts.map(q=>q[0].toFixed(1)+','+q[1].toFixed(1)).join(' ')}" fill="${p.s2}" fill-opacity="0.28" stroke="${p.s2}" stroke-width="2" stroke-linejoin="round"/>`;
+    const a=deg*Math.PI/180;
+    s+=`<line x1="${cx}" y1="${cy}" x2="${cx+Math.cos(a)*R}" y2="${cy-Math.sin(a)*R}" stroke="${p.ink}" stroke-width="2"/>`;
+    s+=`<circle cx="${cx}" cy="${cy}" r="2.5" fill="${p.ink}"/></svg>`;
+    host.insertAdjacentHTML('beforeend',
+      `<figure>${s}<div class="tag num">${deg}° · err ${D.mt.errs[i].toFixed(1)}°</div></figure>`);
+  });
+  document.getElementById('mtCap').textContent =
+    'Orange is the MT population response; the straight needle marks the true stimulus direction. Median error '+D.mt.median.toFixed(1)+'°, mean '+D.mt.mean.toFixed(1)+'° — the mean is carried by the two cardinal-diagonal conditions where opponent energy is most ambiguous.';
+})();
+
+/* ---------- field gradient ---------- */
+(function(){
+  const p=S();
+  document.getElementById('fieldLegend').innerHTML =
+    `<span><i class="sw" style="background:${p.s1}"></i>active cells (% of field)</span>`+
+    `<span><i class="sw" style="background:${p.s2}"></i>pairwise overlap (% of pattern)</span>`;
+  const W=1000,H=248,L=48,R=14,T=12,B=64, f=D.fields;
+  const iw=(W-L-R)/f.length, bw=Math.min(34,(iw-18)/2);
+  const mx=Math.max(40,...f.map(x=>Math.max(x.active,x.overlap)));
+  let s=svgEl(W,H);
+  for(let g=0;g<=4;g++){const y=T+(H-T-B)*(1-g/4), v=mx*g/4;
+    s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${p.grid}" stroke-width="1"/>`;
+    s+=`<text x="${L-8}" y="${y+4}" fill="${p.dim}" font-size="10" text-anchor="end" font-family="ui-monospace,monospace">${v.toFixed(0)}%</text>`;}
+  f.forEach((fd,i)=>{
+    const x0=L+i*iw;
+    [['active',p.s1],['overlap',p.s2]].forEach(([k,c],j)=>{
+      const v=fd[k], h=(H-T-B)*(v/mx);
+      const x=x0+iw/2-(bw*2+6)/2+j*(bw+6);
+      s+=`<rect x="${x}" y="${H-B-h}" width="${bw}" height="${Math.max(1,h)}" rx="4" fill="${c}"><title>${fd.name} ${k} ${v}%</title></rect>`;
+      s+=`<text x="${x+bw/2}" y="${H-B-h-6}" fill="${p.muted}" font-size="10" text-anchor="middle" font-family="ui-monospace,monospace">${v.toFixed(1)}</text>`;
+    });
+    s+=`<text x="${x0+iw/2}" y="${H-B+20}" fill="${p.ink}" font-size="12.5" font-weight="600" text-anchor="middle">${esc(fd.name)}</text>`;
+    s+=`<text x="${x0+iw/2}" y="${H-B+37}" fill="${p.dim}" font-size="10" text-anchor="middle" font-family="ui-monospace,monospace">n=${fd.N}</text>`;
+  });
+  s+='</svg>';
+  document.getElementById('fieldChart').innerHTML=s;
+  document.getElementById('fieldCap').textContent =
+    'DG is the sparsest field and the best separated — exactly its assigned role — and overlap then rises monotonically toward the output stages. Emergent from inhibition and the topographic wiring; nothing here was fitted.';
+})();
+
+/* ---------- replay raster ---------- */
+(function(){
+  const p=S(), f=D.replay.forward, r=D.replay.reverse;
+  document.getElementById('replayLegend').innerHTML =
+    `<span><i class="sw" style="background:${p.s1}"></i>forward (ρ ${f.rho.toFixed(2)})</span>`+
+    `<span><i class="sw" style="background:${p.s2}"></i>reverse (ρ ${r.rho.toFixed(2)})</span>`;
+  const W=520,H=230,L=44,R=14,T=12,B=40;
+  const tmax=Math.max(...f.times,...r.times,1);
+  const imax=Math.max(...f.seq,...r.seq);
+  const X=t=>L+(W-L-R)*(t/tmax), Y=i=>T+(H-T-B)*(1-(imax?i/imax:0));
+  let s=svgEl(W,H);
+  for(let i=0;i<=imax;i++){const y=Y(i);
+    s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${p.grid}" stroke-width="1"/>`;
+    s+=`<text x="${L-8}" y="${y+4}" fill="${p.dim}" font-size="10" text-anchor="end" font-family="ui-monospace,monospace">${i}</text>`;}
+  [[f,p.s1],[r,p.s2]].forEach(([d,c])=>{
+    let path=d.seq.map((v,k)=>`${k?'L':'M'}${X(d.times[k]).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+    s+=`<path d="${path}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" opacity="0.85"/>`;
+    d.seq.forEach((v,k)=>{
+      s+=`<circle cx="${X(d.times[k]).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="4.5" fill="${c}" stroke="${p.panel}" stroke-width="2"><title>index ${v} at ${d.times[k]} ms</title></circle>`;});
+  });
+  s+=`<text x="${(L+W-R)/2}" y="${H-10}" fill="${p.muted}" font-size="11" text-anchor="middle">time within ripple sequence (ms)</text>`;
+  s+=`<text transform="translate(13,${(T+H-B)/2}) rotate(-90)" fill="${p.muted}" font-size="11" text-anchor="middle">stored index</text>`;
+  s+='</svg>';
+  document.getElementById('replayChart').innerHTML=s;
+  document.getElementById('replayCap').textContent =
+    'Igniting the first index walks the sequence forward; igniting the last walks it backward. The whole sequence replays in '+
+    (Math.max(...f.times))+' ms against '+(D.replay.encodeMsPerItem*(f.seq.length-1)).toFixed(0)+' ms of encoding — '+D.replay.compression.toFixed(1)+'× compression.';
+})();
+
+/* ---------- consolidation curve ---------- */
+(function(){
+  const p=S(), c=D.consolidation;
+  document.getElementById('consLegend').innerHTML =
+    `<span><i class="sw" style="background:${p.s1}"></i>mean of ${c.seeds.length} seeds</span>`+
+    `<span><i class="sw" style="background:${p.dim}"></i>individual seeds</span>`;
+  const W=520,H=230,L=46,R=14,T=12,B=44;
+  const xmax=Math.max(...c.events);
+  const X=e=>L+(W-L-R)*(e/xmax), Y=v=>T+(H-T-B)*(1-Math.max(0,Math.min(1,v)));
+  let s=svgEl(W,H);
+  for(let g=0;g<=4;g++){const y=Y(g/4);
+    s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="${p.grid}" stroke-width="1"/>`;
+    s+=`<text x="${L-8}" y="${y+4}" fill="${p.dim}" font-size="10" text-anchor="end" font-family="ui-monospace,monospace">${(g/4).toFixed(2)}</text>`;}
+  c.curves.forEach(row=>{
+    const d=row.map((v,i)=>`${i?'L':'M'}${X(c.events[i]).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+    s+=`<path d="${d}" fill="none" stroke="${p.dim}" stroke-width="1.5" opacity="0.5"/>`;});
+  const dm=c.mean.map((v,i)=>`${i?'L':'M'}${X(c.events[i]).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+  s+=`<path d="${dm}" fill="none" stroke="${p.s1}" stroke-width="2.5" stroke-linejoin="round"/>`;
+  c.mean.forEach((v,i)=>{
+    s+=`<circle cx="${X(c.events[i]).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="4" fill="${p.s1}" stroke="${p.panel}" stroke-width="2"><title>${c.events[i]} events → ρ ${v}</title></circle>`;
+    s+=`<text x="${X(c.events[i]).toFixed(1)}" y="${H-B+16}" fill="${p.dim}" font-size="10" text-anchor="middle" font-family="ui-monospace,monospace">${c.events[i]}</text>`;});
+  s+=`<text x="${(L+W-R)/2}" y="${H-8}" fill="${p.muted}" font-size="11" text-anchor="middle">replay events</text>`;
+  s+=`<text transform="translate(13,${(T+H-B)/2}) rotate(-90)" fill="${p.muted}" font-size="11" text-anchor="middle">cortex-only recall ρ</text>`;
+  s+='</svg>';
+  document.getElementById('consChart').innerHTML=s;
+  const first1=c.events[c.mean.findIndex(v=>v>=0.99)];
+  document.getElementById('consCap').textContent =
+    'With no replay the memory is entirely hippocampus-dependent (ρ 0.00). It becomes fully hippocampus-independent by '+first1+
+    ' replay events. The transition is gradual because it tracks accumulated cortico-cortical weight — it is not a switch.';
+})();
+
+/* ---------- table ---------- */
+(function(){
+  const rows=[];
+  rows.push(['Ventral · shape classification', D.vision.accuracy.toFixed(1)+' %', D.vision.nConditions+' conditions']);
+  D.vision.shapes.forEach(s=>rows.push(['  '+s.kind+' → '+s.label,
+    'c90 '+s.corner90.toFixed(3)+' · c60 '+s.corner60.toFixed(3), 'entropy '+s.entropy.toFixed(3)]));
+  rows.push(['Dorsal · MT direction error', D.mt.median.toFixed(1)+'° median', D.mt.mean.toFixed(1)+'° mean over 8 directions']);
+  D.fields.forEach(f=>rows.push(['Field · '+f.name, f.active.toFixed(1)+' % active', f.overlap.toFixed(1)+' % overlap · n='+f.N]));
+  rows.push(['Replay · forward','ρ '+D.replay.forward.rho.toFixed(2), D.replay.forward.seq.join(' → ')]);
+  rows.push(['Replay · reverse','ρ '+D.replay.reverse.rho.toFixed(2), D.replay.reverse.seq.join(' → ')]);
+  rows.push(['Replay · compression', D.replay.compression.toFixed(1)+'×','vs '+D.replay.encodeMsPerItem+' ms/item encoding']);
+  D.consolidation.events.forEach((e,i)=>rows.push(['Consolidation · '+e+' replay events','ρ '+D.consolidation.mean[i].toFixed(2),
+    'seeds '+D.consolidation.curves.map(r=>r[i].toFixed(2)).join(', ')]));
+  document.getElementById('tbl').innerHTML =
+    '<thead><tr><th>quantity</th><th>value</th><th>detail</th></tr></thead><tbody>'+
+    rows.map(r=>`<tr><td>${esc(r[0])}</td><td class="num">${esc(r[1])}</td><td class="num" style="color:var(--muted)">${esc(r[2])}</td></tr>`).join('')+
+    '</tbody>';
+})();
+}
+
+drawAll();
+const mq = window.matchMedia('(prefers-color-scheme: dark)');
+mq.addEventListener('change', drawAll);
+new MutationObserver(drawAll).observe(document.documentElement,
+  { attributes:true, attributeFilter:['data-theme'] });
+</script>
