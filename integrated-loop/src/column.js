@@ -66,6 +66,14 @@ function cdefaults() {
     pTC_L4: 0.55,      // connection probability within the column's own relay sector
     wL4_L23: 0.85,     // layer 4 → layer 2/3
     pL4_L23: 0.35,
+    // FEEDFORWARD CONVERGENCE ACROSS COLUMNS. ffRadius = 0 confines an L2/3 cell to its own
+    // column's layer 4, which is how this file was first written — and it means no cell sees
+    // more than one patch of the sensory map at encoding time, since the only cross-column
+    // pathway is the recurrent one and that is silent at birth. Stage 31 measured the cost:
+    // the representation becomes a patch detector, not a feature detector. Real receptive
+    // fields span many columns, so this is a MISSING PATHWAY, not a free parameter.
+    ffRadius: 0,       // in columns, on the column lattice (0 = own column only)
+    ffSigma: 1.0,      // Gaussian falloff of the convergence with column distance
     wL23_L5: 0.70,     // layer 2/3 → layer 5
     pL23_L5: 0.30,
 
@@ -155,11 +163,23 @@ function create(opts) {
   }
   /* ---- L4 → L2/3, within the column ---- */
   const ffIdx = [], ffW = [];
+  const inv2f2 = 1 / (2 * P.ffSigma * P.ffSigma);
   for (let c = 0; c < NC; c++) {
+    // the columns this column's L2/3 cells may draw layer-4 input from
+    const src = [];
+    for (let k = 0; k < NC; k++) {
+      const d = colDist(pos, c, k);
+      if (d <= P.ffRadius) src.push([k, Math.exp(-(d * d) * inv2f2)]);
+    }
+    if (!src.length) src.push([c, 1]);
     for (let u = 0; u < P.nL23; u++) {
       const idx = [], w = [];
-      for (let t = 0; t < P.nL4; t++) {
-        if (rnd() < P.pL4_L23) { idx.push(c * P.nL4 + t); w.push(P.wL4_L23 * (0.8 + 0.4 * rnd())); }
+      for (const [k, g] of src) {
+        for (let t = 0; t < P.nL4; t++) {
+          if (rnd() < P.pL4_L23 * g) {
+            idx.push(k * P.nL4 + t); w.push(P.wL4_L23 * g * (0.8 + 0.4 * rnd()));
+          }
+        }
       }
       if (!idx.length) { const t = Math.floor(rnd() * P.nL4); idx.push(c * P.nL4 + t); w.push(P.wL4_L23); }
       ffIdx.push(Int32Array.from(idx)); ffW.push(Float64Array.from(w));

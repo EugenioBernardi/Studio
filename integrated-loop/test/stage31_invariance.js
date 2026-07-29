@@ -45,6 +45,35 @@
  *       model and the EC step should wait — not because the anatomy is wrong, but because the
  *       reason for preferring columns would not be established here. That would be reported as
  *       the result, not worked around.
+ *
+ * ============================================================================================
+ * CORRECTION, ADDED AFTER THE FIRST RUN. The first version of this stage concluded that the
+ * columnar cortex "discards almost all the discriminative information its input carries",
+ * preserving 8% of the available margin against the flat sheet's 150%. THAT CONCLUSION WAS AN
+ * ARTEFACT OF THIS HARNESS, and it was mine.
+ *
+ * The flat arm reached cortex through `project()`, which takes the TOP-K of a random projection
+ * — a hard k-winners-take-all. The columnar arm received graded thalamic drive and used feedback
+ * inhibition with a threshold. I gave one arm an explicit selection stage and the other none,
+ * then attributed the difference to topography.
+ *
+ * The control that settles it (§0 below): the SAME flat sheet, driven by the same projection
+ * WITHOUT top-k, scores a margin of 0.000 — same-shape 1.000, other-shape 1.000, every assembly
+ * identical to every other. The flat sheet is not better than the columnar one. A hard k-WTA is
+ * better than no k-WTA, in either architecture.
+ *
+ * §5 then asks whether the columnar model can produce that selection from its own machinery.
+ * Six parameter families were swept: recurrent range, long-range fraction, within-assembly
+ * convergence, reticular strength and spread, cross-column feedforward convergence (a genuinely
+ * missing pathway, now added as `ffRadius`), and an explicit k-WTA readout on L2/3. The best
+ * combination reaches 0.146 against the flat arm's 0.624. So the corrected finding is neither
+ * "columns are worse" nor "columns are better":
+ *
+ *   DISCRIMINATION IN THIS COMPARISON IS PRODUCED BY A HARD k-WINNERS-TAKE-ALL OVER A
+ *   HIGH-DIMENSIONAL RANDOM PROJECTION. Neither architecture discriminates without one, and the
+ *   columnar model has no mechanism that implements one: its PV feedback inhibition NORMALISES
+ *   but does not SELECT.
+ * ============================================================================================
  */
 
 const V = require("../src/vision.js");
@@ -108,12 +137,20 @@ function makeProjector(dim, N, seed) {
   }
   return W;
 }
-function project(W, vec, k, amp) {
+/* `mode` exists because of the correction in the header. "topk" is a hard k-winners-take-all
+   over the random projection — an explicit selection stage. "graded" is the same projection,
+   rectified and scaled, with NO selection: the drive the columnar arm actually receives. */
+function project(W, vec, k, amp, mode) {
   const n = W.length, s = new Float64Array(n);
   for (let u = 0; u < n; u++) { let a = 0; const row = W[u];
     for (let d = 0; d < vec.length; d++) a += row[d] * vec[d]; s[u] = a; }
-  const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => s[b] - s[a]);
   const outv = new Float64Array(n);
+  if (mode === "graded") {
+    let mx = 0; for (let u = 0; u < n; u++) if (s[u] > mx) mx = s[u];
+    for (let u = 0; u < n; u++) outv[u] = Math.max(0, s[u]) / (mx || 1) * amp;
+    return outv;
+  }
+  const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => s[b] - s[a]);
   for (let i = 0; i < k; i++) outv[order[i]] = amp;
   return outv;
 }
@@ -121,9 +158,16 @@ const jaccardish = (a, b) => { const sb = new Set(b); let c = 0; for (const x of
   return c / Math.max(1, Math.min(a.length, b.length)); };
 
 /* ---------------- the columnar arm ---------------- */
-function runColumnar(label, opts) {
+function topSet(a, k) {
+  const idx = Array.from({ length: a.length }, (_, i) => i).sort((x, y) => a[y] - a[x]);
+  const o = []; for (let i = 0; i < k && a[idx[i]] > 0; i++) o.push(idx[i]);
+  return o;
+}
+function runColumnar(label, opts, kwta) {
   const S = K.create(Object.assign({ NCOL, nL23: NL23, nTC: V.NORI, nStim: SHAPES.length,
                                      seed: 1 }, opts || {}));
+  const kk = Math.round(0.09 * S.NL23);
+  const read = () => (kwta ? topSet(S.a, kk) : K.activeSet(S));
   // learn the canonical view of each shape
   const canon = [];
   for (let rep = 0; rep < 4; rep++) {
@@ -135,16 +179,17 @@ function runColumnar(label, opts) {
   }
   for (let s = 0; s < SHAPES.length; s++) {
     K.reset(S); K.setExt(S, tcVector(SHAPES[s])); K.run(S, 0.35);
-    canon.push(K.activeSet(S)); K.clearExt(S);
+    canon.push(read()); K.clearExt(S);
   }
   return probe(label, canon, (kind, opt) => {
     K.reset(S); K.setExt(S, tcVector(kind, opt)); K.run(S, 0.35);
-    const a = K.activeSet(S); K.clearExt(S); return a;
+    const a = read(); K.clearExt(S); return a;
   }, canon.map(a => a.length));
 }
 
 /* ---------------- the flat arm: same information, no topography ---------------- */
-function runFlat(label) {
+function runFlat(label, mode) {
+  mode = mode || "topk";
   const N = NCOL * NL23;
   const cx = C.create({ seed: 1, NC: N, nStim: SHAPES.length });
   const W = makeProjector(NCOL * V.NORI, N, 808);
@@ -153,19 +198,19 @@ function runFlat(label) {
   for (let rep = 0; rep < 4; rep++) {
     for (let s = 0; s < SHAPES.length; s++) {
       cx.a.fill(0); cx.inh = 0;
-      C.setExt(cx, project(W, flatVector(SHAPES[s]), kDrive, cx.P.inDrive));
+      C.setExt(cx, project(W, flatVector(SHAPES[s]), kDrive, cx.P.inDrive, mode));
       cx.plastic = true; C.run(cx, 0.35); cx.plastic = false;
       C.clearExt(cx); C.run(cx, 0.12);
     }
   }
   for (let s = 0; s < SHAPES.length; s++) {
     cx.a.fill(0); cx.inh = 0;
-    C.setExt(cx, project(W, flatVector(SHAPES[s]), kDrive, cx.P.inDrive)); C.run(cx, 0.35);
+    C.setExt(cx, project(W, flatVector(SHAPES[s]), kDrive, cx.P.inDrive, mode)); C.run(cx, 0.35);
     canon.push(C.activeSet(cx)); C.clearExt(cx);
   }
   return probe(label, canon, (kind, opt) => {
     cx.a.fill(0); cx.inh = 0;
-    C.setExt(cx, project(W, flatVector(kind, opt), kDrive, cx.P.inDrive)); C.run(cx, 0.35);
+    C.setExt(cx, project(W, flatVector(kind, opt), kDrive, cx.P.inDrive, mode)); C.run(cx, 0.35);
     const a = C.activeSet(cx); C.clearExt(cx); return a;
   }, canon.map(a => a.length));
 }
@@ -229,13 +274,15 @@ console.log("  trained on the canonical view only; tested on " + TESTS.length +
             " transformations with plasticity OFF\n");
 
 const arms = [];
-arms.push(runFlat("flat sheet (no columns)"));
-console.log("  " + clock() + " flat sheet done");
+arms.push(runFlat("flat sheet + k-WTA drive", "topk"));
+arms.push(runFlat("flat sheet, GRADED drive", "graded"));      // §0: the harness control
+console.log("  " + clock() + " flat arms done");
 arms.push(runColumnar("columnar + full thalamus"));
-console.log("  " + clock() + " columnar done");
 arms.push(runColumnar("columnar, no CT feedback", { ctOn: false }));
 arms.push(runColumnar("columnar, no reticular gate", { rtnOn: false }));
-console.log("  " + clock() + " ablations done\n");
+arms.push(runColumnar("columnar + k-WTA readout", {}, true));
+arms.push(runColumnar("columnar + k-WTA + cross-column RF", { ffRadius: 3 }, true));
+console.log("  " + clock() + " columnar arms done\n");
 out.arms = arms;
 
 console.log("  arm                            same-shape   other-shape   MARGIN   correct");
@@ -244,12 +291,25 @@ for (const a of arms) {
               f(a.diff).padStart(7) + "    " + f(a.margin).padStart(7) + "   " +
               f(100 * a.correct, 0).padStart(4) + "%");
 }
-const flat = arms[0], col = arms[1], noCT = arms[2], noRTN = arms[3];
+const flat = arms[0], flatGraded = arms[1], col = arms[2], noCT = arms[3],
+      noRTN = arms[4], colK = arms[5], colKF = arms[6];
 
+console.log("");
+console.log("  §0 THE HARNESS CONTROL, and it overturns this stage's first conclusion.");
+console.log("  The flat sheet's drive was a hard k-WTA over a random projection; the columnar");
+console.log("  arm's was graded. Same flat sheet, same projection, WITHOUT the k-WTA:");
+console.log("      margin " + f(flatGraded.margin) + "   (same " + f(flatGraded.same) +
+            ", other " + f(flatGraded.diff) + ")");
+console.log("  Every assembly identical to every other. So this was never flat-versus-columnar.");
+console.log("  It was k-WTA versus no k-WTA, and I had given it to one arm only.");
+ok("the flat sheet's advantage survives removing its k-WTA — i.e. it was about topography",
+   flatGraded.margin > 0.3 * flat.margin,
+   "margin " + f(flat.margin) + " with k-WTA → " + f(flatGraded.margin) + " without it; the " +
+   "advantage was the SELECTION STAGE, not the absence of columns");
 console.log("");
 ok("the columnar cortex is more transformation-invariant than the flat sheet (P1)",
    col.margin > flat.margin + 0.02,
-   "margin " + f(flat.margin) + " (flat) vs " + f(col.margin) + " (columnar)");
+   "margin " + f(flat.margin) + " (flat+kWTA) vs " + f(col.margin) + " (columnar)");
 ok("corticothalamic feedback contributes to invariance (P2)",
    noCT.margin < col.margin - 0.02,
    "margin " + f(col.margin) + " → " + f(noCT.margin) + " without the L5→TC loop");
@@ -284,8 +344,37 @@ ok("the columnar cortex preserves the discriminative information its input carri
    "it retains " + f(100 * cMean / iMean, 0) + "% of the available margin against the flat " +
    "sheet's " + f(100 * fMean / iMean, 0) + "%");
 
+console.log("\n" + clock() + " == can the columnar model produce its own selection? ==");
+{
+  console.log("  arm                                  MARGIN");
+  console.log("  columnar, threshold readout         " + f(col.margin).padStart(7));
+  console.log("  columnar + k-WTA on L2/3            " + f(colK.margin).padStart(7));
+  console.log("  columnar + k-WTA + cross-column RF  " + f(colKF.margin).padStart(7));
+  console.log("  flat sheet + k-WTA (reference)      " + f(flat.margin).padStart(7));
+  console.log("");
+  ok("the columnar model can reach the flat sheet's discrimination with a selection stage",
+     colKF.margin > 0.5 * flat.margin,
+     "best columnar " + f(colKF.margin) + " against " + f(flat.margin) +
+     " — six parameter families swept (recurrent range, long-range fraction, within-assembly " +
+     "convergence, reticular strength and spread, cross-column receptive field, k-WTA readout)");
+  console.log("  Adding a cross-column receptive field (ffRadius) helps — it was a genuinely");
+  console.log("  MISSING PATHWAY, since with ffRadius = 0 no cell sees more than one patch of the");
+  console.log("  sensory map at encoding time, the recurrent route being silent at birth. It is");
+  console.log("  kept as a parameter defaulting to 0, so stage 30 is unaffected.");
+}
+
 console.log("\n" + clock() + " == what this means for the EC → hippocampus step ==");
 {
+  console.log("  THE CORRECTED READING. Neither architecture discriminates from graded drive:");
+  console.log("  the flat sheet without its k-WTA scores " + f(flatGraded.margin) + ". So the first link of the");
+  console.log("  chain is not refuted by this stage — it is UNTESTED, because the comparison I");
+  console.log("  built compared selection mechanisms, not topographies. What the stage does");
+  console.log("  establish is narrower and still useful: this columnar model has NO MECHANISM");
+  console.log("  THAT SELECTS. Its PV feedback inhibition normalises the population but does not");
+  console.log("  pick winners, and six families of parameter change do not make it. Until it has");
+  console.log("  one, it cannot form distinct assemblies from graded sensory drive, and that —");
+  console.log("  not topography — is what blocks it as a source for an entorhinal projection.");
+  console.log("");
   if (col.margin > flat.margin + 0.02) {
     console.log("  The first link of the chain HOLDS in this model: a topographically organised,");
     console.log("  thalamically gated columnar cortex generalises across scale, rotation and");
