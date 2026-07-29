@@ -73,6 +73,13 @@ The rules the work is held to, in the order they bind:
 | 16 | sensitivity: does each claim depend on a parameter I chose? | 4 robust · 2 moderate · **0 knife-edge** |
 | 17 | external calibration audit against published ranges | **8/16 in range** |
 | 18 | visual syndromes: blindsight, akinetopsia, the two agnosias | **10/10 + 2 predicted failures** |
+| 19 | auditory cortex: cochlea → MGv → A1 FM sweeps → belt pitch | 12/12 |
+| 20 | cross-modal binding: sound ⇄ shape through the same index | 8/8 |
+| 21 | structural plasticity: distance-dependent draw, prune-and-rewire | **9/11** |
+| 22 | scale and topology: does the graph have room to move? | **6/8** |
+| 23 | movement: a foraging agent, and continuous experience | **4/7** |
+| 24 | ten thousand cells, homeostatic excitability, the decisive rewiring test | **9/14** |
+| 24b | locality as a developmental parameter, calibrated against cortex | **3/5** |
 
 ### The deliberate failures, and why they stay red
 
@@ -205,6 +212,41 @@ These are load-bearing, not apologies.
 - **Thalamic and cortical neglect are equivalent at the bedside BY CONSTRUCTION** — the pulvinar
   enters as a gain on the same parietal capacity. The consequence, that perimetry separates
   neither, is not by construction.
+- **The prune-and-rewire rule cannot build small-worldness, and the claim is now dropped rather
+  than re-explained.** Registered in advance across three stages: if σ still failed to move once
+  scale, experience and full participation were all supplied, the rule is wrong. At N = 10 000
+  with 100% participation and a moving agent's co-activity, σ went **1.55 → 1.57** over three
+  episodes (1.55 → 1.60 under per-cell normalisation), path length **2.27 → 2.28**, degree CV
+  0.085 → 0.089. Function survived throughout (recall 0.905), so this is a failure to reshape,
+  not damage.
+  **The diagnosis is arithmetic, and then structural.** The regrowth kernel is
+  `local(distance) × (1 + bias·coactivity)`, and the boost contributes only **3.04%** of the
+  sampling mass (max ×1.39). Fixing the representation so a cell judges partners against its own
+  best partner rather than a global maximum raises that to **26.69%** (max ×4.00) — and still
+  barely moves the graph (ΔCV 0.005 vs 0.004). So the limit is not the boost's size. It is that
+  distance **multiplies** rather than biases: a strongly co-active but distant partner is
+  multiplied by a near-zero local term and can never be reached, and co-activity is itself
+  spatially correlated, so the boost is largely redundant with the term it multiplies. A kernel
+  of this form cannot produce long-range structure at any parameter setting. **The named fix is
+  an additive kernel, `local + bias·coactivity`** — untested, and the obvious next experiment.
+- **Locality does not cost pattern completion here, contrary to three registered predictions.**
+  Recall falls only 0.908 → 0.809 across σ_sw 2.05 → 22.30. The criterion was also badly chosen:
+  the cue is 50% of a suprathreshold feedforward drive and stage 1's ablation control puts the
+  no-recurrence floor at **0.50**, so a threshold of 0.6 was testing almost nothing. Measured as
+  the recurrent contribution (recall − 0.50) the cost is 0.41 → 0.31, a 24% loss — real, and not
+  a collapse. **The finding is the opposite of the prediction: pattern completion here is largely
+  feedforward-driven and the recurrent topology is close to a passenger.** That is a limitation
+  of the test, and it names the next measurement — weaken the cue until recurrence is
+  load-bearing, then ask what topology costs.
+- **Spatial tuning is inherited, not computed, and survives the confound being removed.** Stage
+  23's version of this test gave the rewired network four learning passes and the control one,
+  and read the rewired one out with frozen weights and the control with plasticity on. With
+  passes matched and both readouts frozen, the apparent sharpening fell from +15.6% to **+1.2%**
+  (top decile 2.484 control vs 2.514 rewired) — below criterion, and predicted in advance to
+  fail. There is no path integration anywhere in the model, so position is never computed, only
+  inherited from a sensory vector that happens to vary smoothly with it. Until a recurrent
+  attractor maintains position from velocity, every "place field" here is a boundary-and-landmark
+  tuning curve seen from the wrong side.
 
 ---
 
@@ -290,19 +332,53 @@ Absent entirely: LGN and MGB as populations, VPL/VPM (there is no somatosensory 
 LP, the intralaminar/CM-Pf group, and TRN anywhere outside the columnar model. Four modules
 each have "a thalamus" and no two of them are the same object.
 
-### 8.3 Nothing has been rescaled as structures were added
+### 8.3 Scaling — RESOLVED at N = 10 000, and it changed the diagnosis twice
 
-Cortex has been **NC = 800 in every lesion suite since stage 8**, while sensory streams,
-lateralised hippocampi, parietal cortices and the limbic thalamus were added on top. Adding a
-modality *splits* that fixed budget rather than growing it: each modality now gets 400 units.
+*(Superseded by stages 22–24. Kept because the original claim was half wrong and the shape of
+the error is the useful part.)*
 
-And the two modalities are not balanced. **Auditory features are 17-dimensional, visual
-features 6-dimensional** — an unnoticed ~3× asymmetry in how much a modality can say. That is
-a live hypothesis for two things already flagged in stage 20: the modality halves correlating
-at r = 0.43 (a 6-dimensional code produces less distinctive patterns, hence more incidental
-overlap) and the crossover being 2/3 on the auditory arm against 3/3 on the visual one. It is
-testable by equalising the feature dimensionality and re-running — and until that is done, the
-stage-20 asymmetry should not be read as biology.
+The gap as first written was that cortex had been **NC = 800 in every lesion suite since stage
+8**, and that the two modalities were unbalanced at 17 auditory against 6 visual feature
+dimensions. The dimensionality asymmetry was fixed in stage 20 (matched at 17/17; the crossover
+went 2/3 and 3/3 → 6/6 and 6/6, and modality-half correlation fell to −0.021). The scale
+question took three stages and produced two corrections to my own diagnosis:
+
+- **Stage 21** blamed the convergence-preserving rule `pRec·400/N` for a saturated path length.
+  **Wrong.** The rule does exactly what it was designed to do — hold in-degree absolute at ~60.
+- **Stage 22** blamed N alone. **Half right.** Growing N does drop density (13.8% → 4.9% → 1.19%
+  at 10 000) and does lengthen paths (1.86 → 1.97 → 2.27), with dynamics untouched.
+- **Stage 23** separated two limits that had been conflated: *degree* structure needed
+  experience and got it from a moving agent; *path* structure needed lower density.
+- **Stage 24** supplied both at N = 10 000 and found the size of the effect is the point. A
+  4.3-fold density drop bought 0.30 of path length and 0.04 of σ. Density is not the lever.
+
+**The dynamics are scale-invariant at 25× the stage-1 baseline** — sparsity 7.2%, recall 0.901,
+off-target 0.044 at N = 10 000, against 7.3%, 0.91, 0.06 at 2400. That claim has now been
+tested where it could have broken.
+
+**The lever is developmental locality, and it was mis-parameterised.** `pLong` was a floor on
+the un-normalised Gaussian weight, not a fraction, so its share is
+`pLong/((1−pLong)·2πσ_dev²)` — narrowing the Gaussian *increased* long-range wiring. The
+shipped σ_dev = 0.16 was the most local setting the parameterisation could express, which is
+why a locality sweep moved clustering the wrong way. Under the corrected mixture form
+(`mixLong: true`), σ_sw runs 2.05 → 22.30 across σ_dev 0.20 → 0.03, and **σ_dev 0.20 with 6%
+long-range lands at σ_sw 2.05 with recall 0.908** — inside the measured cortical band and
+fully functional. That is a calibrated substrate, available whenever the shipped default is
+worth changing.
+
+### 8.3b The silent 40%, and the one fix that worked as predicted
+
+Stage 23 measured that only 60.3% of cortex was ever driven: the top-k of a fixed random
+projection has favourites, so a unit whose row aligns poorly with the input manifold never wins
+however the input varies. **Homeostatic intrinsic excitability** (`src/homeostasis.js`, an
+adaptive per-unit threshold `b ← b + η(won − target)`, Desai/Turrigiano) removes it completely
+— **62.2% → 100.0%** of units ever driven, win-count CV 1.587 → 0.014, Gini 0.732 → 0.151 on a
+frozen readout. A permanently silent unit is not a fixed point of that rule, which is why this
+one was a mechanism claim rather than a tuning claim, and why it worked first time.
+
+One consequence to remember when reading stage 24: with 100% participation and 600 sampled
+steps, "fraction of cells with *any* co-active partner" saturates at 1.000 (mean 5340 partners
+of 10 000) and stops being diagnostic. The graded values are what matter.
 
 ### 8.4 The hippocampus has no map, and that is a consequence of having no movement
 
