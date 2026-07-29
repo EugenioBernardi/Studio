@@ -28,6 +28,7 @@
     "test:additive": "node --max-old-space-size=6144 test/stage25_additive.js",
     "test:cue": "node --max-old-space-size=4096 test/stage26_cue.js",
     "test:hsp": "node --max-old-space-size=6144 test/stage27_hsp.js",
+    "test:seeds": "node --max-old-space-size=4096 test/stage28_seeds.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },
