@@ -82,6 +82,13 @@ The rules the work is held to, in the order they bind:
 | 24b | locality as a developmental parameter, calibrated against cortex | **3/5** |
 | 25 | the additive regrowth kernel — the named fix for the dropped rule | see §5 |
 | 26 | weakening the cue until recurrence is load-bearing | 4/4 |
+| … | 27–37 recorded in their own commit messages and in `docs/COLUMNAR-ARCHITECTURE.md` | — |
+| 38 | the reticular nucleus as a consolidation scheduler: locality, capacity, lesion dissociation | **9/10** |
+| 39 | the schedule driving real synaptic weight, 5 seeds | **4/5** |
+| 40 | is the schedule *topographic*? — and what the failure buys | **11/13** |
+
+Stages 38–40 have a full record in **`docs/SCHEDULER-VALIDATION.md`**, including the two
+predictions that failed and what replaced them.
 
 ### The deliberate failures, and why they stay red
 

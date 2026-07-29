@@ -172,6 +172,54 @@ function runNREM(G, seconds, onStep) {
   return trace;
 }
 
+/* PER-SECTOR spindle statistics, separating the two quantities a sleep study conflates.
+ *
+ * A scalp derivation yields spindle DENSITY (events per minute) and, less often reported, total
+ * spindle TIME (occupancy). They are not the same measure and this model does not predict they
+ * behave alike: the gate licenses a write whenever the envelope is above threshold, so what a
+ * memory receives is TIME, and the number of onsets that time is chopped into is incidental.
+ * Stage 39 measured density and its registered correlation failed; stage 40 measures both and
+ * asks which one the mechanism actually tracks. Reported per sector — a single global "was any
+ * sector on" onset count saturates once sectors are numerous, which is the other half of why
+ * stage 39's density barely moved (37.5 → 45.2/min across an entire sweep).
+ *
+ * `trace` is the per-sample list of active sectors returned by runNREM. */
+function spindleStats(trace, nSector, dt) {
+  const occ = new Float64Array(nSector), ev = new Float64Array(nSector),
+        durSum = new Float64Array(nSector);
+  const on = new Uint8Array(nSector), run = new Float64Array(nSector);
+  for (let i = 0; i < trace.length; i++) {
+    const act = new Uint8Array(nSector);
+    for (const s of trace[i]) act[s] = 1;
+    for (let s = 0; s < nSector; s++) {
+      if (act[s]) { occ[s] += 1; run[s] += dt; if (!on[s]) ev[s]++; }
+      else if (on[s]) { durSum[s] += run[s]; run[s] = 0; }
+      on[s] = act[s];
+    }
+  }
+  for (let s = 0; s < nSector; s++) if (on[s]) durSum[s] += run[s];
+  const T = trace.length || 1, minutes = (trace.length * dt) / 60 || 1;
+  return {
+    occupancy: Array.from(occ, x => x / T),               // fraction of the night spindling
+    density: Array.from(ev, x => x / minutes),            // events per minute, per sector
+    meanDuration: Array.from(ev, (x, s) => (x ? durSum[s] / x : 0)),
+  };
+}
+
+/* Occupancy and density of the sectors a given memory occupies — the model's analogue of a
+   TOPOGRAPHICALLY LOCAL spindle measure over the cortical territory that holds that memory
+   (Cox 2012; Bergmann 2012), as against a whole-head average. */
+function territoryStats(G, stats, columns) {
+  const secs = sectorsFor(G, columns);
+  const m = a => secs.reduce((x, s) => x + a[s], 0) / secs.length;
+  const other = [];
+  for (let s = 0; s < G.P.nSector; s++) if (!secs.includes(s)) other.push(s);
+  const mo = a => (other.length ? other.reduce((x, s) => x + a[s], 0) / other.length : NaN);
+  return { sectors: secs,
+           occupancy: m(stats.occupancy), density: m(stats.density),
+           otherOccupancy: mo(stats.occupancy), otherDensity: mo(stats.density) };
+}
+
 /* Co-occupancy: how often do two sectors spindle at the SAME time, against how often each does
    at all? Below 1 means they exclude one another — the signature of competition.
  *
@@ -207,4 +255,5 @@ function coOccupancy(trace, nSector, upMask) {
 }
 
 module.exports = { sgdefaults, createGate, stepGate, spindling, licensed, sectorsFor,
-  lesionSector, lesionAll, setBias, clearBias, soDrive, runNREM, coOccupancy, mulberry32 };
+  lesionSector, lesionAll, setBias, clearBias, soDrive, runNREM, coOccupancy, spindleStats,
+  territoryStats, mulberry32 };

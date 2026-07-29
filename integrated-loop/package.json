@@ -40,6 +40,7 @@
     "test:apical": "node test/stage37_apical.js",
     "test:scheduler": "node test/stage38_scheduler.js",
     "test:scheduled": "node test/stage39_scheduled_consolidation.js",
+    "test:topographic": "node test/stage40_topographic.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },
