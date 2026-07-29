@@ -80,6 +80,8 @@ The rules the work is held to, in the order they bind:
 | 23 | movement: a foraging agent, and continuous experience | **4/7** |
 | 24 | ten thousand cells, homeostatic excitability, the decisive rewiring test | **9/14** |
 | 24b | locality as a developmental parameter, calibrated against cortex | **3/5** |
+| 25 | the additive regrowth kernel — the named fix for the dropped rule | see §5 |
+| 26 | weakening the cue until recurrence is load-bearing | 4/4 |
 
 ### The deliberate failures, and why they stay red
 
@@ -229,15 +231,23 @@ These are load-bearing, not apologies.
   spatially correlated, so the boost is largely redundant with the term it multiplies. A kernel
   of this form cannot produce long-range structure at any parameter setting. **The named fix is
   an additive kernel, `local + bias·coactivity`** — untested, and the obvious next experiment.
-- **Locality does not cost pattern completion here, contrary to three registered predictions.**
-  Recall falls only 0.908 → 0.809 across σ_sw 2.05 → 22.30. The criterion was also badly chosen:
-  the cue is 50% of a suprathreshold feedforward drive and stage 1's ablation control puts the
-  no-recurrence floor at **0.50**, so a threshold of 0.6 was testing almost nothing. Measured as
-  the recurrent contribution (recall − 0.50) the cost is 0.41 → 0.31, a 24% loss — real, and not
-  a collapse. **The finding is the opposite of the prediction: pattern completion here is largely
-  feedforward-driven and the recurrent topology is close to a passenger.** That is a limitation
-  of the test, and it names the next measurement — weaken the cue until recurrence is
-  load-bearing, then ask what topology costs.
+- **Locality does cost pattern completion — but only a measure sensitive enough can see it, and
+  stage 24b's was not.** *(This entry corrects itself; the sequence is the point.)* Stage 24b
+  falsified three registered predictions that a local graph would cost completion: recall fell
+  only 0.908 → 0.809 across σ_sw 2.05 → 22.30. Stage 26 then swept the cue fraction against
+  stage 1's ablation control at every point, so the trained-minus-untrained gap is exactly the
+  work the recurrent graph does. **The recurrent contribution peaks at a cue of 0.25 (gap 0.528),
+  not the 0.50 every earlier stage used (0.417)** — and it is non-monotone, since a vanishing cue
+  leaves nothing to complete from (0.451 at cue 0.10). At the sensitive cue, locality retains
+  only **60%** of the recurrent contribution (0.528 → 0.319) against **76%** at cue 0.50.
+  The mechanism of the blindness is specific: at σ_dev 0.03 both cues give the same gap (0.318 vs
+  0.319), but at σ_dev 0.20 the sensitive cue reads 0.528 against 0.417. **The strong cue
+  compresses the top of the range** — it cannot see what a good substrate buys. So the original
+  prediction was right in direction, the test that refuted it was reading off the flat part of
+  its own sensitivity curve, and the cost is a 40% loss of the recurrent contribution rather than
+  the collapse first predicted or the nothing later claimed. **Use a cue of 0.25 for completion
+  tests from here.** Earlier results are not invalidated — a network that completes at cue 0.50
+  does complete — but they were insensitive to exactly the variable stages 21–25 were moving.
 - **Spatial tuning is inherited, not computed, and survives the confound being removed.** Stage
   23's version of this test gave the rewired network four learning passes and the control one,
   and read the rewired one out with frozen weights and the control with plasticity on. With
