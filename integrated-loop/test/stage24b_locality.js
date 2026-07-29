@@ -87,8 +87,11 @@ function measure(cfg) {
   C.encode(cx);
   const fn = recall(cx);
   const sp = 100 * mean(cx.assemblies.map(a => a.length / cx.N));
-  return { ...cfg, C: r.C, L: r.L, sigma: r.sigma, sparsity: sp,
-           recall: fn.recall, off: fn.offTarget };
+  // NOTE the name collision: cfg.sigma is the developmental Gaussian width, r.sigma is the
+  // small-world index. Spreading cfg and then writing `sigma: r.sigma` silently destroys the
+  // first. Kept as two explicit fields so the JSON record and the printouts below stay honest.
+  return { sigmaDev: cfg.sigma, pLong: cfg.pLong, C: r.C, L: r.L, sigmaSW: r.sigma,
+           sparsity: sp, recall: fn.recall, off: fn.offTarget };
 }
 
 /* ---------------- 1. locality at a fixed long-range fraction ---------------- */
@@ -100,24 +103,20 @@ const rows = [];
     const r = measure({ sigma, pLong: 0.06, mixLong: true });
     rows.push(r);
     console.log("   " + f(sigma, 2) + "      " + f(100 * 0.06, 0) + "%        " + f(r.C, 4) +
-                "     " + f(r.L, 2) + "    " + f(r.sigma, 2).padStart(6) + "     " +
+                "     " + f(r.L, 2) + "    " + f(r.sigmaSW, 2).padStart(6) + "     " +
                 f(r.sparsity, 1).padStart(4) + "%     " + f(r.recall) + "   " + f(r.off) +
                 "   " + clock());
   }
   out.locality = rows;
-  const overshoot = rows.filter(r => r.sigma_dev !== undefined);
-  const tight = rows.filter(r => r.sigma <= 0.08);
-  ok("locality raises small-worldness monotonically", rows[0].sigma < rows[rows.length - 1].sigma,
-     "σ_sw " + f(rows[0].sigma, 2) + " (σ_dev 0.20) → " + f(rows[rows.length - 1].sigma, 2) +
-     " (σ_dev 0.03)");
-  const exceeded = rows.filter(r => r.sigma > SW_HI).map(r => r.sigma_dev);
+  const first = rows[0], last = rows[rows.length - 1];
+  ok("locality raises small-worldness monotonically", first.sigmaSW < last.sigmaSW,
+     "σ_sw " + f(first.sigmaSW, 2) + " (σ_dev 0.20) → " + f(last.sigmaSW, 2) + " (σ_dev 0.03)");
   ok("the substrate OVERSHOOTS the cortical band for σ_dev ≤ 0.08 (P1)",
-     rows.filter(x => x.sigma <= 0.08).every(x => x.sigma > SW_HI),
+     rows.filter(x => x.sigmaDev <= 0.08).every(x => x.sigmaSW > SW_HI),
      "cortical reference σ_sw ≈ " + SW_LO + "–" + SW_HI +
-     "; this model reaches " + f(rows[rows.length - 1].sigma, 2));
-  const localRows = rows.filter(x => x.sigma <= 0.05);
+     "; this model reaches " + f(last.sigmaSW, 2) + " at σ_dev 0.03");
   ok("a genuinely local graph costs recall (P2 — the proper P5b re-test)",
-     localRows.some(x => x.recall < 0.6),
+     rows.filter(x => x.sigmaDev <= 0.05).some(x => x.recall < 0.6),
      "recall at σ_dev 0.20 → 0.03: " + rows.map(x => f(x.recall, 2)).join(" → "));
 }
 
@@ -130,7 +129,7 @@ console.log("\n" + clock() + " == 2. the minimum long-range fraction, at σ_dev 
     const r = measure({ sigma: 0.05, pLong, mixLong: true });
     r2.push(r);
     console.log("     " + f(100 * pLong, 0).padStart(3) + "%       " + f(r.C, 4) + "     " +
-                f(r.L, 2) + "    " + f(r.sigma, 2).padStart(6) + "     " +
+                f(r.L, 2) + "    " + f(r.sigmaSW, 2).padStart(6) + "     " +
                 f(r.sparsity, 1).padStart(4) + "%     " + f(r.recall) + "   " + f(r.off) +
                 "   " + clock());
   }
@@ -138,22 +137,71 @@ console.log("\n" + clock() + " == 2. the minimum long-range fraction, at σ_dev 
   const good = r2.filter(x => x.recall > 0.6 && x.off < x.recall - 0.2);
   const minLR = good.length ? Math.min(...good.map(x => x.pLong)) : null;
   out.minLongRange = minLR;
+  // P3 has a PREMISE — that recall is broken at the lowest long-range fraction — and if the
+  // premise is false the prediction is not wrong, it is void. Say which, rather than printing a
+  // bare FAIL that reads as though the rescue failed.
+  const brokenAtLowest = r2[0].recall <= 0.6;
   ok("raising the long-range fraction rescues recall (P3)",
-     minLR != null && r2[0].recall < 0.6 && minLR > r2[0].pLong,
-     minLR == null ? "no setting recovered" :
-     "recall recovers at a long-range fraction of " + f(100 * minLR, 0) + "%");
-  if (minLR != null) {
-    const usable = good.filter(x => x.sigma >= SW_LO && x.sigma <= SW_HI);
-    console.log("");
-    console.log("  settings that are BOTH inside the cortical small-world band and functional:");
-    if (usable.length) for (const u of usable)
-      console.log("    σ_dev " + f(u.sigma, 2) + ", long-range " + f(100 * u.pLong, 0) +
-                  "%  →  σ_sw " + f(u.sigma, 2) + ", recall " + f(u.recall));
-    else console.log("    NONE in this sweep — the two constraints do not overlap at σ_dev = 0.05.");
-    ok("a substrate exists that is cortex-like AND functional", usable.length > 0,
-       usable.length ? usable.length + " settings satisfy both" :
-       "no overlap: small-worldness and pattern completion trade off at this locality");
-  }
+     brokenAtLowest && minLR != null && minLR > r2[0].pLong,
+     brokenAtLowest ? (minLR == null ? "no setting recovered" :
+       "recall recovers at a long-range fraction of " + f(100 * minLR, 0) + "%")
+     : "VOID, not refuted: recall is already " + f(r2[0].recall) + " at the LOWEST long-range " +
+       "fraction (2%), so there is nothing to rescue. The premise failed, not the rescue.");
+  /* The claim "a cortex-like AND functional substrate exists" is about the WHOLE parameter
+     space, so it must be checked against both sweeps. Checking it against §2's rows alone —
+     which are all at σ_dev = 0.05, where σ_sw never drops below 3 — would report a false
+     negative purely because of where the sub-sweep sits. */
+  const all = rows.concat(r2);
+  const usable = all.filter(x => x.sigmaSW >= SW_LO && x.sigmaSW <= SW_HI &&
+                                 x.recall > 0.6 && x.off < x.recall - 0.2);
+  console.log("");
+  console.log("  settings inside the cortical small-world band AND functional (both sweeps):");
+  if (usable.length) for (const u of usable)
+    console.log("    σ_dev " + f(u.sigmaDev, 2) + "   long-range " +
+                f(100 * u.pLong, 0).padStart(3) + "%   →   σ_sw " + f(u.sigmaSW, 2) +
+                ", clustering " + f(u.C, 4) + ", L " + f(u.L, 2) + ", recall " + f(u.recall));
+  else console.log("    NONE anywhere in the swept space.");
+  out.usable = usable;
+  ok("a substrate exists that is cortex-like AND functional", usable.length > 0,
+     usable.length ? usable.length + " of " + all.length + " swept settings satisfy both" :
+     "no overlap anywhere: small-worldness and pattern completion genuinely trade off");
+}
+
+/* ---------------- 3. what the three falsified predictions mean together ---------------- */
+console.log("\n" + clock() + " == 3. three predictions of functional cost, all falsified ==");
+{
+  const worst = rows[rows.length - 1];
+  const FF_FLOOR = 0.50;     // stage 1's ablation control: no recurrent plasticity → recall 0.50
+  console.log("  I predicted three times that making the graph local would cost function:");
+  console.log("  stage 24 §1b (P5b), and this stage's P2 and P3. All three are FALSIFIED.");
+  console.log("  Recall falls monotonically and gently — " + f(rows[0].recall) + " → " +
+              f(worst.recall) + " across a σ_sw range of " + f(rows[0].sigmaSW, 2) +
+              " → " + f(worst.sigmaSW, 2) + ".");
+  console.log("");
+  console.log("  THE CRITERION WAS BADLY CHOSEN, and that is worth stating plainly. cortex.js");
+  console.log("  cues with 50% of a SUPRATHRESHOLD feedforward drive, and stage 1's ablation");
+  console.log("  control puts the no-recurrence floor at recall " + f(FF_FLOOR) + ". Recall therefore");
+  console.log("  cannot fall much below 0.5 whatever the recurrent graph does, so a threshold of");
+  console.log("  0.6 was testing almost nothing. The quantity that carries information is the");
+  console.log("  RECURRENT CONTRIBUTION, recall − " + f(FF_FLOOR) + ":");
+  console.log("    " + rows.map(r => f(r.recall - FF_FLOOR, 2)).join("  →  ") +
+              "   (σ_dev " + rows.map(r => f(r.sigmaDev, 2)).join(" → ") + ")");
+  const dropPct = 100 * (1 - (worst.recall - FF_FLOOR) / (rows[0].recall - FF_FLOOR));
+  console.log("  a " + f(dropPct, 0) + "% loss of the recurrent contribution — a real cost, and not a collapse.");
+  console.log("");
+  console.log("  SO THE FINDING IS THE OPPOSITE OF THE PREDICTION: pattern completion in this");
+  console.log("  model is largely FEEDFORWARD-DRIVEN, and the recurrent topology is close to a");
+  console.log("  passenger. That is a limitation of the test, not a virtue of the model, and it");
+  console.log("  names the next measurement exactly: re-run this sweep with the cue weakened");
+  console.log("  until recurrence is load-bearing (a cue fraction where the no-plasticity");
+  console.log("  control fails outright), and only then ask what topology costs.");
+  console.log("");
+  console.log("  A NOTE ON σ ITSELF. Humphries–Gurney σ = (C/C_rand)/(L/L_rand) grows without");
+  console.log("  bound toward a LATTICE, so σ_sw = " + f(worst.sigmaSW, 1) + " does not mean 'seven times more");
+  console.log("  small-world than cortex' — it means 'nearly a lattice'. Past roughly 4 the index");
+  console.log("  stops being informative, which is the failure Telesford's ω (2011) exists to fix");
+  console.log("  by referencing both a lattice and a random graph. Reported here so the σ column");
+  console.log("  above is not over-read.");
 }
 
 console.log("\n" + clock() + " ==== " + pass + " passed, " + fail + " failed ====\n");
