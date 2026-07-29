@@ -303,3 +303,39 @@ at r = 0.43 (a 6-dimensional code produces less distinctive patterns, hence more
 overlap) and the crossover being 2/3 on the auditory arm against 3/3 on the visual one. It is
 testable by equalising the feature dimensionality and re-running — and until that is done, the
 stage-20 asymmetry should not be read as biology.
+
+### 8.4 The hippocampus has no map, and that is a consequence of having no movement
+
+Checked: the only spatial population in the entire codebase is the **ATN head-direction ring**
+in `spatial.js`. There are no place cells, no grid cells, no boundary-vector cells, no speed
+cells; and there is no self-motion, trajectory or agent in any module. What the model calls a
+hippocampus is an index-and-conjunction machine with no spatial code whatsoever.
+
+This is not an omission to be patched separately — those populations are **not definable
+without movement**. A grid cell is a path-integrator, so it needs velocity. A place field is a
+field *of* a position. A boundary-vector cell needs an environment with boundaries. Speed cells
+need speed. Introduce a moving agent and they become buildable; without one they can only be
+drawn in by hand, which would be the opposite of modelling them.
+
+**It also resolves an open caveat rather than deferring it.** The claim that the
+hippocampocortical loop is a general-purpose machine — the same index-and-replay machinery
+binding ventral↔dorsal in stage 13 and sound↔shape in stage 20 with no change to
+`hippocampus.js` — is currently true partly *by construction*: this hippocampus is
+content-agnostic because it receives an abstract sparse vector and nothing else. A real
+entorhinal input has grid structure, and grid cells are emphatically not content-agnostic.
+Once movement supplies that structure, "is this loop universal?" stops being an artefact of the
+abstraction and becomes a real question with a measurable answer: can the circuit that path-
+integrates also bind a sound to a shape, without retuning?
+
+**Sequencing matters here, and it argues for movement AFTER the connectivity work.** Grid and
+place fields are the best-documented case of a neural representation that *self-organises*. If
+they are hand-built first and structural plasticity is added afterwards, the answer has been
+written into the initial conditions. Built the other way round — biologically constrained
+initial connectivity, activity-dependent pruning and rewiring, and only then a moving agent —
+their appearance would be a result. The two directives converge on the same test.
+
+It is also the prerequisite for **theta phase precession**, which the project memory names as
+the one substantive gap in the hippocampal model and the bridge to chronotaxis. Precession
+compresses a *trajectory* into a theta cycle so that STDP can write the asymmetric weights
+replay later reads out. Without movement there is no trajectory, and precession is not merely
+missing — it is undefined.
