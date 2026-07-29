@@ -44,11 +44,23 @@ function auditoryFeatures(kind, opt) {
          Math.log(r.h.best.f0) / Math.log(900), r.h.nPartials / 6);
   return v;
 }
-/* visual: the V2 angle/curvature descriptors plus orientation statistics */
+/* visual: the V1 ORIENTATION HISTOGRAM plus the V2 angle/curvature descriptors.
+   MATCHED TO THE AUDITORY VECTOR BY CONSTRUCTION, and this is a correction. The first version
+   returned 6 numbers against audition's 17 — a ~3× asymmetry in how much a modality could say,
+   which is not a modelling choice but an oversight. It is a live confound for two things
+   stage 20 flagged: the modality halves correlating at r = 0.43 (a 6-dimensional code makes
+   less distinctive patterns, so more incidental overlap) and the crossover being 2/3 on one
+   arm and 3/3 on the other.
+   The fix is principled rather than cosmetic padding: A1 and V1 are the SAME computation on
+   different axes, so their feature vectors should have the same shape. Both are now a
+   12-channel orientation histogram (modulation orientation in audition, edge orientation in
+   vision) plus five higher-order descriptors from the next stage up (belt pitch / V2 angle). */
 function visualFeatures(kind, opt) {
   const p = V.pipeline(kind, opt || {});
   const f = p.f;
-  return [f.corner60, f.corner90, f.curv || 0, f.edge || 0, f.entropy, (f.peaks || 0) / 4];
+  const v = Array.from(p.ori.H);                     // 12 orientation channels, as in A1
+  v.push(f.corner60, f.corner90, f.curv || 0, f.edge || 0, (f.peaks || 0) / 4);
+  return v;
 }
 
 /* ---------- sparse random projection onto one half of cortex ---------- */

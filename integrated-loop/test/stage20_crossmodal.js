@@ -33,18 +33,24 @@ const ok = (n, c, d) => (c ? (pass++, console.log("  PASS  " + n + "   " + (d ||
 const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
 const out = {};
 
-/* eight bimodal objects: a sound arbitrarily paired with a shape */
+/* Eight bimodal objects, on a CROSSED design. The first version reused three shapes across
+   eight items, so the visual half carried category blocks — and once the visual feature vector
+   was enriched from 6 to 17 dimensions those blocks became MORE visible, pushing the
+   independence correlation from 0.43 to 0.56. That is a stimulus-set defect, not a finding.
+   Here the four shape kinds are crossed with two rotations to give eight DISTINCT visual
+   items, and sounds are assigned so that members of the same auditory family (the two tones,
+   the two harmonics, the two sweeps) never share a shape kind. Sound similarity therefore
+   cannot predict shape similarity by construction of the design rather than by luck. */
 const ITEMS = [
-  { sound: ["tone", { f0: 300 }], image: ["square", { size: 0.52 }] },
-  { sound: ["tone", { f0: 700 }], image: ["triangle", { size: 0.52 }] },
-  { sound: ["harmonic", { f0: 180 }], image: ["circle", { size: 0.52 }] },
-  { sound: ["harmonic", { f0: 320 }], image: ["square", { size: 0.44, rot: 0.5 }] },
-  { sound: ["up", { f0: 300, sweep: 6 }], image: ["triangle", { size: 0.44, rot: 0.5 }] },
-  { sound: ["down", { f0: 1800, sweep: 6 }], image: ["circle", { size: 0.44 }] },
-  { sound: ["noise", { seed: 5 }], image: ["square", { size: 0.60 }] },
-  { sound: ["am", { f0: 600, am: 8 }], image: ["triangle", { size: 0.60 }] },
+  { sound: ["tone", { f0: 300 }],            image: ["square",   { size: 0.52, rot: 0 }] },
+  { sound: ["tone", { f0: 700 }],            image: ["circle",   { size: 0.52, rot: 0.7 }] },
+  { sound: ["harmonic", { f0: 180 }],        image: ["triangle", { size: 0.52, rot: 0 }] },
+  { sound: ["harmonic", { f0: 320 }],        image: ["bar",      { size: 0.52, rot: 0.7 }] },
+  { sound: ["up", { f0: 300, sweep: 6 }],    image: ["circle",   { size: 0.44, rot: 0 }] },
+  { sound: ["down", { f0: 1800, sweep: 6 }], image: ["square",   { size: 0.44, rot: 0.7 }] },
+  { sound: ["noise", { seed: 5 }],           image: ["bar",      { size: 0.60, rot: 0 }] },
+  { sound: ["am", { f0: 600, am: 8 }],       image: ["triangle", { size: 0.60, rot: 0.7 }] },
 ];
-
 /* ---------------- 1. does the front end preserve similarity? ---------------- */
 console.log("\n== 1. is this a front end, or two arbitrary tags? (P1) ==");
 let CM;
@@ -92,7 +98,7 @@ console.log("\n== 2. the pairing is arbitrary, so the halves must be independent
 /* ---------------- 3–4. cross-modal recall, and modality lateralisation ---------------- */
 console.log("\n== 3–4. cross-modal recall and the lateralisation it puts on a modality axis ==");
 {
-  const SEEDS = [1, 2, 3];
+  const SEEDS = [1, 2, 3, 4, 5, 6];
   const PAIRS = [[0, 1], [2, 3], [4, 5], [6, 7]];   // episode k binds item a's sound to item b's shape
   const rec = { intact: [], L: [], R: [], both: [] };
   for (const s of SEEDS) {
