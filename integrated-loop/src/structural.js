@@ -41,7 +41,16 @@ function mulberry32(a) {
 function sdefaults() {
   return {
     sigma: 0.16,      // Gaussian falloff of connection probability, in sheet units
-    pLong: 0.06,      // fraction of contacts drawn without regard to distance
+    pLong: 0.06,      // long-range term — see mixLong for what this number actually means
+    mixLong: false,   // false (stages 21–23): pLong is a FLOOR added to the un-normalised
+                      //   Gaussian weight. Its share of the total mass is then
+                      //   pLong/((1−pLong)·π·sigma²) — 0.79 at sigma 0.16, 3.18 at 0.08, 8.13
+                      //   at 0.05. So SHRINKING sigma makes the graph MORE random, not more
+                      //   local, which is the opposite of what the parameter name suggests and
+                      //   was found by stage 24 §1b when a locality sweep moved clustering the
+                      //   wrong way. Kept as the default so earlier stages reproduce exactly.
+                      // true: each component is normalised first, so pLong IS the long-range
+                      //   fraction and sigma is free to control locality on its own.
     pruneThr: 0.02,   // a synapse this weak is a candidate for removal
     pruneFrac: 0.25,  // at most this fraction of a cell's contacts are pruned per episode
     rewireBias: 3.0,  // how strongly a new contact prefers a co-active partner
@@ -61,25 +70,53 @@ function layout(N, seed) {
 }
 const dist = (p, a, b) => Math.hypot(p[a][0] - p[b][0], p[a][1] - p[b][1]);
 
+/* Weighted draw from a prefix-sum array: the first index whose running total reaches r.
+   Replaces the linear scan the sampling used up to stage 23. Same distribution, same prefix
+   sums, same one rnd() per draw — but O(log N) instead of O(N), which is the difference
+   between 6×10⁹ and 10⁸ operations at N = 10 000 and is why the scale-up is runnable at all. */
+function pickCum(cum, n, r) {
+  let lo = 0, hi = n - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] < r) lo = m + 1; else hi = m; }
+  return lo;
+}
+
 /* distance-dependent initial connectivity with a long-range tail. k = in-degree per cell. */
 function connectDistance(N, pos, k, P, seed) {
   P = Object.assign(sdefaults(), P || {});
   const rnd = mulberry32(seed == null ? 91 : seed);
   const preIdx = [], preW = [];
+  const cum = new Float64Array(N);
+  const g = new Float64Array(N);
+  const inv2s2 = 1 / (2 * P.sigma * P.sigma), one = 1 - P.pLong;
   for (let i = 0; i < N; i++) {
-    const w = new Float64Array(N); let tot = 0;
-    for (let j = 0; j < N; j++) {
-      if (j === i) continue;
-      const d = dist(pos, i, j);
-      const local = Math.exp(-(d * d) / (2 * P.sigma * P.sigma));
-      const v = (1 - P.pLong) * local + P.pLong;      // a floor gives the long-range tail
-      w[j] = v; tot += v;
+    const xi = pos[i][0], yi = pos[i][1];
+    let tot = 0;
+    if (P.mixLong) {
+      // normalise the two components separately, so pLong is genuinely the long-range fraction
+      let gs = 0;
+      for (let j = 0; j < N; j++) {
+        if (j === i) { g[j] = 0; continue; }
+        const dx = pos[j][0] - xi, dy = pos[j][1] - yi;
+        g[j] = Math.exp(-(dx * dx + dy * dy) * inv2s2); gs += g[j];
+      }
+      const flat = P.pLong / (N - 1);
+      for (let j = 0; j < N; j++) {
+        if (j !== i) tot += (gs > 0 ? one * g[j] / gs : 0) + flat;
+        cum[j] = tot;
+      }
+    } else {
+      for (let j = 0; j < N; j++) {
+        if (j !== i) {
+          const dx = pos[j][0] - xi, dy = pos[j][1] - yi;
+          tot += one * Math.exp(-(dx * dx + dy * dy) * inv2s2) + P.pLong;  // floor, not a fraction
+        }
+        cum[j] = tot;
+      }
     }
     const chosen = new Set(), id = [];
     let guard = 0;
     while (id.length < k && guard++ < k * 60) {
-      let r = rnd() * tot, j = 0;
-      while (j < N - 1 && (r -= w[j]) > 0) j++;
+      const j = pickCum(cum, N, rnd() * tot);
       if (j === i || chosen.has(j)) continue;
       chosen.add(j); id.push(j);
     }
@@ -182,11 +219,31 @@ function smallWorld(nb, N, k, seed, nSample) {
 
 /* ---------- the structural step ---------- */
 /* Prune weak synapses and regrow the same number toward co-active partners, distance-weighted
-   and under the cell's original budget. `coact[i][j]` is supplied as an activity trace. */
+   and under the cell's original budget.
+ *
+ * `coact` is an activity trace in one of two forms, because the two regimes need different
+ * storage and pretending otherwise does not scale:
+ *   • SPARSE — an array of per-cell objects, `coact[i][j]`. What `coactivity()` returns from a
+ *     handful of static patterns, where most cells have no co-active partner at all.
+ *   • DENSE  — `{ dense: Uint16Array(N*N) or Float64Array(N*N), scale }`, row-major. What a
+ *     moving agent generates: at N = 10 000 with ~10% active, a step co-activates 10⁶ pairs and
+ *     a per-cell hash map of that is ~10⁷ entries and gigabytes. A flat 200 MB typed array is
+ *     both smaller and an O(1) row lookup, which is exactly what the sampler below wants.
+ *
+ * `scale` converts the raw trace to the [0,1] the boost expects. A per-row `rowScale[i]` may be
+ * given instead, which judges each cell's partners against ITS OWN best partner rather than
+ * against the global maximum. That is not a knob: it is the same competitive logic as the
+ * subtractive weight normalisation above — a cell has no access to the network's maximum, only
+ * to its own — and stage 24 measures what the difference is worth.
+ */
 function pruneAndRewire(cortex, pos, coact, P, seed) {
   P = Object.assign(sdefaults(), P || {});
   const rnd = mulberry32(seed == null ? 404 : seed);
   const N = cortex.N;
+  const inv2s2 = 1 / (2 * P.sigma * P.sigma);
+  const dense = coact && coact.dense ? coact.dense : null;
+  const dScale = dense ? (coact.scale == null ? 1 : coact.scale) : 0;
+  const v = new Float64Array(N), cum = new Float64Array(N);
   let pruned = 0, grown = 0;
   for (let i = 0; i < N; i++) {
     const idx = cortex.preIdx[i], w = cortex.preW[i];
@@ -206,21 +263,32 @@ function pruneAndRewire(cortex, pos, coact, P, seed) {
     // regrow to budget: prefer co-active, distance-weighted partners
     const have = new Set(keptIdx);
     const need = budget + P.budgetSlack - keptIdx.length;
-    const cand = [], cw = [];
+    const xi = pos[i][0], yi = pos[i][1];
     for (let j = 0; j < N; j++) {
-      if (j === i || have.has(j)) continue;
-      const d = dist(pos, i, j);
-      const local = Math.exp(-(d * d) / (2 * P.sigma * P.sigma)) + P.pLong;
-      const co = coact ? (coact[i] ? (coact[i][j] || 0) : 0) : 0;
-      cand.push(j); cw.push(local * (1 + P.rewireBias * co));
+      if (j === i || have.has(j)) { v[j] = 0; continue; }
+      const dx = pos[j][0] - xi, dy = pos[j][1] - yi;
+      v[j] = Math.exp(-(dx * dx + dy * dy) * inv2s2) + P.pLong;
     }
-    let tot = cw.reduce((a, b) => a + b, 0);
-    for (let g = 0; g < need && tot > 0; g++) {
-      let r = rnd() * tot, a = 0;
-      while (a < cand.length - 1 && (r -= cw[a]) > 0) a++;
-      if (cw[a] <= 0) continue;
-      keptIdx.push(cand[a]); keptW.push(0);            // a new contact starts silent
-      tot -= cw[a]; cw[a] = 0; grown++;
+    if (dense) {
+      const off = i * N;
+      const sc = coact.rowScale ? coact.rowScale[i] : dScale;
+      if (sc > 0) for (let j = 0; j < N; j++) if (v[j] > 0) v[j] *= 1 + P.rewireBias * dense[off + j] * sc;
+    } else if (coact && coact[i]) {
+      const ci = coact[i];
+      for (const key in ci) { const j = +key; if (v[j] > 0) v[j] *= 1 + P.rewireBias * ci[key]; }
+    }
+    let tot = 0;
+    for (let j = 0; j < N; j++) { tot += v[j]; cum[j] = tot; }
+    // Sampling WITHOUT replacement, by rejection. Drawing from the fixed distribution and
+    // rejecting repeats is identical to renormalising after each draw, and avoids rebuilding
+    // the prefix sums per draw — `need` is ~15, so rejections are negligible.
+    const taken = new Set();
+    let g = 0, guard = 0;
+    while (g < need && tot > 0 && guard++ < need * 200) {
+      const j = pickCum(cum, N, rnd() * tot);
+      if (j === i || have.has(j) || taken.has(j) || v[j] <= 0) continue;
+      taken.add(j); keptIdx.push(j); keptW.push(0);     // a new contact starts silent
+      g++; grown++;
     }
     cortex.preIdx[i] = Int32Array.from(keptIdx);
     cortex.preW[i] = Float64Array.from(keptW);
@@ -245,6 +313,6 @@ function report(cortex, N, k, seed, nSample) {
   return Object.assign({}, sw, { degree: degreeStats(nb), weights: weightStats(cortex.preW) });
 }
 
-module.exports = { sdefaults, layout, dist, connectDistance, neighbourSets, clustering,
+module.exports = { sdefaults, layout, dist, pickCum, connectDistance, neighbourSets, clustering,
   pathLength, degreeStats, weightStats, smallWorld, pruneAndRewire, coactivity, report,
   mulberry32 };

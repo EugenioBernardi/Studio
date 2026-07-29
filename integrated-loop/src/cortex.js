@@ -83,6 +83,8 @@ function create(opts) {
   return {
     P, rnd, N, stim, preIdx, preW,
     a: new Float64Array(N),
+    nx: new Float64Array(N),            // scratch for one step; hoisted so N = 10 000 does not
+                                        // allocate 80 kB per simulated millisecond
     inh: 0, ext: new Float64Array(N),   // ext = current external drive
     plastic: false,
     assemblies: [],                     // recorded assembly cell-sets per stimulus
@@ -105,11 +107,12 @@ function normalizeCell(S, i) {
 function step(S) {
   const P = S.P, N = S.N, dt = P.dt;
   let sumAct = 0;
-  const nx = new Float64Array(N);
+  const nx = S.nx || (S.nx = new Float64Array(N));
+  const a = S.a, ext = S.ext, gIinh = P.gI * S.inh + P.thr;
   for (let i = 0; i < N; i++) {
     let rec = 0; const pi = S.preIdx[i], pw = S.preW[i];
-    for (let k = 0; k < pi.length; k++) rec += pw[k] * S.a[pi[k]];
-    const drive = S.ext[i] + rec - P.gI * S.inh - P.thr;
+    for (let k = 0; k < pi.length; k++) rec += pw[k] * a[pi[k]];
+    const drive = ext[i] + rec - gIinh;
     nx[i] = drive > 0 ? clamp(P.gain * drive, 0, 1.3) : 0;   // supralinear post-threshold gain
   }
   for (let i = 0; i < N; i++) { S.a[i] += (dt / P.tauA) * (nx[i] - S.a[i]); sumAct += S.a[i]; }

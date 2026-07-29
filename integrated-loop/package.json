@@ -23,6 +23,7 @@
     "test:structural": "node test/stage21_structural.js",
     "test:scale-topology": "node test/stage22_scale_topology.js",
     "test:movement": "node test/stage23_movement.js",
+    "test:scale10k": "node --max-old-space-size=4096 test/stage24_scale10k.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },
