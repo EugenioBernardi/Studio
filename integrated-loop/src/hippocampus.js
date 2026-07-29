@@ -64,6 +64,12 @@ function hdefaults() {
     tauA: 0.020, tauI: 0.006, dt: 0.001,
     taGate: 0.45,                // temporoammonic GATES rather than drives (distal dendrite)
     // plasticity
+    // ACh gating of the mossy-fibre detonator. TESTED IN STAGE 34 AND NOT SUPPORTED: the
+    // mechanism is well motivated (mossy lesions impair acquisition and spare retrieval) and an
+    // exploratory run agreed, 2/6 → 4/6 indices retrieved, but on held-out seeds and cue draws
+    // it went the other way, 10/18 → 5/18. Kept at 0 and documented so the hypothesis stays
+    // recorded and re-testable rather than deleted.
+    achMF: 0.0,
     lrBind: 3.0, lrRec3: 3.0, lrAsym: 0.9, asymBack: 0.35, seqGain: 1.0,
     wRecMax3: 1.4, wBudget3: 2.0, wBindMax: 1.6, wBudgetBind: 2.2,
     actThr: 0.30, ach: 1.0,
@@ -227,11 +233,20 @@ function forwardStep(H, cortexA) {
   fieldStep(H, H.ec3, i => dot(H.Wce3, i, cortexA), P.gEC, "iEC3");
   fieldStep(H, H.dg, i => dot(H.Wed, i, H.ec2), P.gDG, "iDG");
   const achRec = 1 - 0.85 * P.ach;             // recurrence gated off while encoding (Hasselmo)
+  // MOSSY-FIBRE GATE. The DG→CA3 detonator forces a NEW, separated pattern into CA3 — which is
+  // what encoding needs and what retrieval must not have. Mossy-fibre disruption impairs
+  // acquisition while sparing retrieval (Treves & Rolls 1992; Lassalle, Bataille & Halley 2000;
+  // Lee & Kesner 2004), and acetylcholine is the switch: high during encoding, low during
+  // retrieval, when the DIRECT EC II → CA3 perforant path should carry the cue and the recurrent
+  // collaterals should complete it (Hasselmo).
+  // achMF = 0 reproduces every earlier stage exactly, because at encoding (ach = 1) the gate is
+  // 1 regardless; only retrieval changes.
+  const mfGate = (1 - P.achMF) + P.achMF * P.ach;
   // H.commIn is optional per-cell CA3 drive from the OTHER hippocampus (see bilateral.js). It is
   // gated by ACh exactly as the local recurrence is: the commissural/associational system is
   // suppressed while encoding and released during retrieval, being the same class of synapse.
   const comm = H.commIn;
-  fieldStep(H, H.ca3, i => dot(H.Wdc, i, H.dg) + dot(H.Wec3, i, H.ec2)
+  fieldStep(H, H.ca3, i => mfGate * dot(H.Wdc, i, H.dg) + dot(H.Wec3, i, H.ec2)
                           + achRec * (dot(H.Rca3, i, H.ca3) + (comm ? comm[i] : 0)), P.gCA3, "iCA3");
   // CA1: Schaffer drives (proximal dendrites); temporoammonic GATES (distal dendrites)
   fieldStep(H, H.ca1, i => {

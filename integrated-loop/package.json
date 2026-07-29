@@ -34,6 +34,7 @@
     "test:invariance": "node test/stage31_invariance.js",
     "test:dendritic": "node test/stage32_dendritic.js",
     "test:ec-route": "node test/stage33_ec_route.js",
+    "test:mossy": "node test/stage34_mossy_gate.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },
