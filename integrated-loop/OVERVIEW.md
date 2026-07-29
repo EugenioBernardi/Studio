@@ -255,3 +255,51 @@ Each cost real time and each is a diagnostic pattern, not a typo.
    instrument a real scale — bisection in mm of a real line length, MST with perceptually
    confusable stimuli from the MNIST front end, MT with a decision noise floor — not retuning
    the circuits behind them.
+
+---
+
+## 8. Architectural gaps found by asking three direct questions
+
+Recorded because each was checked against the source, not assumed, and each is load-bearing.
+
+### 8.1 There is no association cortex. All binding is hippocampal.
+
+`cxStream` has exactly **two** labels. There is no third, heteromodal region: no unimodal →
+heteromodal → transmodal gradient (Mesulam), no convergence zone (Damasio), no anterior
+temporal semantic hub (Patterson; Lambon Ralph). Cortex is ONE sheet whose random recurrence
+happens to cross the modality halves, so assemblies span both — but that is undifferentiated
+cross-talk, not a hierarchy, and nothing in cortex *learns* a conjunction. Every conjunction in
+this project is stored by the hippocampus.
+
+**Consequence.** The model cannot express **semantic dementia** — anterior temporal degradation
+with degraded concepts and *spared* episodic memory — which is precisely the dissociation
+showing that cortex binds too. It also means stage 20's "cross-modal binding" is
+hippocampus-only by construction: there is no cortical route it could have used instead, so
+the comparison against the cortical floor is easier than it would be with a real hub.
+
+### 8.2 The thalamus is four incompatible objects
+
+| where | what it actually is |
+|---|---|
+| `thalamocortical.js` | TC + RTN per column — generic first-order relay, **not** wired to vision or audition |
+| `vision.js` | LGN is a **function**, not a population |
+| `auditory.js` | MGv is a **comment** on a lateral-inhibition filter |
+| `limbicthalamus.js` | ATN, MD, pulvinar as scalar rate nodes |
+
+Absent entirely: LGN and MGB as populations, VPL/VPM (there is no somatosensory input at all),
+LP, the intralaminar/CM-Pf group, and TRN anywhere outside the columnar model. Four modules
+each have "a thalamus" and no two of them are the same object.
+
+### 8.3 Nothing has been rescaled as structures were added
+
+Cortex has been **NC = 800 in every lesion suite since stage 8**, while sensory streams,
+lateralised hippocampi, parietal cortices and the limbic thalamus were added on top. Adding a
+modality *splits* that fixed budget rather than growing it: each modality now gets 400 units.
+
+And the two modalities are not balanced. **Auditory features are 17-dimensional, visual
+features 6-dimensional** — an unnoticed ~3× asymmetry in how much a modality can say. That is
+a live hypothesis for two things already flagged in stage 20: the modality halves correlating
+at r = 0.43 (a 6-dimensional code produces less distinctive patterns, hence more incidental
+overlap) and the crossover being 2/3 on the auditory arm against 3/3 on the visual one. It is
+testable by equalising the feature dimensionality and re-running — and until that is done, the
+stage-20 asymmetry should not be read as biology.
