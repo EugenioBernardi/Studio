@@ -55,11 +55,42 @@ function pdefaults() {
     // ipsilateral space. tailR > tailL is the Mesulam asymmetry.
     tailR: 0.60, tailL: 0.10,
     covW: 0.35,       // gradient transition width
+    // ATTENTIONAL STRENGTH asymmetry — right-hemisphere dominance for spatial attention
+    // (Heilman & Van Den Abell 1980; Mesulam 1981). This is a SECOND asymmetry, separable from
+    // the coverage tails above, and stage 14 registered in advance that its absence was why
+    // pseudoneglect came out with the wrong sign: a coverage asymmetry alone moves the mark
+    // toward the BETTER-covered side, which is rightward, whereas normals bisect slightly left.
+    // strR > strL makes the left half-field — driven by the stronger hemisphere — the more
+    // strongly attended one. The magnitude is NOT fitted to the pseudoneglect range; it is
+    // anchored on the independent clinical fact that right lesions neglect worse than left
+    // ones, which stage 29 checks separately.
+    strR: 1.0, strL: 1.0,
+    // TONIC orienting drive (Kinsbourne's opponent processor, the half of it this model was
+    // missing). Each hemisphere exerts a baseline pull toward its contralateral field that does
+    // NOT depend on a stimulus being there. Without it the opponent term is purely
+    // stimulus-driven, and stage 29 measured the consequence: in a serial cancellation search,
+    // once the ipsilesional targets are cancelled the intact hemisphere has nothing to be
+    // active about, its callosal inhibition vanishes, and the contralesional targets are then
+    // found — 0% missed at every severity from 0.2 to 0.8, which is not neglect. A real patient
+    // still cannot orient left after clearing the right, because the intact hemisphere's pull
+    // is tonic. Subthreshold on its own; it biases competition, it does not create percepts.
+    tonic: 0.0,
     // competition
     gLocal: 0.55,     // local excitation (attention is a bump, not a pixel)
     locW: 2,          // local excitation half-width in bins
     gGlobal: 2.4,     // within-hemisphere global inhibition
-    gCall: 1.9,       // CALLOSAL cross-hemisphere inhibition — the opponent term
+    // CALLOSAL cross-hemisphere inhibition — the opponent term. Was 1.9, which extinction
+    // alone does not pin down: extinction holds anywhere above ~0.8, so 1.9 was free. Stage 29
+    // added a SECOND independent clinical constraint — the line-bisection deviation must land
+    // in its published 5–25% band — and that narrows the admissible range to roughly 0.8–1.0.
+    // At 1.9 the competition is winner-take-all for an EXTENDED stimulus: the perceived gain of
+    // the neglected half collapses to 0.03 instead of the ~0.7–0.8 a 10–20% deviation implies,
+    // so bisection saturates at 50%. Constraining a previously unconstrained parameter with an
+    // independent measurement is calibration; it is not the same as tuning until a number lands,
+    // and stage 14 is re-run in full to show nothing else moved.
+    // (PARIETAL_GCALL is honoured only so that stage 29 can sweep this parameter against the
+    //  SHIPPED stage-14 suite rather than against a re-implementation of it. Unset in normal use.)
+    gCall: +(process.env.PARIETAL_GCALL || 1.9),
     thr: 0.06, gain: 1.5,
     tauA: 0.020, tauI: 0.006, dt: 0.001,
     settleMs: 120,
@@ -107,6 +138,7 @@ function step(S, sal) {
   for (const side of ["L", "R"]) {
     const other = side === "L" ? "R" : "L";
     const a = S.a[side], cvg = S.cov[side], live = S.intact[side];
+    const str = side === "R" ? P.strR : P.strL;
     for (let j = 0; j < NP; j++) {
       // local excitation: attention is a bump on the map, not an isolated pixel
       let loc = 0;
@@ -114,7 +146,7 @@ function step(S, sal) {
         const k = j + d; if (k < 0 || k >= NP || d === 0) continue;
         loc += a[k];
       }
-      const drive = live * cvg[j] * sal[j] + P.gLocal * loc
+      const drive = live * str * cvg[j] * (sal[j] + P.tonic) + P.gLocal * loc
                     - P.gGlobal * S.inh[side] - P.gCall * S.inh[other] - P.thr;
       nx[side][j] = drive > 0 ? Math.min(1.3, P.gain * drive) : 0;
     }
@@ -161,13 +193,104 @@ function line(S, uA, uB, w) {
 function detected(S, A, u) { return A[nearest(S, u)] >= S.P.detectThr; }
 function level(S, A, u) { return A[nearest(S, u)]; }
 
-/* subjective midpoint of a line = centre of mass of the attention it attracts.
-   Returned in u; a POSITIVE value is a rightward (ipsilesional, for a right lesion) error. */
+/* DEPRECATED as a clinical instrument — kept because stages 14 and 17 report it, and removing
+   it would silently rewrite their record.
+ *
+ * Centre of mass of the attention map. This is a PROXY for the subjective midpoint, not a model
+ * of the judgement, and it saturates by construction. With perceived gain g_L on the left half
+ * and g_R on the right, CoM = (g_R − g_L) / (2·(g_L + g_R)), so at g_L → 0 it goes to exactly
+ * 0.5 — 50% of the half-line — whatever else is true. Stage 17 measured 50.6% against a clinical
+ * 5–25%, which is that ceiling and not a property of the model. Use `bisectMark`. */
 function bisect(S, A) {
   let num = 0, den = 0;
   for (let j = 0; j < S.NP; j++) { num += A[j] * S.u[j]; den += A[j]; }
   return den > 0 ? num / den : 0;
 }
+
+/* THE CLINICAL INSTRUMENT. Line bisection is an EQUAL-EXTENT judgement: the subject marks the
+   point at which the left segment appears as long as the right. Perceived extent is the
+   attentional gain integrated over the segment, so the mark is where
+       ∫(−1→m) A  =  ∫(m→+1) A
+   — the weighted MEDIAN of attended salience, not its mean. Under a step-gain model this gives
+   m = (g_R − g_L)/(2·g_R): a 20% underestimation of the left half puts the mark at 10% of the
+   half-line, which is what the clinical series report. Interpolated within the winning bin so
+   the measure is not quantised to NP positions.
+
+   Returned in u. Positive = rightward (ipsilesional, for a right lesion). Multiply by 100 for
+   the clinic's units, percent of half-line. */
+function bisectMark(S, A) {
+  let tot = 0;
+  for (let j = 0; j < S.NP; j++) tot += A[j];
+  if (tot <= 0) return 0;
+  const half = tot / 2;
+  let cum = 0;
+  for (let j = 0; j < S.NP; j++) {
+    const prev = cum;
+    cum += A[j];
+    if (cum >= half) {
+      const uLo = j > 0 ? 0.5 * (S.u[j - 1] + S.u[j]) : S.u[0];
+      const uHi = j < S.NP - 1 ? 0.5 * (S.u[j] + S.u[j + 1]) : S.u[S.NP - 1];
+      const frac = A[j] > 0 ? (half - prev) / A[j] : 0;
+      return uLo + frac * (uHi - uLo);
+    }
+  }
+  return S.u[S.NP - 1];
+}
+
+/* the perceived gain of each half-line — the quantity the judgement above compares, exposed so
+   that a bisection result can be read against the attenuation that produced it */
+function halfGains(S, A) {
+  let gL = 0, nL = 0, gR = 0, nR = 0;
+  for (let j = 0; j < S.NP; j++) {
+    if (S.u[j] < 0) { gL += A[j]; nL++; } else { gR += A[j]; nR++; }
+  }
+  gL = nL ? gL / nL : 0; gR = nR ? gR / nR : 0;
+  return { gL, gR, ratio: gR > 0 ? gL / gR : 0 };
+}
+/* CANCELLATION AS SERIAL SEARCH — the way the test is actually taken, and the way the
+   single-shot version below is not.
+ *
+ * A patient given a cancellation sheet does not apprehend all targets in one 120 ms settle. They
+ * SCAN: the most salient unmarked target wins attention, is crossed out, and thereby leaves the
+ * competition; the next fixation is a fresh competition among what remains; the search ends when
+ * nothing further reaches awareness. That structure is what makes the test GRADED — once the
+ * ipsilesional targets have been marked and removed, the contralesional ones face no competitor,
+ * so a patient with partial (not absolute) attenuation finds some of them.
+ *
+ * The single-shot version is all-or-none by construction: with ten simultaneous competitors and
+ * strong callosal inhibition, any lesion that lets the right side win at all wipes the left
+ * completely. Stage 29 measured exactly that — 100% of left targets missed at every severity
+ * from 0.30 to 0.95 — which is why no severity could reproduce the clinical combination of
+ * partial cancellation loss with a 5–25% bisection deviation.
+ *
+ * `maxFix` bounds the search the way a time limit does. Returns the same shape as
+ * `cancellation`, plus the fixation count, so the two can be compared directly. */
+function cancellationSerial(S, targets, opts) {
+  opts = opts || {};
+  const maxFix = opts.maxFix == null ? targets.length * 3 : opts.maxFix;
+  const items = targets.map(t => ({ u: t.u, found: false }));
+  let fixations = 0;
+  for (let fx = 0; fx < maxFix; fx++) {
+    const left = items.filter(t => !t.found);
+    if (!left.length) break;
+    const A = attend(S, stimuli(S, left), opts);
+    let best = -1, bv = 0;
+    for (let k = 0; k < left.length; k++) {
+      const v = level(S, A, left[k].u);
+      if (v > bv) { bv = v; best = k; }
+    }
+    if (best < 0 || bv < S.P.detectThr) break;   // nothing reaches awareness: search terminates
+    left[best].found = true;
+    fixations++;
+  }
+  let l = 0, r = 0, nL = 0, nR = 0;
+  for (const t of items) {
+    if (t.u < 0) { nL++; if (t.found) l++; } else { nR++; if (t.found) r++; }
+  }
+  return { left: l, right: r, nL, nR, fixations,
+           leftFrac: nL ? l / nL : 0, rightFrac: nR ? r / nR : 0 };
+}
+
 /* cancellation: how many of an array of targets are found, per side */
 function cancellation(S, targets, opts) {
   const A = attend(S, stimuli(S, targets), opts);
@@ -194,4 +317,5 @@ function extinction(S, uTarget, uCompetitor, opts) {
 }
 
 module.exports = { createParietal, pdefaults, lesionParietal, attend, step, stimuli, line,
-  detected, level, bisect, cancellation, extinction, nearest, covR, covL, mulberry32 };
+  detected, level, bisect, bisectMark, halfGains, cancellation, cancellationSerial,
+  extinction, nearest, covR, covL, mulberry32 };
