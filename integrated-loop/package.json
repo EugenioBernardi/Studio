@@ -30,6 +30,7 @@
     "test:hsp": "node --max-old-space-size=6144 test/stage27_hsp.js",
     "test:seeds": "node --max-old-space-size=4096 test/stage28_seeds.js",
     "test:bedside": "node test/stage29_bedside.js",
+    "test:columns": "node test/stage30_columns.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },
