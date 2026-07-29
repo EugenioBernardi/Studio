@@ -86,9 +86,51 @@ The rules the work is held to, in the order they bind:
 | 38 | the reticular nucleus as a consolidation scheduler: locality, capacity, lesion dissociation | **9/10** |
 | 39 | the schedule driving real synaptic weight, 5 seeds | **4/5** |
 | 40 | is the schedule *topographic*? — and what the failure buys | **11/13** |
+| 41 | **the control stages 38–39 never ran. The scheduler result is RETRACTED** | **2/3** |
 
 Stages 38–40 have a full record in **`docs/SCHEDULER-VALIDATION.md`**, including the two
 predictions that failed and what replaced them.
+
+> ### RETRACTION — read this before citing stages 38–40
+>
+> Stage 41 ran the one control that was missing: `lateral = 0`, i.e. the reticular gate with
+> **no competition between sectors** — global, simultaneous spindles, the standard assumption the
+> whole module was built to argue against. The capacity signature stage 39 reported as the
+> scheduler's doing (total consolidated weight flat while per-memory weight falls with more
+> memories) **appears in full with the mechanism switched off**: total 1.200 → 1.542 → 1.537,
+> per-memory 1.200 → 0.771 → 0.307 at 2/3/6 memories.
+>
+> The cause is arithmetic. `scheduledNight` rehearses **one memory per ripple**, and the ripple
+> count is fixed by the night's length — a fixed budget before any thalamus is consulted. Stage
+> 38's "memories compete for spindle slots" inherits the same problem, having been measured in
+> licensed events, which the ripple count also budgets.
+>
+> Three further downgrades, all in stage 41:
+> - The **lesion dissociation** (replay intact, consolidation abolished) is reproduced exactly by
+>   a **content-blind coin at p = 0**. It shows the pattern is *consistent with* a thalamic gate;
+>   it is not evidence that the reticular nucleus *is* one.
+> - The fallback claim — competition sets a monotone **gain** — also fails: 1.54 → 1.60 → 0.63 →
+>   0.33 → 0.43. It is a threshold with a ragged tail, not a knob.
+> - At **matched duty cycle** the coin reaches the same weight (0.121 vs 0.127) but **better**
+>   cortex-only recall (2.80 vs 1.60), because reticular licensing is temporally clustered and an
+>   i.i.d. coin spreads the same writes more evenly. At equal throughput the gate is *worse than
+>   chance* at building a usable cortical sequence.
+>
+> **What survives:** only stage 40 §4–6 — an unbiased reticular gate is *fair*, not selective, and
+> topographic specificity requires an external bias source. A negative result about a mechanism.
+>
+> **Independently, the positive framing was not novel.** Wei, Krishnan, Komarov & Bazhenov (2018,
+> *PLoS Comput Biol*, doi:10.1371/journal.pcbi.1006322) already published a biophysical
+> thalamocortical model in which local spindles let distinct memory traces replay independently
+> while slow oscillations make them compete; Antony et al. (2018, *Curr Biol*,
+> doi:10.1016/j.cub.2018.04.020) established spindle refractoriness segmenting sleep into
+> reactivation opportunities and gaps, in humans.
+>
+> **Method lesson, the generalisable one.** The missing control was a single line, and it went
+> unrun because the result it would kill was the one being hoped for. Stage 38 varied `lateral` to
+> establish *locality*, then measured *capacity* at one value of it. **Vary the mechanism
+> parameter in every measurement that claims the mechanism — not only in the one that introduces
+> it.**
 
 ### The deliberate failures, and why they stay red
 
