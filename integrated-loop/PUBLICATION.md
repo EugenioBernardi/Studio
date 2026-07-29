@@ -10,9 +10,10 @@ encouraging.*
 
 **Nothing here is submittable today, and the three candidate papers are blocked by three
 different things.** The strongest *scientific* unit is not any of the positive results — it is
-the structural-plasticity failure sequence (stages 21–26), because it is a registered,
-replicated, mechanistically diagnosed negative result about a rule the field has a working
-alternative to. It needs exactly one more experiment to be publishable. The strongest
+the structural-plasticity sequence (stages 21–28): a registered, seed-replicated,
+mechanistically diagnosed negative result about a rule the field has a working alternative to,
+with that alternative now run in the same network and the whole comparison replicated over ten
+seeds. **Its blockers are cleared.** The strongest
 *content* is the clinical-localisation work (stages 12–18), and it is blocked by the fact that
 every behavioural readout in the project sits outside its published range. The resource paper
 is blocked by files that do not exist in the repository.
@@ -120,9 +121,36 @@ wiring rule as well was redundant, and why removing it costs nothing.
 eNeuro (which has an explicit Negative Results section), PLOS Computational Biology, or Network
 Neuroscience. **Realistic timeline: gated on seed replication, not on further mechanism work.**
 
-### The blocker that now dominates
+### The blocker is CLEARED (stage 28)
 
-**Stages 21–27 are all single-seed.** Earlier stages in this project ran 12-seed robustness
+Ten seeds, three arms on identical inputs within each seed, everything varying with seed —
+layout, connectivity draw, stimulus patterns, sensory projection, agent trajectory.
+
+| Δ over 3 episodes, N = 2400, mean ± sd | co-activity | HSP + homeostat | HSP alone |
+|---|---|---|---|
+| small-world σ | 0.024 ± 0.011 | **0.198 ± 0.039** | 1.867 ± 0.068 |
+| degree CV | 0.004 ± 0.001 | **0.112 ± 0.022** | 0.428 ± 0.004 |
+| rich club | 0.037 ± 0.043 | **0.847 ± 0.086** | 2.275 ± 0.134 |
+
+- **P1** — HSP beats the co-activity rule on Δσ in **10/10** seeds (z = 13.8 with the intrinsic
+  homeostat, z = 81.2 without).
+- **P2** — the degree-CV ordering is **10/10** (z = 15.5 and z = 332.2).
+- **P3, the one I expected to regress** — a difference of differences, and those are exactly what
+  vanish on replication. It did not: ΔCV is smaller with intrinsic homeostasis in **10/10** seeds,
+  mean difference 0.316 ± 0.021, **z = 48.5**.
+- **P4** — the runaway replicates: in-degree grows monotonically in **10/10** seeds for HSP alone
+  and in only **2/10** with the intrinsic homeostat. The combination is what converges, which is
+  the claim stage 27 made from one seed.
+- Function survives in every seed and both rules (recall 0.682 ± 0.041 vs 0.648 ± 0.031 at the
+  sensitive cue).
+
+The scale trade is stated rather than hidden: significance across seeds at N = 2400, magnitude at
+N = 10 000 at one seed (stages 24 and 27). What remains untested is whether the ORDERING reverses
+between 2400 and 10 000; nothing observed suggests it, and it is not tested.
+
+### The blocker that previously dominated
+
+**Stages 21–27 were all single-seed.** Earlier stages in this project ran 12-seed robustness
 sweeps; this entire structural arc is n = 1. The project's own first rule is *replicate before
 believing*, and a +10% effect at 50 trials once became +1.8% ± 6.4 at 110 here. A single-seed
 σ = 3.87 is not defensible, and the interaction result (P3) is the one that most needs a spread
