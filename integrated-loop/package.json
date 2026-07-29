@@ -22,6 +22,7 @@
     "test:crossmodal": "node test/stage20_crossmodal.js",
     "test:structural": "node test/stage21_structural.js",
     "test:scale-topology": "node test/stage22_scale_topology.js",
+    "test:movement": "node test/stage23_movement.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },
