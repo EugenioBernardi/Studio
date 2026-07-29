@@ -96,9 +96,19 @@ function neighbourSets(preIdx) {
   for (let i = 0; i < N; i++) for (const j of preIdx[i]) { nb[i].add(j); nb[j].add(i); }
   return nb;
 }
-function clustering(nb) {
+/* Sampled over `nSample` nodes when the network is large: clustering is O(N·d²) and the
+   shipped degree is ~110, so an exhaustive pass at N = 4000 is 48M set lookups per call. */
+function clustering(nb, nSample, seed) {
   let tot = 0, n = 0;
-  for (let i = 0; i < nb.length; i++) {
+  const N = nb.length;
+  let nodes;
+  if (nSample && nSample < N) {
+    const rnd = mulberry32(seed == null ? 13 : seed);
+    const s = new Set();
+    while (s.size < nSample) s.add(Math.floor(rnd() * N));
+    nodes = [...s];
+  } else nodes = Array.from({ length: N }, (_, i) => i);
+  for (const i of nodes) {
     const ns = [...nb[i]], d = ns.length;
     if (d < 2) continue;
     let links = 0;
@@ -155,8 +165,8 @@ function weightStats(preW) {
   return { n: ws.length, logSkew: skew, cv: mw ? sw / mw : 0 };
 }
 /* small-world index sigma = (C/C_rand) / (L/L_rand), using a degree-matched random graph */
-function smallWorld(nb, N, k, seed) {
-  const C0 = clustering(nb), L0 = pathLength(nb, 30, seed);
+function smallWorld(nb, N, k, seed, nSample) {
+  const C0 = clustering(nb, nSample, seed), L0 = pathLength(nb, 30, seed);
   const rnd = mulberry32((seed || 3) + 777);
   const rIdx = [];
   for (let i = 0; i < N; i++) {
@@ -165,7 +175,7 @@ function smallWorld(nb, N, k, seed) {
     rIdx.push(Int32Array.from(s));
   }
   const rnb = neighbourSets(rIdx);
-  const Cr = clustering(rnb), Lr = pathLength(rnb, 30, seed);
+  const Cr = clustering(rnb, nSample, seed), Lr = pathLength(rnb, 30, seed);
   return { C: C0, L: L0, Crand: Cr, Lrand: Lr,
            sigma: (Cr > 0 && L0 > 0 && Lr > 0) ? (C0 / Cr) / (L0 / Lr) : 0 };
 }
@@ -229,9 +239,9 @@ function coactivity(cortex) {
   return co;
 }
 
-function report(cortex, N, k, seed) {
+function report(cortex, N, k, seed, nSample) {
   const nb = neighbourSets(cortex.preIdx);
-  const sw = smallWorld(nb, N, k, seed);
+  const sw = smallWorld(nb, N, k, seed, nSample);
   return Object.assign({}, sw, { degree: degreeStats(nb), weights: weightStats(cortex.preW) });
 }
 
