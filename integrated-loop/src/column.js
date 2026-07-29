@@ -98,6 +98,31 @@ function cdefaults() {
     wRecMax: 1.2,
     wBudget: 1.3,      // SUBTRACTIVE normalisation cap on total incoming recurrent weight
 
+    // ---- DENDRITIC NONLINEARITY: the reason a cell codes a PATTERN, not an AMOUNT ----
+    // A linear cell (d = Σ w·x) fires in proportion to how much drive it gets, so every cell in
+    // a strongly driven column rises together and all stimuli recruit the same cells — measured
+    // in stage 31 as assemblies overlapping 0.79 across different shapes. Real pyramidal
+    // dendrites are not linear: branches act as semi-independent nonlinear subunits, so a cell
+    // responds when a SPECIFIC subset of its inputs is co-active on the same branch and not when
+    // the same total current arrives spread thinly (Poirazi, Brannon & Mel 2003; Polsky, Mel &
+    // Schiller 2004; Larkum 2013). That is what makes a cell a feature detector.
+    nBranch: 6,        // dendritic subunits per L2/3 cell
+    dendThr: 0.35,     // per-branch threshold: below this a branch contributes almost nothing
+    dendGain: 2.2,     // supralinear gain above it
+    dendOn: false,     // default off so stages 30 and 31 reproduce unchanged
+
+    // ---- FEEDFORWARD INHIBITION: selection in time, not just normalisation ----
+    // The PV pools below track their own lamina's activity, i.e. pure FEEDBACK inhibition, which
+    // divides the population by its mean and normalises without picking winners. In cortex the
+    // thalamocortical afferent drives PV cells DIRECTLY, so inhibition arrives before the
+    // disynaptic cortical excitation and leaves a brief window in which only the most strongly
+    // driven cells reach threshold (Pouille & Scanziani 2001; Gabernet et al. 2005; Cruikshank,
+    // Lewis & Connors 2007). That feedforward term is a competitive threshold that scales with
+    // the input, which is what selection requires.
+    ffiTC_PV4: 0.0,    // relay → PV4, feedforward
+    ffiL4_PV23: 0.0,   // layer 4 → PV23, feedforward
+    tauFFI: 0.002,     // feedforward inhibition is FAST — this is what makes it a window
+
     // ---- inhibition ----
     // L2/3 feedback inhibition. Set so the associative sparsity matches the flat sheet's
     // 7.2–7.3%: this is the module's own design target (emergent sparsity from feedback
@@ -112,6 +137,23 @@ function cdefaults() {
     thrTC: 0.10, gainTC: 1.8,
     tauA: 0.020, tauI: 0.006, dt: 0.001,
     lrRec: 2.5, encReps: 4, actThr: 0.30,
+
+    // ---- BCM METAPLASTICITY: competition between stimuli FOR CELLS ----
+    // Plain Hebbian recurrence MERGES correlated patterns, and stage 31 measured it directly:
+    // cross-shape assembly overlap 0.28 before learning and 0.63 after. A cell shared by two
+    // stimuli is potentiated for both and becomes a bridge that drags one assembly into the
+    // other. cortex.js never hit this because its stimuli are random sparse subsets that barely
+    // overlap to begin with; natural stimuli are correlated, so the problem is unavoidable here.
+    //
+    // The biological answer is the sliding modification threshold (Bienenstock, Cooper & Munro
+    // 1982): the LTP/LTD crossover point tracks the cell's own recent activity, θ ∝ ⟨a²⟩. A cell
+    // that responds to everything raises its threshold and its synapses DEPRESS; a cell that
+    // responds selectively keeps potentiating. Promiscuous cells are therefore expelled from
+    // assemblies and selective ones retained — pattern separation as metaplasticity rather than
+    // as an extra circuit.
+    bcmOn: false,      // default off so stages 30 and 31 reproduce unchanged
+    bcmTau: 1.0,       // s — θ must integrate across stimuli, not within one presentation
+    bcmTarget: 0.35,   // activity scale at which θ sits when a cell fires selectively
 
     // ---- ablations, for the gates ----
     rtnOn: true,       // false = no reticular gate at all (G2)
@@ -247,6 +289,8 @@ function create(opts) {
     l5: new Float64Array(NL5),
     rtn: new Float64Array(NC),
     pv23: new Float64Array(NC), pv4: new Float64Array(NC), som: new Float64Array(NC),
+    ffi23: new Float64Array(NC), ffi4: new Float64Array(NC),
+    theta: new Float64Array(NL23).fill(0.35),   // BCM sliding modification threshold
     ext: new Float64Array(NTC),           // external drive arrives at the RELAY
     // Direct injection into L2/3, BYPASSING the relay and layer 4. Exists only so gate G3 can
     // ask whether the laminar route does any work; it is not a physiological pathway.
@@ -316,19 +360,32 @@ function step(S) {
       const idx = S.l4Idx[i], w = S.l4W[i];
       let d = 0;
       for (let k = 0; k < idx.length; k++) d += w[k] * S.tc[idx[k]];
-      d -= P.gPV4 * S.pv4[c] + P.thr;
+      d -= P.gPV4 * S.pv4[c] + S.ffi4[c] + P.thr;
       S.nx4[i] = d > 0 ? clamp(P.gain * d, 0, 1.3) : 0;
     }
   }
 
   /* ---- 4. layer 2/3: feedforward from L4 + recurrent cortico-cortical − PV − SOM ---- */
   for (let c = 0; c < NC; c++) {
-    const inh = P.gPV23 * S.pv23[c] + P.gSOM * S.som[c] + P.thr;
+    const inh = P.gPV23 * S.pv23[c] + P.gSOM * S.som[c] + S.ffi23[c] + P.thr;
     for (let u = 0; u < P.nL23; u++) {
       const i = c * P.nL23 + u;
       const fi = S.ffIdx[i], fw = S.ffW[i];
       let d = 0;
-      for (let k = 0; k < fi.length; k++) d += fw[k] * S.l4[fi[k]];
+      if (P.dendOn && fi.length >= P.nBranch) {
+        // partition the feedforward inputs into dendritic subunits; each branch is thresholded
+        // and supralinear, so clustered co-active input counts for far more than the same
+        // current spread across branches
+        const per = fi.length / P.nBranch;
+        for (let b = 0; b < P.nBranch; b++) {
+          const lo = Math.floor(b * per), hi = Math.floor((b + 1) * per);
+          let bs = 0;
+          for (let k = lo; k < hi; k++) bs += fw[k] * S.l4[fi[k]];
+          if (bs > P.dendThr) { const e = bs - P.dendThr; d += P.dendGain * e * e; }
+        }
+      } else {
+        for (let k = 0; k < fi.length; k++) d += fw[k] * S.l4[fi[k]];
+      }
       const pi = S.preIdx[i], pw = S.preW[i];
       for (let k = 0; k < pi.length; k++) d += pw[k] * S.a[pi[k]];
       d += S.extL23[i];
@@ -357,28 +414,52 @@ function step(S) {
   for (let i = 0; i < S.NL5; i++) S.l5[i] += kA * (S.nx5[i] - S.l5[i]);
 
   /* ---- 7. interneuron pools track their own lamina, per column ---- */
-  const kI = dt / P.tauI;
+  const kI = dt / P.tauI, kF = dt / P.tauFFI;
   for (let c = 0; c < NC; c++) {
     let m23 = 0; for (let u = 0; u < P.nL23; u++) m23 += S.a[c * P.nL23 + u];
     let m4 = 0; for (let u = 0; u < P.nL4; u++) m4 += S.l4[c * P.nL4 + u];
     let m5 = 0; for (let u = 0; u < P.nL5; u++) m5 += S.l5[c * P.nL5 + u];
+    let mtc = 0; for (let t = 0; t < P.nTC; t++) mtc += S.tc[c * P.nTC + t];
     S.pv23[c] += kI * (m23 / P.nL23 - S.pv23[c]);
     S.pv4[c] += kI * (m4 / P.nL4 - S.pv4[c]);
     S.som[c] += kI * (m5 / P.nL5 - S.som[c]);
+    // FEEDFORWARD components, on their own fast time constant, tracking the AFFERENT rather
+    // than the local population — this is the term that selects instead of normalising
+    S.ffi4[c] += kF * (P.ffiTC_PV4 * mtc / P.nTC - S.ffi4[c]);
+    S.ffi23[c] += kF * (P.ffiL4_PV23 * m4 / P.nL4 - S.ffi23[c]);
   }
 
   /* ---- 8. Hebbian plasticity on the cortico-cortical L2/3 recurrence ---- */
   if (S.plastic) {
     const a = S.a;
-    for (let i = 0; i < S.NL23; i++) {
-      if (a[i] < P.actThr) continue;
-      const pi = S.preIdx[i], pw = S.preW[i];
-      let touched = false;
-      for (let k = 0; k < pi.length; k++) {
-        const aj = a[pi[k]];
-        if (aj > P.actThr) { pw[k] = clamp(pw[k] + P.lrRec * dt * a[i] * aj, 0, P.wRecMax); touched = true; }
+    if (P.bcmOn) {
+      // θ tracks ⟨a²⟩ on a slow time constant, so it integrates ACROSS stimuli
+      const kT = dt / P.bcmTau, inv = 1 / (P.bcmTarget * P.bcmTarget);
+      for (let i = 0; i < S.NL23; i++) S.theta[i] += kT * (a[i] * a[i] * inv * P.bcmTarget - S.theta[i]);
+      for (let i = 0; i < S.NL23; i++) {
+        if (a[i] <= 0) continue;
+        const pi = S.preIdx[i], pw = S.preW[i];
+        // the BCM factor: positive above the cell's own threshold, NEGATIVE below it
+        const post = a[i] * (a[i] - S.theta[i]);
+        if (post === 0) continue;
+        let touched = false;
+        for (let k = 0; k < pi.length; k++) {
+          const aj = a[pi[k]];
+          if (aj > 0) { pw[k] = clamp(pw[k] + P.lrRec * dt * post * aj, 0, P.wRecMax); touched = true; }
+        }
+        if (touched && post > 0) normalizeCell(S, i);
       }
-      if (touched) normalizeCell(S, i);
+    } else {
+      for (let i = 0; i < S.NL23; i++) {
+        if (a[i] < P.actThr) continue;
+        const pi = S.preIdx[i], pw = S.preW[i];
+        let touched = false;
+        for (let k = 0; k < pi.length; k++) {
+          const aj = a[pi[k]];
+          if (aj > P.actThr) { pw[k] = clamp(pw[k] + P.lrRec * dt * a[i] * aj, 0, P.wRecMax); touched = true; }
+        }
+        if (touched) normalizeCell(S, i);
+      }
     }
   }
 }
@@ -386,6 +467,7 @@ function step(S) {
 function reset(S) {
   S.tc.fill(0); S.l4.fill(0); S.a.fill(0); S.l5.fill(0);
   S.rtn.fill(0); S.pv23.fill(0); S.pv4.fill(0); S.som.fill(0);
+  S.ffi23.fill(0); S.ffi4.fill(0);
 }
 function run(S, seconds) { const n = Math.round(seconds / S.P.dt); for (let k = 0; k < n; k++) step(S); }
 
