@@ -37,6 +37,7 @@
     "test:mossy": "node test/stage34_mossy_gate.js",
     "test:afferent": "node test/stage35_afferent_bcm.js",
     "test:route-retest": "node test/stage36_route_retest.js",
+    "test:apical": "node test/stage37_apical.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },

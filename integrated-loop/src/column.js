@@ -172,6 +172,22 @@ function cdefaults() {
     bcmTau: 1.0,       // s — θ must integrate across stimuli, not within one presentation
     bcmTarget: 0.35,   // activity scale at which θ sits when a cell fires selectively
 
+    // ---- APICAL (MODULATORY) FEEDBACK: layer 1, not the soma ----
+    // Long-range feedback — hippocampal EC-deep → neocortex, and cortico-cortical feedback
+    // generally — terminates on the APICAL TUFTS of pyramidal cells in layer 1, and apical input
+    // is MODULATORY rather than driving: on its own it does not make a cell fire, it amplifies a
+    // cell that already has basal (feedforward or recurrent) support. That is the driver /
+    // modulator distinction (Sherman & Guillery) and the cellular mechanism is dendritic
+    // coincidence detection between basal and apical compartments (Larkum, Zhu & Sakmann 1999;
+    // Larkum 2013).
+    //
+    // Stages 33 and 36 injected hippocampal reinstatement as a somatic DRIVING current, and the
+    // symptom is exactly what that predicts: recall and off-target rose together, because a
+    // driving input activates cells with no support for the retrieved memory just as readily as
+    // cells with it. A multiplicative apical term cannot do that — a cell with zero basal drive
+    // gets zero benefit however strong the feedback.
+    gApical: 0.0,      // 0 = the somatic-drive behaviour stages 33 and 36 used
+
     // ---- ablations, for the gates ----
     rtnOn: true,       // false = no reticular gate at all (G2)
     ctOn: true,        // false = no corticothalamic feedback
@@ -312,6 +328,7 @@ function create(opts) {
     // Direct injection into L2/3, BYPASSING the relay and layer 4. Exists only so gate G3 can
     // ask whether the laminar route does any work; it is not a physiological pathway.
     extL23: new Float64Array(NL23),
+    apical: new Float64Array(NL23),     // layer-1 modulatory feedback (see gApical)
     nx23: new Float64Array(NL23), nxTC: new Float64Array(NTC),
     nx4: new Float64Array(NL4), nx5: new Float64Array(NL5),
     plastic: false, assemblies: [],
@@ -319,8 +336,9 @@ function create(opts) {
 }
 
 function setExt(S, vec) { S.ext.set(vec); }
-function clearExt(S) { S.ext.fill(0); S.extL23.fill(0); }
+function clearExt(S) { S.ext.fill(0); S.extL23.fill(0); S.apical.fill(0); }
 function setExtL23(S, vec) { S.extL23.set(vec); }
+function setApical(S, vec) { S.apical.set(vec); }
 
 function normalizeCell(S, i) {
   const pw = S.preW[i]; if (!pw.length) return;
@@ -406,6 +424,8 @@ function step(S) {
       const pi = S.preIdx[i], pw = S.preW[i];
       for (let k = 0; k < pi.length; k++) d += pw[k] * S.a[pi[k]];
       d += S.extL23[i];
+      // apical feedback multiplies the basal drive rather than adding to it
+      if (P.gApical > 0) d *= 1 + P.gApical * S.apical[i];
       d -= inh;
       S.nx23[i] = d > 0 ? clamp(P.gain * d, 0, 1.3) : 0;
     }
@@ -550,4 +570,5 @@ function encode(S, dur) {
 const overlap = (a, b) => { const sb = new Set(b); let c = 0; for (const x of a) if (sb.has(x)) c++; return c; };
 
 module.exports = { create, cdefaults, step, run, reset, present, encode, setExt, clearExt, setExtL23,
+  setApical,
   activeSet, activeFrac, activeColumns, overlap, normalizeCell, colLayout, colDist, mulberry32 };
