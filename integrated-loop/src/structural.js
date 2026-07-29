@@ -318,6 +318,144 @@ function pruneAndRewire(cortex, pos, coact, P, seed) {
   return { pruned, grown };
 }
 
+/* ---------- HOMEOSTATIC STRUCTURAL PLASTICITY (Butz & van Ooyen) ----------
+ * The field's established structural-plasticity rule, and the one this project did NOT try
+ * across stages 21–25. Implemented here as the comparison arm rather than as a replacement.
+ *
+ *   Butz M, Wörgötter F, van Ooyen A. A model for cortical rewiring following deafferentation
+ *     and focal stroke. Front Comput Neurosci (2009). doi:10.3389/neuro.10.010.2009
+ *   Butz M, van Ooyen A. Homeostatic structural plasticity increases the efficiency of
+ *     small-world networks. Front Synaptic Neurosci (2014). doi:10.3389/fnsyn.2014.00007
+ *   Butz M, Steenbuck ID, van Ooyen A. Homeostatic structural plasticity can account for
+ *     topology changes following deafferentation and focal stroke. Front Neuroanat (2014).
+ *     doi:10.3389/fnana.2014.00115
+ *
+ * THREE DIFFERENCES FROM `pruneAndRewire`, and each one is the point:
+ *
+ *   1. NO HEBBIAN TERM ANYWHERE IN THE WIRING. Partner choice is purely distance-dependent.
+ *      Stages 21–25 failed with a co-activity-driven rule; this one has no co-activity input
+ *      at all, so if it works, what carries the topology is heterogeneous ACTIVITY, not
+ *      correlation.
+ *   2. THE BUDGET IS NOT FIXED. Each cell carries axonal (presynaptic) and dendritic
+ *      (postsynaptic) ELEMENTS whose number tracks the cell's own activity against a
+ *      set-point: underactive cells grow elements, overactive ones retract them. Degree is
+ *      therefore an OUTCOME of activity rather than a constant, which is where degree
+ *      heterogeneity can come from — `pruneAndRewire` enforced a constant in-degree per cell
+ *      and so could only ever vary out-degree.
+ *   3. DELETION IS AT RANDOM among a cell's synapses, not "the weakest". Butz & van Ooyen
+ *      delete bound elements without reference to synaptic weight, and stage 22 showed that
+ *      "prune the weakest 25%" was close to random anyway once most synapses sit near the
+ *      normalisation floor — so this is the literature rule, and it is also the honest one.
+ *
+ * New contacts pair a free dendritic element of i with a free AXONAL element of j, weighted by
+ * distance. The axonal-availability term is what lets hubs form: a cell with many free axonal
+ * elements is a more likely partner for everyone, so out-degree can run away in a way a fixed
+ * budget forbids.
+ */
+function hspDefaults() {
+  return {
+    target: null,     // activity set-point; null = auto-calibrate to the network's own baseline
+    nu: 0.35,         // growth rate, in units of k0 elements per episode per unit relative error
+    sigmaConn: 0.16,  // distance kernel for pairing free elements
+    k0: 60,           // reference in-degree, the scale growth is expressed in
+    zMin: 4,          // a cell may not be fully disconnected
+    zMax: 400,
+  };
+}
+
+/* `act[i]` is the cell's mean activity over the preceding experience — the calcium-like trace
+   the set-point is compared against. */
+function hspRewire(cortex, pos, act, P, seed) {
+  P = Object.assign(hspDefaults(), P || {});
+  const rnd = mulberry32(seed == null ? 909 : seed);
+  const N = cortex.N;
+  const inv2s2 = 1 / (2 * P.sigmaConn * P.sigmaConn);
+
+  let target = P.target;
+  if (target == null) {                       // auto-calibrate, as the cerebellum's cf0 does
+    let s = 0; for (let i = 0; i < N; i++) s += act[i];
+    target = s / N;
+  }
+  if (!(target > 0)) target = 1e-6;
+
+  const outDeg = new Int32Array(N);
+  for (let i = 0; i < N; i++) for (const j of cortex.preIdx[i]) outDeg[j]++;
+  if (!cortex.zD) {
+    cortex.zD = Int32Array.from(cortex.preIdx.map(x => x.length));
+    cortex.zA = Int32Array.from(outDeg);
+  }
+  const zD = cortex.zD, zA = cortex.zA;
+  const scale = P.nu * P.k0;
+
+  // 1. elements track the activity error: underactive → grow, overactive → retract
+  let sumErr = 0;
+  for (let i = 0; i < N; i++) {
+    const err = (target - act[i]) / target;
+    sumErr += Math.abs(err);
+    const d = Math.round(scale * err);
+    zD[i] = Math.max(P.zMin, Math.min(P.zMax, zD[i] + d));
+    zA[i] = Math.max(P.zMin, Math.min(P.zMax, zA[i] + d));
+  }
+
+  // 2. retract: delete AT RANDOM where dendritic elements have fallen below the in-degree
+  let deleted = 0;
+  for (let i = 0; i < N; i++) {
+    const idx = cortex.preIdx[i], w = cortex.preW[i];
+    const excess = idx.length - zD[i];
+    if (excess <= 0) continue;
+    const kill = new Set();
+    let guard = 0;
+    while (kill.size < excess && guard++ < excess * 60) kill.add(Math.floor(rnd() * idx.length));
+    const ki = [], kw = [];
+    for (let a = 0; a < idx.length; a++) if (!kill.has(a)) { ki.push(idx[a]); kw.push(w[a]); }
+    cortex.preIdx[i] = Int32Array.from(ki); cortex.preW[i] = Float64Array.from(kw);
+    deleted += kill.size;
+  }
+  outDeg.fill(0);
+  for (let i = 0; i < N; i++) for (const j of cortex.preIdx[i]) outDeg[j]++;
+
+  // 3. grow: pair free dendritic elements with free AXONAL elements, distance-weighted.
+  //    Cells are visited in random order so that early cells do not monopolise the free
+  //    axonal supply by index.
+  const v = new Float64Array(N), cum = new Float64Array(N);
+  const order = Array.from({ length: N }, (_, i) => i);
+  for (let s = N - 1; s > 0; s--) {
+    const r = Math.floor(rnd() * (s + 1));
+    const t = order[s]; order[s] = order[r]; order[r] = t;
+  }
+  let grown = 0;
+  for (const i of order) {
+    const need = zD[i] - cortex.preIdx[i].length;
+    if (need <= 0) continue;
+    const have = new Set(cortex.preIdx[i]);
+    const xi = pos[i][0], yi = pos[i][1];
+    let tot = 0;
+    for (let j = 0; j < N; j++) {
+      let val = 0;
+      const freeA = zA[j] - outDeg[j];
+      if (j !== i && freeA > 0 && !have.has(j)) {
+        const dx = pos[j][0] - xi, dy = pos[j][1] - yi;
+        val = Math.exp(-(dx * dx + dy * dy) * inv2s2) * freeA;
+      }
+      v[j] = val; tot += val; cum[j] = tot;
+    }
+    const ki = Array.from(cortex.preIdx[i]), kw = Array.from(cortex.preW[i]);
+    const taken = new Set();
+    let g = 0, guard = 0;
+    while (g < need && tot > 0 && guard++ < need * 200) {
+      const j = pickCum(cum, N, rnd() * tot);
+      if (j === i || have.has(j) || taken.has(j) || v[j] <= 0) continue;
+      taken.add(j); ki.push(j); kw.push(0); outDeg[j]++; g++; grown++;
+    }
+    cortex.preIdx[i] = Int32Array.from(ki); cortex.preW[i] = Float64Array.from(kw);
+  }
+
+  let zs = 0, zmin = Infinity, zmax = 0;
+  for (let i = 0; i < N; i++) { zs += zD[i]; if (zD[i] < zmin) zmin = zD[i]; if (zD[i] > zmax) zmax = zD[i]; }
+  return { grown, deleted, target, meanErr: sumErr / N,
+           meanZ: zs / N, minZ: zmin, maxZ: zmax };
+}
+
 /* accumulate a co-activity trace over the assemblies a cortex has learned */
 function coactivity(cortex) {
   const N = cortex.N, co = Array.from({ length: N }, () => ({}));
@@ -337,4 +475,4 @@ function report(cortex, N, k, seed, nSample) {
 
 module.exports = { sdefaults, layout, dist, pickCum, connectDistance, neighbourSets, clustering,
   pathLength, degreeStats, weightStats, smallWorld, pruneAndRewire, coactivity, report,
-  mulberry32 };
+  hspDefaults, hspRewire, mulberry32 };
