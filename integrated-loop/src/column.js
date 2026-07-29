@@ -151,7 +151,24 @@ function cdefaults() {
     // responds selectively keeps potentiating. Promiscuous cells are therefore expelled from
     // assemblies and selective ones retained — pattern separation as metaplasticity rather than
     // as an extra circuit.
-    bcmOn: false,      // default off so stages 30 and 31 reproduce unchanged
+    bcmOn: false,      // BCM on the RECURRENT collaterals — see bcmFF below before using this
+
+    // WHICH SYNAPSES BCM BELONGS ON. Bienenstock, Cooper & Munro modelled the sliding threshold
+    // on AFFERENT synapses — thalamocortical input to visual cortex, ocular dominance and
+    // orientation selectivity. Stage 32 put it on the RECURRENT collaterals instead, and the
+    // trade-off it then measured (discrimination up, auto-associative completion 0.416 → 0.197)
+    // is the direct consequence: BCM depresses the synapses of promiscuous cells, and on the
+    // recurrent pathway those are the very synapses completion runs on.
+    //
+    // The two pathways have different jobs and take different rules. Afferent L4 → L2/3 learns
+    // WHAT a cell responds to, so it takes BCM and yields selectivity. Recurrent L2/3 ⇄ L2/3
+    // stores the association among co-active cells, so it stays Hebbian with subtractive
+    // normalisation and yields completion. In the file as first written the feedforward weights
+    // were not plastic at all, so selectivity had nowhere to live except the recurrence.
+    bcmFF: false,      // BCM on the AFFERENT L4 → L2/3 synapses
+    lrFF: 0.9,         // afferent learning rate
+    wFFMax: 2.2,
+    wFFBudget: 3.0,    // subtractive normalisation cap on a cell's total afferent weight
     bcmTau: 1.0,       // s — θ must integrate across stimuli, not within one presentation
     bcmTarget: 0.35,   // activity scale at which θ sits when a cell fires selectively
 
@@ -432,6 +449,29 @@ function step(S) {
   /* ---- 8. Hebbian plasticity on the cortico-cortical L2/3 recurrence ---- */
   if (S.plastic) {
     const a = S.a;
+    // AFFERENT plasticity: BCM on L4 → L2/3. θ is shared with the recurrent rule below, because
+    // it is a property of the CELL (its own recent activity), not of a pathway.
+    if (P.bcmFF) {
+      const kT = dt / P.bcmTau, inv = 1 / P.bcmTarget;
+      for (let i = 0; i < S.NL23; i++) S.theta[i] += kT * (a[i] * a[i] * inv - S.theta[i]);
+      for (let i = 0; i < S.NL23; i++) {
+        if (a[i] <= 0) continue;
+        const post = a[i] * (a[i] - S.theta[i]);
+        if (post === 0) continue;
+        const fi = S.ffIdx[i], fw = S.ffW[i];
+        let touched = false;
+        for (let k = 0; k < fi.length; k++) {
+          const pre = S.l4[fi[k]];
+          if (pre > 0) { fw[k] = clamp(fw[k] + P.lrFF * dt * post * pre, 0, P.wFFMax); touched = true; }
+        }
+        if (touched && post > 0) {
+          let sum = 0; for (let k = 0; k < fw.length; k++) sum += fw[k];
+          const excess = sum - P.wFFBudget;
+          if (excess > 0) { const dec = excess / fw.length;
+            for (let k = 0; k < fw.length; k++) fw[k] = fw[k] > dec ? fw[k] - dec : 0; }
+        }
+      }
+    }
     if (P.bcmOn) {
       // θ tracks ⟨a²⟩ on a slow time constant, so it integrates ACROSS stimuli
       const kT = dt / P.bcmTau, inv = 1 / (P.bcmTarget * P.bcmTarget);

@@ -35,6 +35,7 @@
     "test:dendritic": "node test/stage32_dendritic.js",
     "test:ec-route": "node test/stage33_ec_route.js",
     "test:mossy": "node test/stage34_mossy_gate.js",
+    "test:afferent": "node test/stage35_afferent_bcm.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },
