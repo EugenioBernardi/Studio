@@ -55,6 +55,21 @@ function sdefaults() {
     pruneFrac: 0.25,  // at most this fraction of a cell's contacts are pruned per episode
     rewireBias: 3.0,  // how strongly a new contact prefers a co-active partner
     budgetSlack: 0,   // extra contacts a cell may end with (0 = strict budget)
+
+    // HOW CO-ACTIVITY ENTERS THE REGROWTH KERNEL. This is the parameter stage 24 died on.
+    //   "multiplicative" (stages 21–24): v = local(d) · (1 + rewireBias·co). Distance is a
+    //     GATE, not a prior — a strongly co-active but distant partner is multiplied by a
+    //     near-zero local term and can never be reached. Stage 24 showed no setting of
+    //     rewireBias escapes this: raising the boost's share of the sampling mass from 3.04%
+    //     to 26.69% moved the graph by ΔCV 0.004 → 0.005 and σ by 0.02 → 0.05. The kernel,
+    //     not the parameter, is the limit.
+    //   "additive": v = local(d) + addBias·co. Distance now BIASES. A maximally co-active
+    //     partner is reachable from anywhere on the sheet, which is what building long-range
+    //     structure requires — and what it risks is function, since regrowth is no longer
+    //     spatially constrained. Stage 25 tests both halves of that.
+    rewireMode: "multiplicative",
+    addBias: 1.0,     // additive mode: weight of a maximally co-active partner, against a
+                      // local term that runs from pLong (far) to 1+pLong (adjacent)
   };
 }
 
@@ -269,13 +284,20 @@ function pruneAndRewire(cortex, pos, coact, P, seed) {
       const dx = pos[j][0] - xi, dy = pos[j][1] - yi;
       v[j] = Math.exp(-(dx * dx + dy * dy) * inv2s2) + P.pLong;
     }
+    const additive = P.rewireMode === "additive";
     if (dense) {
       const off = i * N;
       const sc = coact.rowScale ? coact.rowScale[i] : dScale;
-      if (sc > 0) for (let j = 0; j < N; j++) if (v[j] > 0) v[j] *= 1 + P.rewireBias * dense[off + j] * sc;
+      if (sc > 0) for (let j = 0; j < N; j++) if (v[j] > 0) {
+        const co = dense[off + j] * sc;
+        v[j] = additive ? v[j] + P.addBias * co : v[j] * (1 + P.rewireBias * co);
+      }
     } else if (coact && coact[i]) {
       const ci = coact[i];
-      for (const key in ci) { const j = +key; if (v[j] > 0) v[j] *= 1 + P.rewireBias * ci[key]; }
+      for (const key in ci) { const j = +key; if (v[j] > 0) {
+        const co = ci[key];
+        v[j] = additive ? v[j] + P.addBias * co : v[j] * (1 + P.rewireBias * co);
+      } }
     }
     let tot = 0;
     for (let j = 0; j < N; j++) { tot += v[j]; cum[j] = tot; }
