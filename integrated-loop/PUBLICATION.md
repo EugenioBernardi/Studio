@@ -80,10 +80,53 @@ was tested throughout the project with a 50% cue, and the recurrent contribution
 read the same gap (0.318/0.319), but at σ_dev 0.20 the sensitive cue reads 0.528 against 0.417.
 This is a generalisable methods point about auto-associative recall benchmarks.
 
+### The missing experiment has now been run (stage 27)
+
+Butz–van Ooyen HSP, implemented faithfully — synaptic elements tracking a firing-rate set-point,
+random deletion, distance-dependent pairing weighted by free axonal availability, **no Hebbian
+term anywhere in the wiring** — on the same substrate, agent, seeds and episode count.
+
+| Δ over 3 episodes, N = 10 000 | HSP + intrinsic homeostat | HSP alone | co-activity rule |
+|---|---|---|---|
+| small-world σ | **+0.210** | +2.327 | +0.020 |
+| degree CV | **+0.115** | +0.441 | +0.004 |
+| rich club | **+0.908** | +1.922 | +0.010 |
+| clustering | +0.0029 | +0.0305 | +0.0001 |
+| recall (cue 0.50) | 0.874 | 0.857 | 0.905 |
+| off-target | 0.037 | 0.049 | 0.044 |
+
+**Read the middle column with suspicion, not enthusiasm.** The HSP-alone arm has *not converged*:
+in-degree runs 60 → 61.7 → 66.1 → 72.7 and is still climbing, deletions fall away each episode
+(101k → 60k → 36k) while growth holds near 100k, and σ goes 2.05 → 2.87 → 3.87, overshooting the
+cortical band by episode 3. The cause is diagnosable: with the intrinsic homeostat off, **39% of
+cells receive no feedforward drive at all**, so their activity set-point is *unsatisfiable* and
+they grow elements indefinitely. That is runaway, not reorganisation. The bounded column is the
+first one, where in-degree stays at exactly 60.0 and σ settles at 1.75.
+
+So the honest framing is not "intrinsic homeostasis costs structural reorganisation". It is:
+**intrinsic and structural homeostasis consume the same error signal, and the combination is what
+makes structural homeostasis converge.** Activity CV 1.431 → 0.279; silent fraction 39.0% → 0.0%.
+Alone, the structural rule chases a target that a starved cell can never reach.
+
+**P4b was falsified, and informatively.** I predicted off-target recall would rise because HSP
+wires blind to what cells code. It does not (0.037 and 0.049 against 0.044). The reason is a
+division of labour worth stating as a result: **structural plasticity sets capacity and topology;
+synaptic plasticity sets selectivity.** The co-activity information the structural rule was
+trying to use is *already being used* by the Hebbian weight rule — which is why putting it in the
+wiring rule as well was redundant, and why removing it costs nothing.
+
 ### Venue
 
 eNeuro (which has an explicit Negative Results section), PLOS Computational Biology, or Network
-Neuroscience. **Realistic timeline: one experiment away.**
+Neuroscience. **Realistic timeline: gated on seed replication, not on further mechanism work.**
+
+### The blocker that now dominates
+
+**Stages 21–27 are all single-seed.** Earlier stages in this project ran 12-seed robustness
+sweeps; this entire structural arc is n = 1. The project's own first rule is *replicate before
+believing*, and a +10% effect at 50 trials once became +1.8% ± 6.4 at 110 here. A single-seed
+σ = 3.87 is not defensible, and the interaction result (P3) is the one that most needs a spread
+because it is a difference of differences.
 
 ---
 
