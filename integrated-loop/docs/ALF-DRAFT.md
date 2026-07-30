@@ -1,33 +1,4 @@
-"use strict";
-/* Emits docs/ALF-DRAFT.md. Prose is fixed here; every NUMBER is interpolated from figures/*.json,
-   which the test suites write. A number in the manuscript therefore cannot be stale or invented —
-   if a suite is re-run and a result moves, the draft moves with it. */
-
-const fs = require("fs"), path = require("path");
-const DIR = __dirname, ROOT = path.join(DIR, "..");
-const read = n => { try { return JSON.parse(fs.readFileSync(path.join(DIR, n), "utf8")); }
-                    catch (e) { return null; } };
-const alf = read("alf.json"), dis = read("disease.json"), adc = read("ad-components.json");
-if (!alf || !dis || !adc) {
-  console.error("missing figures/*.json — run test:alf, test:disease, test:ad-components first");
-  process.exit(1);
-}
-const n = (x, d = 2) => (x == null || Number.isNaN(x) ? "—" : Number(x).toFixed(d));
-const cv = alf.curves, co = alf.cohort, C = dis.conditions;
-const H = cv["healthy"], M15 = cv["IED 15/min, coupled"], M30 = cv["IED 30/min, coupled"],
-      M60 = cv["IED 60/min, coupled"], U30 = cv["IED 30/min, UNCOUPLED"],
-      U60 = cv["IED 60/min, UNCOUPLED"];
-const DL = ["30 min", "6 h", "1 day", "1 week", "1 mo"];
-const row = (tag, c) => `| ${tag} | ${c.recall.map(x => n(x)).join(" | ")} | ${n(c.density, 1)} | ${n(c.couplingStrength)} | ${n(c.replayFrac)} |`;
-
-/* leave-one-out ordering for the AD section */
-const looRows = Object.entries(adc.leaveOneOut)
-  .map(([k, r]) => ({ k, late: r.recall[2] - adc.alone.full.recall[2],
-                      mid: r.recall[1] - adc.alone.full.recall[1],
-                      early: r.recall[0] - adc.alone.full.recall[0] }))
-  .sort((a, b) => b.late - a.late);
-
-const md = `# Interictal discharges cause accelerated long-term forgetting by capturing hippocampo-cortical coupling slots
+# Interictal discharges cause accelerated long-term forgetting by capturing hippocampo-cortical coupling slots
 
 **Working draft.** Status is stated plainly in §7: one registered prediction central to the
 phenotype **failed**, and two subsidiary lines were withdrawn. This is a draft for internal
@@ -53,14 +24,14 @@ does, but carries no valid hippocampal replay.
 
 The consequence follows without further assumption. The hippocampal trace decays on its normal
 schedule, so early recall is nearly preserved; the cortical trace is never written, so late recall
-collapses. Across ${co.n} simulated patients in whom discharge rate and coupling varied
-independently, one-week retention correlated with discharge rate at ρ = ${n(co.rhoRate)}, with
-spindle density at ρ = ${n(co.rhoDens)}, and with the fraction of coupling events carrying replay at
-ρ = ${n(co.rhoFrac)}. Because IEDs *add* spindles and *raise* coupling strength, the conventional
+collapses. Across 40 simulated patients in whom discharge rate and coupling varied
+independently, one-week retention correlated with discharge rate at ρ = -0.50, with
+spindle density at ρ = -0.14, and with the fraction of coupling events carrying replay at
+ρ = 0.94. Because IEDs *add* spindles and *raise* coupling strength, the conventional
 sleep-EEG markers of consolidation move in the wrong direction: at matched discharge rate, a night
 that loses the memory and a night that does not are indistinguishable by spindle density
-(${n(U60.density, 1)} vs ${n(M60.density, 1)}/min) while one-week recall differs by
-${n(U60.recall[3] - M60.recall[3])} of the list.
+(14.2 vs 11.0/min) while one-week recall differs by
+0.76 of the list.
 
 We further show that Alzheimer's disease reaches the same behavioural phenotype through a different
 failure of the same channel — undersupply rather than capture — and that the two are separable by
@@ -98,7 +69,7 @@ cortico-cortical store).
 
 **The channel.** Each slow-oscillation up-state is an opportunity for a coupling event. A
 physiological spindle rides only a fraction of up-states, set so that healthy spindle density is
-${n(H.density, 1)}/min — within the 2–6/min range reported in human NREM sleep. Each physiological
+5.7/min — within the 2–6/min range reported in human NREM sleep. Each physiological
 event replays one item and writes its transition into cortex.
 
 **The pathology.** IEDs arrive as a Poisson process. An IED arriving at an up-state captures the slot
@@ -125,26 +96,26 @@ frozen for every pathological condition, so it cannot absorb the pathology.
 
 Eight simulated subjects, a 15-item list, one night of NREM.
 
-| condition | ${DL.join(" | ")} | density/min | coupling | replay frac |
+| condition | 30 min | 6 h | 1 day | 1 week | 1 mo | density/min | coupling | replay frac |
 |---|---|---|---|---|---|---|---|---|
-${row("healthy", H)}
-${row("IED 15/min, coupled", M15)}
-${row("IED 30/min, coupled", M30)}
-${row("IED 60/min, coupled", M60)}
-${row("IED 30/min, **uncoupled**", U30)}
-${row("IED 60/min, **uncoupled**", U60)}
+| healthy | 0.97 | 0.97 | 0.97 | 0.85 | 0.85 | 5.7 | 0.55 | 1.00 |
+| IED 15/min, coupled | 0.92 | 0.91 | 0.90 | 0.62 | 0.61 | 6.7 | 0.64 | 0.77 |
+| IED 30/min, coupled | 0.85 | 0.85 | 0.83 | 0.36 | 0.35 | 7.9 | 0.71 | 0.55 |
+| IED 60/min, coupled | 0.79 | 0.78 | 0.76 | 0.09 | 0.08 | 11.0 | 0.77 | 0.32 |
+| IED 30/min, **uncoupled** | 0.97 | 0.97 | 0.97 | 0.85 | 0.85 | 10.4 | 0.67 | 1.00 |
+| IED 60/min, **uncoupled** | 0.97 | 0.97 | 0.97 | 0.85 | 0.85 | 14.2 | 0.71 | 1.00 |
 
 **Figure 1** plots these curves.
 
 The deficit *grows with delay*: at 30 discharges/min the healthy-minus-patient gap runs
-${DL.map((d, i) => `${n(H.recall[i] - M30.recall[i])} (${d})`).join(", ")}. A fixed encoding deficit
+0.12 (30 min), 0.12 (6 h), 0.14 (1 day), 0.49 (1 week), 0.50 (1 mo). A fixed encoding deficit
 would show a constant gap; this is loss over time, which is what "accelerated forgetting" names.
 
 **The registered criterion for the phenotype was not met.** We required, at a single dose, an early
 gap ≤ 0.10 *and* a one-week gap ≥ 0.25. At 15/min the early gap is
-${n(H.recall[0] - M15.recall[0])} but the late gap is only ${n(H.recall[3] - M15.recall[3])}; at
-30/min the late gap is ${n(H.recall[3] - M30.recall[3])} but the early gap is
-${n(H.recall[0] - M30.recall[0])}. Neither dose satisfies both. We did not search for an
+0.06 but the late gap is only 0.23; at
+30/min the late gap is 0.49 but the early gap is
+0.12. Neither dose satisfies both. We did not search for an
 intermediate dose that would, because that is parameter-hunting. The model therefore predicts that
 ALF patients are **not truly normal early** but near-normal, and that sufficiently sensitive early
 testing should reveal a small deficit of order one to two items. This is falsifiable and, we note,
@@ -153,15 +124,15 @@ consistent with the literature's own hedge — "normal *or near-normal*".
 ## 4. Why the clinical literature disagrees with itself
 
 Discharge rate and coupling vary independently across patients: two people with the same spike count
-can differ in how much of it lands on the consolidation channel. Across ${co.n} simulated patients
+can differ in how much of it lands on the consolidation channel. Across 40 simulated patients
 (**Figure 2**):
 
 | predictor | Spearman ρ with one-week recall |
 |---|---|
-| discharge rate | ${n(co.rhoRate)} |
-| spindle density | ${n(co.rhoDens)} |
-| SO–spindle coupling strength | ${n(co.rhoCS)} |
-| **fraction of coupling events carrying replay** | **${n(co.rhoFrac)}** |
+| discharge rate | -0.50 |
+| spindle density | -0.14 |
+| SO–spindle coupling strength | -0.75 |
+| **fraction of coupling events carrying replay** | **0.94** |
 
 Spike burden is a weak predictor; spindle density has essentially none; coupling strength is
 *inverted*. The variable that predicts is the one no clinical study measures. This is a quantitative
@@ -169,10 +140,10 @@ account of the contradictory associations reported across 51 studies: the field 
 against the wrong quantity.
 
 **The inverted biomarker.** At matched discharge rate, coupled and uncoupled nights both raise
-spindle density (${n(M60.density, 1)} and ${n(U60.density, 1)}/min against healthy
-${n(H.density, 1)}) and both raise coupling strength (${n(M60.couplingStrength)} and
-${n(U60.couplingStrength)} against ${n(H.couplingStrength)}) — yet one-week recall is
-${n(M60.recall[3])} coupled against ${n(U60.recall[3])} uncoupled. A sleep study sees the same
+spindle density (11.0 and 14.2/min against healthy
+5.7) and both raise coupling strength (0.77 and
+0.71 against 0.55) — yet one-week recall is
+0.09 coupled against 0.85 uncoupled. A sleep study sees the same
 abnormality in a patient who will forget and a patient who will not. Reading spindle density as a
 proxy for consolidation would rank the worst-affected patient as the healthiest.
 
@@ -184,22 +155,24 @@ a modest amount of discharge capture from subclinical epileptiform activity. **F
 
 | condition | 30 min | 1 day | 1 week | slots | density/min |
 |---|---|---|---|---|---|
-${["healthy", "TEA", "TLE-HS", "AD"].filter(k => C[k]).map(k =>
-  `| ${k} | ${C[k].recall.map(x => n(x)).join(" | ")} | ${n(C[k].slots, 0)} | ${n(C[k].density, 1)} |`).join("\n")}
+| healthy | 0.97 | 0.97 | 0.85 | 342 | 5.7 |
+| TEA | 0.89 | 0.87 | 0.51 | 342 | 7.9 |
+| TLE-HS | 0.78 | 0.35 | 0.27 | 342 | 9.0 |
+| AD | 0.76 | 0.30 | 0.09 | 196 | 5.1 |
 
 Two results follow.
 
 **The epilepsy family splits by structural damage.** Transient epileptic amnesia — discharges without
-much structural damage — gives an early gap of ${n(C.healthy.recall[0] - C.TEA.recall[0])} and a
-one-week gap of ${n(C.healthy.recall[2] - C.TEA.recall[2])}: pure accelerated forgetting behind a
+much structural damage — gives an early gap of 0.08 and a
+one-week gap of 0.34: pure accelerated forgetting behind a
 normal bedside test. Adding hippocampal sclerosis gives an early gap of
-${n(C.healthy.recall[0] - C["TLE-HS"].recall[0])} — ordinary amnesia. The discharges are the same;
+0.19 — ordinary amnesia. The discharges are the same;
 sclerosis removes the route that was covering the early delay. The bedside test was never measuring
 the damaged system.
 
 **Spindle density separates the mechanisms even though the behaviour does not.** Epilepsy
-${n(C.TEA.density, 1)}/min, healthy ${n(C.healthy.density, 1)}/min, Alzheimer's
-${n(C.AD.density, 1)}/min. A hijacked channel runs hot; an undersupplied one runs cold.
+7.9/min, healthy 5.7/min, Alzheimer's
+5.1/min. A hijacked channel runs hot; an undersupplied one runs cold.
 
 **Which part of "Alzheimer's" carries the deficit.** We modelled AD as four stacked deficits and
 then separated them, because attributing an outcome to a mechanism without varying the mechanism is
@@ -208,37 +181,41 @@ the error that invalidated an earlier line of this project. Leave-one-out from t
 
 | component removed | recovery at 30 min | recovery at 1 day | recovery at 1 week |
 |---|---|---|---|
-${looRows.map(r => `| ${r.k} | +${n(r.early)} | +${n(r.mid)} | +${n(r.late)} |`).join("\n")}
+| slot supply | +0.08 | +0.21 | +0.29 |
+| spindle generation | +0.06 | +0.18 | +0.25 |
+| discharge capture | +0.02 | +0.03 | +0.03 |
+| hippocampal decay | +0.03 | +0.46 | +0.01 |
+| cortical capacity | +0.00 | +0.00 | +0.00 |
 
 Three things follow, two of them uncomfortable.
 
 *AD's accelerated forgetting is a **supply** failure.* The one-week deficit is carried by the two
-supply-side components — slot supply (+${n(looRows.find(r => r.k === "slot supply").late)}) and
-spindle generation (+${n(looRows.find(r => r.k === "spindle generation").late)}). No single component
+supply-side components — slot supply (+0.29) and
+spindle generation (+0.25). No single component
 reproduces the full deficit: the worst alone reaches
-${n(Math.min(...Object.values(adc.alone.components).map(r => r.recall[2])))} at one week against
-${n(adc.alone.full.recall[2])} for the full profile. The phenotype is built from converging partial
+0.44 at one week against
+0.09 for the full profile. The phenotype is built from converging partial
 failures, which is what a degenerative disease should look like and why no single-mechanism account
 of AD memory loss will fit.
 
 *Discharge capture — the mechanism this whole model was built on — is a minor term in Alzheimer's*
-(+${n(looRows.find(r => r.k === "discharge capture").late)}). It belongs to epilepsy. This is also why
+(+0.03). It belongs to epilepsy. This is also why
 the levetiracetam prediction failed in AD: a drug that frees a hijacked channel cannot help a channel
 nobody occupied.
 
 *One modelled component is inert.* Reduced cortical capacity contributes
-+${n(looRows.find(r => r.k === "cortical capacity").late)} — nothing — because in this model the
++0.00 — nothing — because in this model the
 cortico-cortical weights never approach their ceiling, so lowering the ceiling changes nothing. We
 report it rather than quietly dropping it: it means the model as built has no purchase on cortical
 synaptic loss, and any claim about that mechanism would have to come from elsewhere.
 
 **A registered prediction about the timing of the components failed.** We predicted that hippocampal
 decay would act early and slot supply late. Slot supply does act late
-(+${n(looRows.find(r => r.k === "slot supply").late)} at one week vs
-+${n(looRows.find(r => r.k === "slot supply").early)} at 30 min), but hippocampal decay does not act
-early — it contributes +${n(looRows.find(r => r.k === "hippocampal decay").early)} at 30 minutes and
-+${n(looRows.find(r => r.k === "hippocampal decay").late)} at one week, and its effect is
-concentrated at the **intermediate** delay (+${n(looRows.find(r => r.k === "hippocampal decay").mid)}
+(+0.29 at one week vs
++0.08 at 30 min), but hippocampal decay does not act
+early — it contributes +0.03 at 30 minutes and
++0.01 at one week, and its effect is
+concentrated at the **intermediate** delay (+0.46
 at one day). In hindsight this is the sensible answer and we should have predicted it: at 30 minutes
 even a degraded hippocampal trace suffices, at one week it has decayed in every condition, and only
 in between does its decay *rate* matter. The split between early and late causes is real; our
@@ -272,7 +249,7 @@ Reported as failures rather than omitted.
 - **A levetiracetam account was withdrawn.** We predicted that benefit would track captured fraction
   and show an inverted-U dose response (SV2A blockade damping discharges more than ripples, but
   damping both), offering a mechanism for the observation that 62.5 and 125 mg BID improved memory in
-  amnestic MCI while 250 mg did not. Best gain was ${n((dis.levetiracetam ? Math.max(...dis.levetiracetam.curves.TEA) - dis.levetiracetam.curves.TEA[0] : 0))} of the list
+  amnestic MCI while 250 mg did not. Best gain was 0.00 of the list
   against a registered 0.08, on a non-monotone curve. Not supported; not tuned until it was.
 - **A harness bug produced a false negative** and is recorded. A shared random stream let discharge
   parameters perturb the physiological spindle schedule, giving a "matched-rate" control with 11%
@@ -289,10 +266,10 @@ Reported as failures rather than omitted.
 
 ## 8. Availability
 
-Model \`src/alf.js\`; suites \`test/stage43_alf.js\`, \`test/stage44_disease.js\`,
-\`test/stage45_ad_components.js\` (\`npm run test:alf\`, \`test:disease\`, \`test:ad-components\`).
-Every figure and every number in this draft is generated from \`figures/*.json\` written by those
-suites; \`figures/build-figures.js\` and \`figures/build-draft.js\` regenerate the figure page and
+Model `src/alf.js`; suites `test/stage43_alf.js`, `test/stage44_disease.js`,
+`test/stage45_ad_components.js` (`npm run test:alf`, `test:disease`, `test:ad-components`).
+Every figure and every number in this draft is generated from `figures/*.json` written by those
+suites; `figures/build-figures.js` and `figures/build-draft.js` regenerate the figure page and
 this document.
 
 ## References
@@ -316,8 +293,3 @@ this document.
   2015;7:688–98. doi:10.1016/j.nicl.2015.02.009
 - Horakova H, Fendrych Mazancova A, Vyhnalek M. Challenging memory tests in early Alzheimer's
   disease. *Neurosci Biobehav Rev* 2026;186:106701. doi:10.1016/j.neubiorev.2026.106701
-`;
-
-fs.mkdirSync(path.join(ROOT, "docs"), { recursive: true });
-fs.writeFileSync(path.join(ROOT, "docs", "ALF-DRAFT.md"), md);
-console.log("wrote docs/ALF-DRAFT.md (" + (md.length / 1024).toFixed(1) + " kB)");
