@@ -35,33 +35,62 @@ hippocampal-cortical coupling". Confirmed in four human subjects with focal epil
 So IEDs do not merely add noise — they **out-compete physiological ripples for the coupling
 channel**. That is a mechanism-level claim, measured in rats and humans, with no model attached.
 
-### The hypothesis
+### 2026 UPDATE — the mechanism is worse than "blocking", and this sharpens the hypothesis
 
-ALF is the behavioural signature of IEDs occupying the ripple–spindle consolidation channel. The
-hippocampal trace decays at its normal rate (**hence normal recall at 30 minutes**) while little or
-nothing accrues cortically (**hence catastrophic loss at days**). What predicts ALF is therefore
-**not IED rate but the fraction of coupling events IEDs capture** — which would explain why the
-clinical literature finds contradictory associations with epileptiform burden.
+Uehara, Barcelon, Shigeto, Mukaino, Okadome, Mukae, Sakata, Murai, Tobimatsu, Isobe & Kira,
+*Clin Neurophysiol Pract*, April 2026 ([10.1016/j.cnp.2026.04.005](https://doi.org/10.1016/j.cnp.2026.04.005)).
+Ten TLE patients, simultaneous intracranial and scalp EEG during NREM. Hippocampal IEDs:
+
+- **induced** frontal spindles 0.4–0.8 s after the discharge,
+- **increased** slow-oscillation incidence within ±0.4 s across regions,
+- and — the decisive number — **"phase consistency and amplitude modulation of spindle-SO coupling
+  were HIGHER for IED-coupled than for uncoupled spindles"**.
+
+Their keyword list includes *accelerated long-term forgetting*. So IEDs do not degrade the coupling
+machinery; they **drive it harder than physiology does**. The channel is not blocked — it is fired
+with the wrong payload.
+
+### The hypothesis, revised in light of that
+
+**IED-driven coupling events are structurally intact and semantically empty.** The slow
+oscillation–spindle machinery fires, with *better* phase consistency than physiological events, but
+carries no valid hippocampal replay. The hippocampal trace then decays at its normal rate (**hence
+normal recall at 30 minutes**) while little accrues cortically (**hence catastrophic loss at
+days**).
+
+**The prediction that makes this worth modelling — an inverted biomarker.** Because IED burden
+*raises* spindle density and *raises* SO–spindle coupling strength while *lowering* retention, the
+standard consolidation biomarkers are not merely insensitive in epilepsy, they point the wrong way.
+The valid measure is the **fraction of coupling events that carry replay**, not the strength of the
+coupling. This is a direct, quantitative explanation for the "contradictory associations" the 2020
+review reports, and it is testable on intracranial datasets that already exist.
 
 ### The three criteria
 
 1. **Biological plausibility — high.** Every component is measured: IED–spindle coordination,
    reduced ripple occurrence, impaired consolidation, in both rat and human.
-2. **Novelty — checked and clear.** PubMed for computational models of ALF returns two hits,
-   neither mechanistic: Bianco et al. 2023 uses a statistical-learning model of auditory sequence
-   memory and explicitly contrasts it with verbal ALF
-   ([10.1016/j.crneur.2023.100115](https://doi.org/10.1016/j.crneur.2023.100115)); O'Connor et al.
-   2020 uses event-based *staging*, with ALF as a measure, not a mechanism
-   ([10.1186/s13195-020-00695-2](https://doi.org/10.1186/s13195-020-00695-2)). A search for models
-   of epileptiform disruption of ripple replay returns nothing. **No mechanistic model of ALF
-   exists, and no model of IED–ripple competition exists.**
-3. **Clinical relevance — unusually strong, and doubled.** (a) Epilepsy: ALF is missed by standard
-   30-minute testing, so it is systematically underdiagnosed. (b) **Preclinical Alzheimer's**:
-   O'Connor et al. found that in familial AD mutation carriers, "cognitive change was first
-   detected in measures of accelerated long-term forgetting, **up to 10 years before estimated
-   symptom onset**" — ALF is the earliest detectable cognitive change on the AD continuum. The
-   hypothesis also proposes a *measurable biomarker* (IED–spindle coupling fraction rather than
-   spike count) and names a treatment target.
+2. **Novelty — checked, including 2020–2026, and clear.** Computational models of ALF: two hits,
+   neither mechanistic — Bianco et al. 2023, a statistical-learning model of auditory sequence
+   memory that explicitly *contrasts* itself with verbal ALF
+   ([10.1016/j.crneur.2023.100115](https://doi.org/10.1016/j.crneur.2023.100115)), and O'Connor
+   et al. 2020, event-based *staging* with ALF as a measure not a mechanism
+   ([10.1186/s13195-020-00695-2](https://doi.org/10.1186/s13195-020-00695-2)). A 2020–2026 search
+   for *computational model + epilepsy + memory consolidation + replay* returns **zero results**.
+   A 2020–2026 search for *ALF + sleep spindles + epilepsy* returns exactly **one** paper — Uehara
+   2026 above, which is empirical. The field is active (180 ALF papers since 2021) and entirely
+   experimental. **The modelling gap is wide open and is getting more, not less, interesting.**
+3. **Clinical relevance — strong in epilepsy, promising but NOT established in Alzheimer's.**
+   (a) Epilepsy: ALF is missed by standard 30-minute testing, so it is systematically
+   underdiagnosed; and the inverted-biomarker prediction above bears directly on how sleep EEG is
+   read in these patients. (b) Alzheimer's: O'Connor et al. found ALF was the first cognitive
+   change detectable in familial AD mutation carriers, "up to 10 years before estimated symptom
+   onset". **Temper this.** Horakova, Fendrych Mazancova & Vyhnalek, *Neurosci Biobehav Rev*, April
+   2026 ([10.1016/j.neubiorev.2026.106701](https://doi.org/10.1016/j.neubiorev.2026.106701)) review
+   exactly these paradigms and conclude that "none currently fulfills the criteria for routine
+   clinical implementation", with the strongest evidence going to the Memory Binding Test and the
+   Loewenstein-Acevedo scales rather than to accelerated forgetting. An earlier draft of this file
+   called the AD case "unusually strong and doubled"; that overstated it. The epilepsy case is the
+   solid one and the AD case is a plausible extension, not a second pillar.
 
 ### Why this one is buildable here, and the trap to avoid
 
