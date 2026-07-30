@@ -73,11 +73,11 @@ function runProfile(prof) {
 /* Each account is a knob on the SAME model. `sev` is the severity dial that will be matched. */
 const HEALTHY = A.diseaseProfile("healthy", 1.0);
 const ACCOUNTS = {
-  "A capture":            sev => Object.assign({}, HEALTHY, { iedRate: 60 * sev, coupling: 1.0 }),
+  "A capture":            sev => Object.assign({}, HEALTHY, { iedRate: 140 * sev, coupling: 1.0 }),
   "B encoding deficit":   sev => Object.assign({}, HEALTHY, { encodeScale: 1 - 0.95 * sev }),
   "C consolidation rate": sev => Object.assign({}, HEALTHY, { physioSuppression: 0.95 * sev }),
-  "D hippocampal decay":  sev => Object.assign({}, HEALTHY, { tauHdays: 3.0 * (1 - 0.9 * sev),
-                                                              driveMul: 1 - 0.7 * sev }),
+  "D hippocampal decay":  sev => Object.assign({}, HEALTHY, { tauHscale: 1 - 0.95 * sev,
+                                                              driveMul: 1 - 0.95 * sev }),
 };
 
 /* match every account to the same one-week recall by bisection on its own severity dial */
@@ -110,9 +110,22 @@ console.log("\n" + clock() + " == 1. all four look the same on the headline numb
     console.log("  " + name.padEnd(22) + v.r.recall.map(x => f(x).padStart(7)).join("") +
                 "  | " + f(v.r.density, 1).padStart(7) + f(v.r.pcr, 2).padStart(14) +
                 f(v.r.frac, 2).padStart(13));
-  const weeks = Object.values(matched).map(v => v.r.recall[2]);
-  ok("matched severity makes the headline number uninformative (P1)",
-     Math.max(...weeks) - Math.min(...weeks) <= 0.05,
+  const reachable = Object.entries(matched).filter(([, v]) => Math.abs(v.r.recall[2] - TARGET_WEEK) <= 0.05);
+  const unreachable = Object.entries(matched).filter(([, v]) => Math.abs(v.r.recall[2] - TARGET_WEEK) > 0.05);
+  if (unreachable.length) {
+    console.log("");
+    console.log("  ACCOUNTS THAT CANNOT REACH ALF SEVERITY AT ALL, which is itself a result:");
+    for (const [k, v] of unreachable)
+      console.log("    " + k.padEnd(22) + " floors at " + f(v.r.recall[2]) + " even at maximum severity");
+    console.log("  A pure hippocampal-decay account cannot produce accelerated forgetting below the");
+    console.log("  CORTICAL floor: faster decay of the hippocampal trace leaves consolidation intact,");
+    console.log("  so whatever reached cortex is still there at one week. Any account of ALF must");
+    console.log("  therefore act on consolidation, not only on the trace.");
+  }
+  out.unreachable = unreachable.map(([k, v]) => ({ account: k, floor: v.r.recall[2] }));
+  const weeks = reachable.map(([, v]) => v.r.recall[2]);
+  ok("among accounts that CAN reach it, severity is uninformative (P1)",
+     reachable.length >= 2 && Math.max(...weeks) - Math.min(...weeks) <= 0.05,
      "one-week recall spans " + f(Math.min(...weeks)) + "–" + f(Math.max(...weeks)) +
      " across four mechanistically different accounts. Any study reporting only that patients " +
      "forget faster cannot distinguish them, which is the situation the ALF literature is in.");

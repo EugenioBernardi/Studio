@@ -239,7 +239,16 @@ function runNight(M, opts) {
    has faded and recall is whatever was consolidated. Whether that produces a clinically
    recognisable ALF pattern, and at what delay, is what the simulation is for.
    --------------------------------------------------------------------- */
-function hippocampalSupport(delayDays, P) { return Math.exp(-delayDays / P.tauHdays); }
+/* Trace lifetime is CALIBRATED per subject, so disease profiles must express their effect on it
+   RELATIVELY (tauHscale) and never as an absolute. An earlier version had diseaseProfile return
+   `tauHdays: 3.0`, and because profiles are passed as opts they override the calibrated value —
+   so every disease condition silently discarded the calibration and healthy one-week recall came
+   out 0.95 instead of the anchored 0.852. Absolute values in a profile clobber calibration; scales
+   compose with it. */
+function hippocampalSupport(delayDays, P) {
+  const tau = P.tauHdays * (P.tauHscale == null ? 1 : P.tauHscale);
+  return Math.exp(-delayDays / Math.max(1e-6, tau));
+}
 
 /* GRADED RETRIEVAL, replacing a hard all-or-none threshold.
  *
@@ -407,7 +416,7 @@ function diseaseProfile(name, severity) {
   const s = severity == null ? 1.0 : severity;
   switch (name) {
     case "healthy":
-      return { iedRate: 0, coupling: 0, nightMin: 60, tauHdays: 3.0, wCCscale: 1.0, driveMul: 1.0 };
+      return { iedRate: 0, coupling: 0, nightMin: 60, tauHscale: 1.0, wCCscale: 1.0, driveMul: 1.0 };
     /* EPILEPSY ALSO SUPPRESSES PHYSIOLOGICAL SPINDLE-SLOW-WAVE COUPLING, and this was added after
        the model's prediction was contradicted by data. An earlier version gave epilepsy discharge
        capture on a channel of NORMAL supply, and therefore predicted that spindle density RUNS HOT
@@ -431,10 +440,10 @@ function diseaseProfile(name, severity) {
        also reduced in TLE is a separate question this model does not settle and which would falsify
        the density half if answered yes. */
     case "TEA":                 // transient epileptic amnesia: discharges, little structural damage
-      return { iedRate: 25 * s, coupling: 0.9, nightMin: 60, tauHdays: 3.0,
+      return { iedRate: 25 * s, coupling: 0.9, nightMin: 60, tauHscale: 1.0,
                wCCscale: 1.0, driveMul: 1.0 };
     case "TLE-HS":              // temporal lobe epilepsy with hippocampal sclerosis
-      return { iedRate: 40 * s, coupling: 0.9, nightMin: 60, tauHdays: 3.0 - 1.4 * s,
+      return { iedRate: 40 * s, coupling: 0.9, nightMin: 60, tauHscale: 1 - 0.47 * s,
                wCCscale: 1.0, driveMul: 1 - 0.45 * s };
     case "AD":                  // Alzheimer's: fewer slots, weaker slots, less capacity, some capture
       // Reduced spindle density is one of the better-replicated sleep findings in AD, and it is a
@@ -444,7 +453,7 @@ function diseaseProfile(name, severity) {
       // frees the channel cannot help a channel that was never occupied.
       return { iedRate: 12 * s, coupling: 0.7, nightMin: 60 * (1 - 0.40 * s),
                physioSuppression: 0.30 * s,
-               tauHdays: 3.0 - 1.6 * s, wCCscale: 1 - 0.35 * s, driveMul: 1 - 0.30 * s };
+               tauHscale: 1 - 0.53 * s, wCCscale: 1 - 0.35 * s, driveMul: 1 - 0.30 * s };
     default: throw new Error("unknown disease " + name);
   }
 }
