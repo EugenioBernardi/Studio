@@ -550,11 +550,41 @@ function calibrateHippocampalDrive(M, opts) {
    call inherits them. Order matters — the learning-rate bisection must run with the hippocampal
    drive already fixed, or it compensates for a gain that is about to change. */
 function calibrateSubject(M, opts) {
+  const P = Object.assign(adefaults(), opts || {});
+  /* STEP 1 — early anchor: hippocampal drive set so the hippocampal route alone carries normal
+     30-minute recall, subject to the specificity constraint. */
   const hip = calibrateHippocampalDrive(M, opts);
   M.cal = { driveScale0: hip.driveScale0 };
+
+  /* STEP 2 — trace lifetime. THIS IS NOT OPTIONAL AND WAS THE BUG.
+     Raising the reinstatement drive 3.8x to satisfy the early anchor also extended how long the
+     hippocampal trace remains useful: with tauH left at its arbitrary 3 days, healthy one-week
+     recall rose from 0.85 to 0.95 and the hippocampal route MASKED the cortical differences the
+     model exists to measure. Every late deficit compressed and the cohort correlation with replay
+     fraction collapsed from 0.94 to 0.47. Drive and lifetime are not independent, and calibrating
+     one without the other silently moved the other.
+     tauH is therefore anchored to the structural claim that MAKES this a consolidation disorder:
+     by one week the memory must be largely cortex-dependent, i.e. the hippocampal route alone
+     recovers little. Without that, a "consolidation" model is really a slow-decay model. */
+  const lateCeiling = P.hippoWeekCeiling == null ? 0.15 : P.hippoWeekCeiling;
+  let chosenTau = P.tauHdays;
+  for (const tau of [3.0, 2.5, 2.0, 1.7, 1.4, 1.2, 1.0, 0.8]) {
+    const probe = Object.assign({}, P, M.cal, { tauHdays: tau });
+    M._hcache = new Map();
+    const pr = hippoRoute(M, hippocampalSupport(7, probe), probe);
+    let sc = 0; for (const v of pr) sc += v;
+    sc = (sc - 1) / (M.order.length - 1);      // exclude the always-cued first item
+    chosenTau = tau;
+    if (sc <= lateCeiling) break;
+  }
+  M.cal.tauHdays = chosenTau;
+  M._hcache = new Map();
+
+  /* STEP 3 — late anchor: per-replay increment set so the cortical route reaches normal one-week
+     retention, with the hippocampal parameters already fixed. */
   const cort = calibrateLearningRate(M, opts);
   M.cal.lrCC = cort.lrCC;
-  return { hippocampal: hip, cortical: cort };
+  return { hippocampal: hip, tauHdays: chosenTau, cortical: cort };
 }
 
 module.exports = { adefaults, pRecall, calibrateHippocampalDrive, calibrateSubject, buildSubject, resetCortical, runNight, calibrateLearningRate,
