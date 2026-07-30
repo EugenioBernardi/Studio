@@ -76,7 +76,7 @@ function spearman(xs, ys) {
 console.log("\n" + clock() + " building and calibrating " + SEEDS.length + " subjects...");
 const SUBJ = SEEDS.map(s => {
   const M = A.buildSubject(s, ORDER);
-  const cal = A.calibrateLearningRate(M, {});
+  const cal = A.calibrateSubject(M, {}).cortical;
   return { M, cal };
 });
 console.log("  healthy 1-week cortical retention after calibration: " +

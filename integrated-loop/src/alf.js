@@ -78,6 +78,11 @@ function adefaults() {
                          // but modest, and the "runs hot" claim has to survive at the modest value
                          // or it is not a claim about patients.
     // ---- retrieval
+    encodeScale: 1.0,    // ENCODING STRENGTH. A weakly encoded memory has both a weaker hippocampal
+                         // index (so it reinstates cortex less well) and less to replay (so each
+                         // replay writes less). Distinct from driveMul, which is a RETRIEVAL-side
+                         // lesion applied to a normally encoded trace. Used to implement the
+                         // encoding-deficit account of ALF as a rival to capture in stage 46.
     tauHdays: 3.0,       // hippocampal trace time constant (days)
     driveScale0: 0.45,   // intact hippocampus→cortex reinstatement drive (loop.js default)
   };
@@ -135,7 +140,7 @@ function resetCortical(M) {
    BETTER coupling than the physiological events they displace. That is the whole point.
    --------------------------------------------------------------------- */
 function runNight(M, opts) {
-  const P = Object.assign(adefaults(), opts || {});
+  const P = Object.assign(adefaults(), M.cal || {}, opts || {});
   /* THREE INDEPENDENT STREAMS, and this is not fastidiousness — it is a correctness requirement
      that a single stream silently violates.
      With one generator, the discharge loop's draws advance the stream that also decides whether a
@@ -193,7 +198,11 @@ function runNight(M, opts) {
     physio++;
     const k = M.sampleItem(rndItem);
     const prevSet = new Set(M.hpc.indices[order[k - 1]].cortex);
+    // a weakly encoded trace has less to replay, so each event writes proportionally less
+    const lrSave = M.cons.lrCC;
+    if (P.encodeScale !== 1) M.cons.lrCC = lrSave * P.encodeScale;
     KC.writeTransition(M.cons, prevSet, M.hpc.indices[order[k]].cortex);
+    M.cons.lrCC = lrSave;
     writes++;
     M.cons.events++;
   }
@@ -253,7 +262,8 @@ function hippoRoute(M, support, P) {
   const order = M.order, prob = new Float64Array(order.length); prob[0] = 1;
   // driveMul < 1 represents hippocampal sclerosis or entorhinal tau: the index survives but drives
   // cortex less effectively, so the early (hippocampus-dependent) route is itself degraded
-  const scale = P.driveScale0 * support * (P.driveMul == null ? 1 : P.driveMul);
+  const scale = P.driveScale0 * support * (P.driveMul == null ? 1 : P.driveMul) *
+                (P.encodeScale == null ? 1 : P.encodeScale);
   if (scale < 0.02) return prob;                    // trace effectively gone
   for (let k = 1; k < order.length; k++) {
     const target = new Set(M.hpc.indices[order[k]].cortex);
@@ -300,7 +310,8 @@ function cortexRoute(M, P) {
  * Caching it also guarantees the conditions are compared against an identical hippocampal route,
  * which is what makes the comparison paired. */
 function recallAtDelay(M, delayDays, opts) {
-  const P = Object.assign(adefaults(), opts || {});
+  // per-subject calibration lives on the model, so every call site inherits it without threading
+  const P = Object.assign(adefaults(), M.cal || {}, opts || {});
   const sup = hippocampalSupport(delayDays, P);
   M._hcache = M._hcache || new Map();
   const key = sup.toFixed(6);
@@ -334,7 +345,7 @@ function recallAtDelay(M, delayDays, opts) {
    free parameter of the dose and it is stated rather than tuned.
    --------------------------------------------------------------------- */
 function calibrateLearningRate(M, opts) {
-  const P = Object.assign(adefaults(), opts || {});
+  const P = Object.assign(adefaults(), M.cal || {}, opts || {});
   /* CALIBRATED AGAINST NORMAL HUMAN PERFORMANCE, not against a convenient number. A healthy adult
      does not retain a 15-word list perfectly for a week — delayed recall around 0.85 of the list is
      ordinary. So lrCC is set so the IED-FREE night lands there. That matters for the science as
@@ -472,6 +483,80 @@ function levetiracetam(prof, dose, opts) {
   });
 }
 
-module.exports = { adefaults, pRecall, buildSubject, resetCortical, runNight, calibrateLearningRate,
+/* ---------------------------------------------------------------------
+   TWO-POINT BEHAVIOURAL CALIBRATION.
+
+   The cortical route is anchored to normal one-week list retention (~0.85). The hippocampal route
+   must be anchored too, and for a reason that decides whether this model can address ALF at all.
+
+   Left uncalibrated, the hippocampal route recovered only 0.775 of the list at full support, so
+   healthy 30-minute recall was substantially carried by CORTEX. Capture then dragged early recall
+   down with it, and the model could not produce the defining ALF pattern at any dose: every dose
+   gave either normal-early-but-mild-late or severe-late-but-impaired-early. That is not a fact
+   about memory, it is a mis-set gain.
+
+   Empirically an ALF patient with an intact hippocampus recalls a word list near-completely at 30
+   minutes — that IS what "normal early recall" denotes. So the hippocampal drive is set so that the
+   hippocampal route ALONE reaches `target` at full support. Early recall then belongs to the
+   hippocampus, capture cannot touch it, and the preserved 30-minute test follows structurally
+   rather than from a lucky dose.
+
+   THE CEILING IS REAL AND IS REPORTED. Scanning drive shows the hippocampal route's score keeps
+   rising to 0.94, but the rise above ~1.7 is CONFABULATION: overlap with a NON-TARGET assembly
+   climbs from 0.11 to 0.40, so at the top of the range half the apparent recall is the wrong
+   memory. Constrained to keep non-target overlap under 0.20, the route reaches ~0.90 and no more.
+   The model therefore cannot produce complete early recall without confabulating, which is a
+   property of this hippocampal index worth reporting rather than hiding.
+
+   SPECIFICITY IS CHECKED, not assumed. Reinstatement drive cannot simply be turned up: loop.js
+   warns that strong drive lets the WRONG memory clear threshold and cortical completion then
+   amplifies it into a full spurious assembly. The scan is therefore over the score against the
+   CORRECT target, which falls once drive starts reinstating neighbours, and the calibration takes
+   the smallest drive reaching the target rather than the largest score. If no drive reaches the
+   target the best achievable is returned and flagged, rather than silently pushing drive into the
+   regime where the model confabulates. */
+function calibrateHippocampalDrive(M, opts) {
+  const P = Object.assign(adefaults(), opts || {});
+  const target = P.healthyEarlyRecall == null ? 0.95 : P.healthyEarlyRecall;
+  const specFloor = P.specificityFloor == null ? 0.20 : P.specificityFloor;
+  const order = M.order;
+  const rows = [];
+  for (const d of [0.35, 0.45, 0.6, 0.8, 1.0, 1.3, 1.7, 2.2, 2.8, 3.5]) {
+    let tgt = 0, oth = 0, nn = 0, score = 0;
+    for (let k = 1; k < order.length; k++) {
+      const tSet = new Set(M.hpc.indices[order[k]].cortex);
+      const oIdx = order[(k % (order.length - 1)) + 1];
+      const oSet = new Set(M.hpc.indices[oIdx].cortex);
+      const act = L.reinstateFromIndex(M.cortex, M.hpc, order[k], { driveScale: d });
+      let on = 0, on2 = 0;
+      for (const c of act) { if (tSet.has(c)) on++; if (oSet.has(c)) on2++; }
+      const fr = on / Math.max(1, tSet.size);
+      tgt += fr; oth += on2 / Math.max(1, oSet.size); nn++;
+      score += pRecall(fr, P.retThr, P.retTemp);
+    }
+    rows.push({ d, target: tgt / nn, other: oth / nn, score: (score + 1) / order.length });
+  }
+  // largest drive whose NON-TARGET overlap stays below the floor; among those, the best score
+  const safe = rows.filter(r => r.other <= specFloor);
+  const pick = safe.length ? safe.reduce((a, b) => (b.score > a.score ? b : a)) : rows[0];
+  M._hcache = new Map();
+  return { driveScale0: pick.d, achieved: pick.score, otherOverlap: pick.other,
+           reachedTarget: pick.score >= target, rows,
+           ceiling: rows.reduce((a, b) => (b.score > a.score ? b : a)).score };
+}
+
+/* TWO-POINT CALIBRATION in one call: anchor the hippocampal route to normal early recall, then the
+   cortical route to normal one-week retention, and store both on the subject so every downstream
+   call inherits them. Order matters — the learning-rate bisection must run with the hippocampal
+   drive already fixed, or it compensates for a gain that is about to change. */
+function calibrateSubject(M, opts) {
+  const hip = calibrateHippocampalDrive(M, opts);
+  M.cal = { driveScale0: hip.driveScale0 };
+  const cort = calibrateLearningRate(M, opts);
+  M.cal.lrCC = cort.lrCC;
+  return { hippocampal: hip, cortical: cort };
+}
+
+module.exports = { adefaults, pRecall, calibrateHippocampalDrive, calibrateSubject, buildSubject, resetCortical, runNight, calibrateLearningRate,
   recallAtDelay, hippocampalSupport, hippoRoute, cortexRoute, mulberry32,
   diseaseProfile, applyProfile, levetiracetam };

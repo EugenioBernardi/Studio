@@ -45,7 +45,7 @@ console.log("\n" + clock() + " building " + SEEDS.length + " subjects...");
 const SUBJ = SEEDS.map(s => {
   const M = A.buildSubject(s, ORDER);
   const baseW = M.cons.wCCmax;
-  const cal = A.calibrateLearningRate(M, {});
+  const cal = A.calibrateSubject(M, {}).cortical;
   return { M, baseW, cal };
 });
 

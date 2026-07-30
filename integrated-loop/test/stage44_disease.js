@@ -58,7 +58,7 @@ console.log("\n" + clock() + " building and calibrating " + SEEDS.length + " sub
 const SUBJ = SEEDS.map(s => {
   const M = A.buildSubject(s, ORDER);
   const baseW = M.cons.wCCmax;
-  const cal = A.calibrateLearningRate(M, {});
+  const cal = A.calibrateSubject(M, {}).cortical;
   return { M, baseW, cal };
 });
 console.log("  healthy 1-week retention: " + f(mean(SUBJ.map(s => s.cal.achieved))) +
