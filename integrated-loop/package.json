@@ -45,6 +45,8 @@
     "test:atn": "node test/stage42_atn_pointer.js",
     "test:alf": "node test/stage43_alf.js",
     "test:disease": "node test/stage44_disease.js",
+    "test:ad-components": "node test/stage45_ad_components.js",
+    "figures": "node figures/build-figures.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
   },

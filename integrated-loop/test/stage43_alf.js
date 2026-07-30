@@ -195,7 +195,7 @@ console.log("\n" + clock() + " == 5. a simulated cohort: what predicts forgettin
   const rhoFrac = spearman(rows.map(r => r.replayFrac), rows.map(r => r.week));
   const rhoDens = spearman(rows.map(r => r.density), rows.map(r => r.week));
   const rhoCS = spearman(rows.map(r => r.cStrength), rows.map(r => r.week));
-  out.cohort = { n: rows.length, rhoRate, rhoFrac, rhoDens, rhoCS };
+  out.cohort = { n: rows.length, rhoRate, rhoFrac, rhoDens, rhoCS, rows };
   console.log("  n = " + rows.length + " simulated patients, IED rate and coupling varying independently");
   console.log("    rho(1-week recall, IED rate)              = " + f(rhoRate));
   console.log("    rho(1-week recall, spindle density)       = " + f(rhoDens));

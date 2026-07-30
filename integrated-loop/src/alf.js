@@ -55,14 +55,28 @@ function adefaults() {
   return {
     // ---- the night
     nightMin: 60,        // minutes of NREM simulated
-    fSO: 0.9,            // Hz — slow oscillation; each up-state is one coupling SLOT
+    fSO: 0.9,            // Hz — slow oscillation
+    spindleP: 0.10,      // P(a physiological spindle rides a given up-state). NOT every up-state
+                         // carries one: human NREM spindle density is ~2–6/min, while the slow
+                         // oscillation runs near 0.9 Hz (~54/min). An earlier version treated every
+                         // up-state as a coupling event and reported a healthy density of 54/min,
+                         // an order of magnitude above anything measured. 0.9 Hz x 0.10 = 5.4/min,
+                         // which is inside the reported range and makes the density numbers below
+                         // comparable with a real sleep study.
     // ---- the pathology
     iedRate: 0,          // IEDs per minute (clinical range in TLE is broad: ~0–60/min)
     coupling: 1.0,       // P(an IED arriving near a slot CAPTURES it). THE mechanism parameter.
     // ---- what a coupling event looks like on scalp EEG, taken from Uehara 2026
     cPhys: 0.55,         // SO–spindle phase consistency of a physiological coupling event
     cIED: 0.82,          // ...of an IED-induced one. HIGHER — this is the measured finding.
-    iedSpindleP: 0.85,   // P(an IED induces a frontal spindle) — Uehara: 0.4–0.8 s post-IED
+    iedSpindleP: 0.15,   // P(an IED induces a frontal spindle), against a physiological baseline of
+                         // spindleP = 0.10 — so a discharge raises spindle probability by about
+                         // half, which is what "spindle occurrence increased 0.4–0.8 s after IEDs"
+                         // (Uehara 2026) supports. An earlier version used 0.85, i.e. nearly every
+                         // discharge spawning a spindle, which produced a healthy-vs-epilepsy
+                         // density ratio of 5x that no sleep study reports. The elevation is real
+                         // but modest, and the "runs hot" claim has to survive at the modest value
+                         // or it is not a claim about patients.
     // ---- retrieval
     tauHdays: 3.0,       // hippocampal trace time constant (days)
     driveScale0: 0.45,   // intact hippocampus→cortex reinstatement drive (loop.js default)
@@ -125,14 +139,14 @@ function runNight(M, opts) {
   const rnd = mulberry32((opts && opts.nightSeed) || 20260730);
   const order = M.order;
   const seconds = P.nightMin * 60;
-  const nSlots = Math.floor(seconds * P.fSO);
-  const iedPerSlot = (P.iedRate / 60) / P.fSO;    // expected IEDs arriving per slot
+  const nCycles = Math.floor(seconds * P.fSO);
+  const iedPerCycle = (P.iedRate / 60) / P.fSO;   // expected IEDs arriving per SO cycle
 
   let physio = 0, captured = 0, iedTotal = 0, iedSpindles = 0, writes = 0, suppressed = 0;
-  let turn = 0;
-  for (let s = 0; s < nSlots; s++) {
-    // how many IEDs arrived near this slot (Poisson, small-count sampling)
-    let nIED = 0, Lp = Math.exp(-iedPerSlot), p = 1;
+  let nSlots = 0;
+  for (let s = 0; s < nCycles; s++) {
+    // how many IEDs arrived in this cycle (Poisson, small-count sampling)
+    let nIED = 0, Lp = Math.exp(-iedPerCycle), p = 1;
     do { p *= rnd(); nIED++; } while (p > Lp);
     nIED -= 1;
     iedTotal += nIED;
@@ -142,6 +156,10 @@ function runNight(M, opts) {
       if (rnd() < P.iedSpindleP) iedSpindles++;    // IEDs induce spindles whether or not they capture
       if (!taken && rnd() < P.coupling) taken = true;
     }
+
+    // does a physiological spindle ride this up-state at all? Only then is there a coupling SLOT.
+    if (rnd() >= P.spindleP) continue;
+    nSlots++;
     if (taken) { captured++; continue; }           // structurally intact, semantically empty
 
     // A drug that dampens high-frequency bursting removes some physiological ripples too. The slot
