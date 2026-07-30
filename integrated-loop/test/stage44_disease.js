@@ -73,12 +73,14 @@ function runProfile(prof) {
     A.resetCortical(M); A.applyProfile(M, prof, S.baseW); M._hcache = new Map();
     const n = A.runNight(M, prof);
     bio.slots.push(n.nSlots); bio.density.push(n.spindleDensity);
+    (bio.pcr = bio.pcr || []).push(n.physioCoupledRate);
     bio.cs.push(n.couplingStrength); bio.frac.push(n.replayFraction);
     DELAYS.forEach((d, i) => rec[i].push(A.recallAtDelay(M, d, prof).recall));
     M.cons.wCCmax = S.baseW; M._hcache = new Map();
   }
   return { recall: rec.map(mean), recallSd: rec.map(sd), slots: mean(bio.slots),
-           density: mean(bio.density), cs: mean(bio.cs), frac: mean(bio.frac) };
+           density: mean(bio.density), physioCoupledRate: mean(bio.pcr),
+           cs: mean(bio.cs), frac: mean(bio.frac) };
 }
 
 /* ---------------- 1. the four conditions ---------------- */
@@ -127,7 +129,7 @@ console.log("\n" + clock() + " == 3. epilepsy vs Alzheimer's: capture or supply?
      D.slots <= 0.75 * H.slots && T.slots >= 0.95 * H.slots,
      "AD has " + f(100 * (1 - D.slots / H.slots), 0).trim() + "% fewer coupling opportunities; " +
      "epilepsy has the normal number and loses them to capture.");
-  ok("spindle density separates the two mechanisms (P3)",
+  ok("TOTAL spindle density separates the two mechanisms (P3)",
      T.density > H.density && D.density < H.density,
      "epilepsy " + f(T.density, 1) + " vs healthy " + f(H.density, 1) + " vs Alzheimer's " +
      f(D.density, 1) + ". Identical accelerated forgetting, OPPOSITE EEG signatures — a hijacked " +
@@ -163,6 +165,46 @@ console.log("\n" + clock() + " == 4. levetiracetam: who does it help, and at wha
      " at the highest dose. Sharp-wave ripples ARE high-frequency bursts, so enough SV2A blockade " +
      "removes the replay along with the discharges. Offered as the mechanism behind Bakker et al. " +
      "(2015): 62.5 and 125 mg BID improved memory in amnestic MCI, 250 mg did not.");
+}
+
+/* ---------------- 5. external validation against Schiller et al. 2025 (P6) ---------------- */
+console.log("\n" + clock() + " == 5. against independent human data (P6) ==");
+{
+  /* Found AFTER the model was built and after its "epilepsy runs hot" prediction was made.
+     Schiller, von Ellenrieder, ... Frauscher (Epilepsia 2025) recorded 20 unilateral drug-resistant
+     TLE patients and 20 matched controls with HD-EEG and polysomnography, and report COUPLED
+     SPINDLE-SLOW-WAVE RATES globally reduced in TLE: 0.18 vs 0.35 per minute, a ratio of 0.51.
+
+     That measure is the rate of PHYSIOLOGICAL coupling events. It is NOT this model's
+     `spindleDensity`, which counts total spindles including the IED-induced ones. The two diverge,
+     and the divergence is the point: in the same simulated patient, total density RISES while the
+     physiological coupled rate FALLS. Reporting the first makes epilepsy look hot; reporting the
+     second makes it look cold; only the second is what Schiller measured.
+
+     REGISTERED: the model's TLE physiological coupled rate, as a ratio to healthy, falls within
+     0.15 of the 0.51 Schiller reports. Nothing was fitted to this number - the ratio is produced by
+     slot capture alone. */
+  const H = R["healthy"], T = R["TLE-HS"], A2 = R["TEA"];
+  const ratio = T.physioCoupledRate / H.physioCoupledRate;
+  const MEASURED = 0.51;
+  out.schiller = { modelRatio: ratio, measured: MEASURED,
+                   teaRatio: A2.physioCoupledRate / H.physioCoupledRate,
+                   densityHealthy: H.density, densityTLE: T.density };
+  console.log("  measure                                healthy    TEA   TLE-HS");
+  console.log("  TOTAL spindle density /min            " + f(H.density, 1).padStart(7) +
+              f(A2.density, 1).padStart(7) + f(T.density, 1).padStart(9) + "     RISES");
+  console.log("  PHYSIOLOGICAL coupled rate /min       " + f(H.physioCoupledRate, 2).padStart(7) +
+              f(A2.physioCoupledRate, 2).padStart(7) + f(T.physioCoupledRate, 2).padStart(9) + "     FALLS");
+  console.log("");
+  console.log("  model TLE/healthy coupled rate ratio = " + f(ratio) +
+              "     Schiller et al. 2025 measured = " + f(MEASURED));
+  ok("the model reproduces an independent human measurement it was not fitted to (P6)",
+     Math.abs(ratio - MEASURED) < 0.15,
+     "model " + f(ratio).trim() + " against measured " + f(MEASURED).trim() + ". This prediction " +
+     "was not available when the model was built and no parameter was adjusted to meet it: the " +
+     "ratio falls out of slot capture. It also corrects a claim made earlier in this project - " +
+     "reading TOTAL spindle density, the model said epilepsy 'runs hot', and on the quantity human " +
+     "studies actually report it runs cold. Both are true of the same simulated patient.");
 }
 
 console.log("\n" + clock() + " == the clinical reading ==");

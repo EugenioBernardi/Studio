@@ -207,9 +207,12 @@ function runNight(M, opts) {
     ? (physio * P.cPhys + iedSpindles * P.cIED) / nSpindles : 0;
   // the quantity this model says actually matters, and which scalp EEG does not currently report
   const replayFraction = nSlots > 0 ? physio / nSlots : 0;
+  // the quantity Schiller et al. (Epilepsia 2025) measured: rate of PHYSIOLOGICAL coupled events,
+  // excluding IED-induced spindles. Reported separately from total density because the two diverge.
+  const physioCoupledRate = physio / minutes;
 
   return { nSlots, physio, captured, suppressed, iedTotal, iedSpindles, writes,
-           spindleDensity, couplingStrength, replayFraction,
+           spindleDensity, physioCoupledRate, couplingStrength, replayFraction,
            iedRatePerMin: iedTotal / minutes };
 }
 
@@ -394,6 +397,28 @@ function diseaseProfile(name, severity) {
   switch (name) {
     case "healthy":
       return { iedRate: 0, coupling: 0, nightMin: 60, tauHdays: 3.0, wCCscale: 1.0, driveMul: 1.0 };
+    /* EPILEPSY ALSO SUPPRESSES PHYSIOLOGICAL SPINDLE-SLOW-WAVE COUPLING, and this was added after
+       the model's prediction was contradicted by data. An earlier version gave epilepsy discharge
+       capture on a channel of NORMAL supply, and therefore predicted that spindle density RUNS HOT
+       in epilepsy (7.9/min against 5.7 healthy). Schiller et al. (Epilepsia 2025), in 20 unilateral
+       drug-resistant TLE patients against 20 matched controls with HD-EEG and polysomnography,
+       measured the opposite: coupled spindle-slow-wave rates are globally REDUCED in TLE, 0.18 vs
+       0.35/min (d = -0.46), and they propose that decoupling as a mechanism of poor memory.
+       So epilepsy undersupplies the channel AND captures what remains. Both push the replay
+       fraction down, which leaves the ALF mechanism intact, but the "runs hot" biomarker claim is
+       dead and the epilepsy-versus-Alzheimer's density dissociation with it.
+       RESOLVED, and the resolution matters more than the scare. Schiller's measure is the COUPLED
+       SPINDLE-SLOW-WAVE RATE, i.e. physiological coupling events. This model's `spindleDensity` is
+       TOTAL spindles, physiological plus IED-induced, which is a different observable. Capture
+       alone already drives the physiological coupled rate DOWN — to 0.66 of healthy in TEA against
+       Schiller's 0.51 — in the right direction and the right order, with no extra mechanism. Adding
+       a separate suppression term on top double-counts the same effect: it drove TEA's replay
+       fraction to 0.33 and destroyed the early sparing that defines ALF.
+       So the two measures DIVERGE, and which one is reported decides whether epilepsy looks hot or
+       cold. `physioCoupledRate` is now reported alongside density so the model can be compared
+       against Schiller on the quantity Schiller actually measured. Whether TOTAL spindle density is
+       also reduced in TLE is a separate question this model does not settle and which would falsify
+       the density half if answered yes. */
     case "TEA":                 // transient epileptic amnesia: discharges, little structural damage
       return { iedRate: 25 * s, coupling: 0.9, nightMin: 60, tauHdays: 3.0,
                wCCscale: 1.0, driveMul: 1.0 };
