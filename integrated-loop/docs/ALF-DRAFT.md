@@ -33,9 +33,13 @@ that loses the memory and a night that does not are indistinguishable by spindle
 (14.2 vs 11.0/min) while one-week recall differs by
 0.76 of the list.
 
-We further show that Alzheimer's disease reaches the same behavioural phenotype through a different
-failure of the same channel — undersupply rather than capture — and that the two are separable by
-spindle density, which is *elevated* in epilepsy and *reduced* in Alzheimer's.
+The model reproduces an independent human measurement it was not fitted to. Schiller et al. (2025)
+report coupled spindle–slow-wave rates reduced to 0.51 of control in temporal
+lobe epilepsy; the model gives 0.50, produced by slot capture alone. The
+same simulated patient shows *total* spindle density **rising** (5.7
+→ 9.0/min) while the *physiologically coupled* rate **falls** — so which
+measure is reported decides whether epilepsy appears hyper- or hypo-coupled. Alzheimer's reaches the
+same behavioural phenotype through undersupply rather than capture.
 
 ---
 
@@ -221,6 +225,45 @@ even a degraded hippocampal trace suffices, at one week it has decayed in every 
 in between does its decay *rate* matter. The split between early and late causes is real; our
 assignment of which cause acts when was wrong.
 
+## 5b. External validation, and a claim withdrawn
+
+The model made a prediction we could check against data it had never seen. It failed on one measure
+and succeeded on another, and the two are not in conflict.
+
+**The failure.** Reading *total* spindle density, the model says epilepsy runs hot — density
+5.7 → 9.0/min — because
+discharge-induced spindles add to the count. Schiller, von Ellenrieder, … Frauscher (*Epilepsia*
+2025), recording 20 patients with unilateral drug-resistant temporal lobe epilepsy against 20
+matched controls with high-density EEG and polysomnography, report the opposite direction for
+spindle–slow-wave coupling: **globally reduced**, 0.18 vs 0.35/min (*d* = −0.46). The "runs hot"
+claim, as stated, is withdrawn.
+
+**The success, and the reason both are true.** Schiller's measure is the rate of *coupled
+spindle–slow-wave events* — physiological coupling. That is not total spindle count. In the model
+these two quantities diverge in the same patient:
+
+| measure | healthy | TEA | TLE + sclerosis |
+|---|---|---|---|
+| total spindle density /min | 5.7 | 7.9 | 9.0 |
+| **physiologically coupled rate /min** | 5.70 | 3.77 | 2.83 |
+
+The model's TLE/healthy ratio on Schiller's measure is **0.50** against a
+measured **0.51**. Nothing was fitted to it: the ratio falls out of slot
+capture, and the comparison was made after the model was built and after its prediction was fixed.
+
+We record that our first response to the contradiction was wrong. We added a spindle-suppression
+term to the epilepsy profiles to reproduce the reduction directly, which destroyed the phenotype —
+replay fraction fell to 0.33 and 30-minute recall to 0.78, eliminating the preserved early recall
+that defines ALF. That was double-counting: capture already produces the reduction. The term was
+removed.
+
+**What this costs the disease-discrimination claim.** On the externally validated measure, epilepsy
+and Alzheimer's are *both* reduced (0.50 and
+0.56 of healthy). They
+separate only on *total* density, which is the measure we cannot point to as validated. **A study
+reporting total spindle density reduced in TLE would falsify that half outright.** We found none
+either way.
+
 ## 6. Predictions
 
 1. **Measure the captured fraction, not the spike count.** The fraction of slow-oscillation/spindle
@@ -231,8 +274,9 @@ assignment of which cause acts when was wrong.
    discharge burden at matched rate.
 3. **ALF patients are near-normal, not normal, at short delay.** Sensitive early testing should show
    a small deficit (order 1–2 items on a 15-item list).
-4. **Spindle density distinguishes capture from undersupply** — elevated in epilepsy, reduced in
-   Alzheimer's, with the same accelerated-forgetting profile.
+4. **Total spindle count and physiologically coupled rate diverge in epilepsy** — the first rises
+   with discharge burden, the second falls, in the same patient and the same night. Studies
+   reporting one should not be read as evidence about the other. Only the second tracks retention.
 5. **Sclerosis converts ALF into amnesia** by removing the compensating route, so the presence of a
    normal 30-minute test in an epilepsy patient is informative about hippocampal integrity.
 
@@ -243,6 +287,8 @@ Reported as failures rather than omitted.
 - **The registered phenotype criterion (P1) failed**, as set out in §3. The qualitative pattern is
   robust; the specific conjunction of a ≤0.10 early gap with a ≥0.25 late gap was not achieved at
   either dose tested.
+- **The "epilepsy runs hot" claim was withdrawn** after checking against Schiller et al. 2025
+  (§5b), and our first attempted fix was itself wrong and is recorded there.
 - **A prediction about component timing failed** (§5): hippocampal decay acts at the intermediate
   delay, not early, so our assignment of which AD component acts when was wrong even though the
   early/late split itself holds. One modelled component (cortical capacity) is inert.
@@ -261,6 +307,10 @@ Reported as failures rather than omitted.
   wrong: higher phase consistency for IED-coupled spindles; a hippocampal trace decaying over days
   against an accruing cortical one; salience-biased replay; calibration to ~0.85 normal one-week
   retention.
+- **Externally validated**: the physiologically coupled rate ratio in TLE
+  (0.50 model vs 0.51 measured, Schiller 2025), and
+  reduced spindle activity in early Alzheimer's (Bender et al., *Neurology* 2025). **Not externally
+  validated**: everything else, including the total-density discrimination between the two diseases.
 - **Not modelled**: seizures themselves, medication effects other than the withdrawn levetiracetam
   analysis, REM, or any wake-state contribution to consolidation.
 
@@ -288,6 +338,11 @@ this document.
 - Wei Y, Krishnan GP, Komarov M, Bazhenov M. Differential roles of sleep spindles and sleep slow
   oscillations in memory consolidation. *PLoS Comput Biol* 2018;14:e1006322.
   doi:10.1371/journal.pcbi.1006322
+- Schiller K, von Ellenrieder N, Mansilla D, et al. Widespread decoupling of spindles and slow waves
+  in temporal lobe epilepsy. *Epilepsia* 2025;66:2421–32. doi:10.1111/epi.18359
+- Bender AC, Berezuk C, Pellerin KR, et al. Association of sleep spindle activity with cognitive
+  decline in early clinical stages of Alzheimer disease. *Neurology* 2025;106:e214459.
+  doi:10.1212/WNL.0000000000214459
 - Bakker A, Albert MS, Krauss G, Speck CL, Gallagher M. Response of the medial temporal lobe network
   in amnestic mild cognitive impairment to therapeutic intervention. *Neuroimage Clin*
   2015;7:688–98. doi:10.1016/j.nicl.2015.02.009
