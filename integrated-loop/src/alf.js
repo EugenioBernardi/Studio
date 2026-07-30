@@ -573,6 +573,28 @@ function calCachePath(M, P) {
                P.retThr, P.retTemp].join("_");
   return require("path").join(__dirname, "..", ".calcache", key + ".json");
 }
+/* A cheap assertion that the calibration is ACTUALLY IN EFFECT, run on both the fresh and the
+   cached path. The disk cache introduced a bug in which cached subjects kept the calibrated
+   constants in M.cal but ran with the default learning rate, and nothing downstream noticed until
+   a whole suite reported healthy recall at ceiling. Checking the anchor directly costs one
+   cortical read-out and makes that failure impossible to ship. */
+function verifyCalibration(M, P, report) {
+  const target = P.healthyWeekRetention == null ? 0.85 : P.healthyWeekRetention;
+  resetCortical(M);
+  runNight(M, Object.assign({}, P, { iedRate: 0 }));
+  const cp = cortexRoute(M, P);
+  let sc = 0; for (const v of cp) sc += v;
+  const got = sc / M.order.length;
+  resetCortical(M);
+  report.verified = got;
+  if (Math.abs(got - target) > 0.12) {
+    throw new Error("calibration not in effect: healthy one-week cortical recall " +
+      got.toFixed(3) + " against anchor " + target.toFixed(2) +
+      " (lrCC=" + M.cons.lrCC + ", cal=" + JSON.stringify(M.cal) + ")");
+  }
+  return got;
+}
+
 function calibrateSubject(M, opts) {
   const P = Object.assign(adefaults(), opts || {});
   const fs2 = require("fs"), path2 = require("path");
@@ -580,8 +602,19 @@ function calibrateSubject(M, opts) {
   if (!P.noCalCache) {
     try {
       const hit = JSON.parse(fs2.readFileSync(cp, "utf8"));
-      M.cal = hit.cal; M._hcache = new Map();
-      return Object.assign({ cached: true }, hit.report);
+      M.cal = hit.cal;
+      // APPLY the cached fit, do not merely record it. calibrateLearningRate sets M.cons.lrCC as a
+      // side effect, and the first version of this cache restored only M.cal.lrCC — so cached
+      // subjects silently ran with the DEFAULT learning rate, roughly 4x the calibrated value, and
+      // over-consolidated to ceiling. Healthy one-week recall read 1.00 against an anchor of 0.85,
+      // and because only some seeds were cached the suite mixed calibrated and uncalibrated
+      // subjects in one mean. A cache must restore every effect of what it replaces, not just its
+      // return value.
+      M.cons.lrCC = hit.cal.lrCC;
+      M._hcache = new Map();
+      const rep = Object.assign({ cached: true }, hit.report);
+      verifyCalibration(M, P, rep);
+      return rep;
     } catch (e) { /* miss */ }
   }
   /* STEP 1 — early anchor: hippocampal drive set so the hippocampal route alone carries normal
@@ -618,6 +651,7 @@ function calibrateSubject(M, opts) {
   const cort = calibrateLearningRate(M, opts);
   M.cal.lrCC = cort.lrCC;
   const report = { hippocampal: hip, tauHdays: chosenTau, cortical: cort };
+  verifyCalibration(M, P, report);
   if (!P.noCalCache) {
     try {
       fs2.mkdirSync(path2.dirname(cp), { recursive: true });
