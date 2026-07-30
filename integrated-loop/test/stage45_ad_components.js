@@ -57,7 +57,7 @@ const COMPONENTS = {
   "slot supply":        ["nightMin"],
   "spindle generation": ["physioSuppression"],
   "cortical capacity":  ["wCCscale"],
-  "hippocampal decay":  ["tauHdays", "driveMul"],
+  "hippocampal decay":  ["tauHscale", "driveMul"],
   "discharge capture":  ["iedRate", "coupling"],
 };
 
