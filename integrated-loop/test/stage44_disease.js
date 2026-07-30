@@ -70,13 +70,13 @@ function runProfile(prof) {
   const rec = DELAYS.map(() => []), bio = { slots: [], density: [], cs: [], frac: [] };
   for (const S of SUBJ) {
     const M = S.M;
-    A.resetCortical(M); A.applyProfile(M, prof, S.baseW); M._hcache = new Map();
+    A.resetCortical(M); A.applyProfile(M, prof, S.baseW);
     const n = A.runNight(M, prof);
     bio.slots.push(n.nSlots); bio.density.push(n.spindleDensity);
     (bio.pcr = bio.pcr || []).push(n.physioCoupledRate);
     bio.cs.push(n.couplingStrength); bio.frac.push(n.replayFraction);
     DELAYS.forEach((d, i) => rec[i].push(A.recallAtDelay(M, d, prof).recall));
-    M.cons.wCCmax = S.baseW; M._hcache = new Map();
+    M.cons.wCCmax = S.baseW;
   }
   return { recall: rec.map(mean), recallSd: rec.map(sd), slots: mean(bio.slots),
            density: mean(bio.density), physioCoupledRate: mean(bio.pcr),

@@ -323,7 +323,11 @@ function recallAtDelay(M, delayDays, opts) {
   const P = Object.assign(adefaults(), M.cal || {}, opts || {});
   const sup = hippocampalSupport(delayDays, P);
   M._hcache = M._hcache || new Map();
-  const key = sup.toFixed(6);
+  // key on everything that changes the hippocampal route, not just the delay. Suites previously
+  // cleared this cache between EVERY condition, forcing ~1.9 s of recomputation per subject per
+  // delay even when the hippocampal parameters were identical across conditions.
+  const key = [sup.toFixed(6), P.driveScale0, P.driveMul == null ? 1 : P.driveMul,
+               P.encodeScale == null ? 1 : P.encodeScale, P.retThr, P.retTemp].join("|");
   if (!M._hcache.has(key)) M._hcache.set(key, hippoRoute(M, sup, P));
   const h = M._hcache.get(key);
   const c = cortexRoute(M, P);
@@ -558,8 +562,28 @@ function calibrateHippocampalDrive(M, opts) {
    cortical route to normal one-week retention, and store both on the subject so every downstream
    call inherits them. Order matters — the learning-rate bisection must run with the hippocampal
    drive already fixed, or it compensates for a gain that is about to change. */
+/* Calibration is deterministic given the seed and the anchors, costs ~24 s per subject, and was
+   being recomputed identically on every run — the single largest cost in the suite and pure waste
+   across re-runs and container restarts. The three resulting constants are cached to disk under a
+   key built from the seed and every input that determines them, so a changed anchor invalidates the
+   cache rather than silently reusing a stale fit. */
+function calCachePath(M, P) {
+  const key = [M.order.length, M.cortex.P.seed, P.healthyEarlyRecall, P.specificityFloor,
+               P.hippoWeekCeiling, P.healthyWeekRetention, P.spindleP, P.fSO, P.nightMin,
+               P.retThr, P.retTemp].join("_");
+  return require("path").join(__dirname, "..", ".calcache", key + ".json");
+}
 function calibrateSubject(M, opts) {
   const P = Object.assign(adefaults(), opts || {});
+  const fs2 = require("fs"), path2 = require("path");
+  const cp = calCachePath(M, P);
+  if (!P.noCalCache) {
+    try {
+      const hit = JSON.parse(fs2.readFileSync(cp, "utf8"));
+      M.cal = hit.cal; M._hcache = new Map();
+      return Object.assign({ cached: true }, hit.report);
+    } catch (e) { /* miss */ }
+  }
   /* STEP 1 — early anchor: hippocampal drive set so the hippocampal route alone carries normal
      30-minute recall, subject to the specificity constraint. */
   const hip = calibrateHippocampalDrive(M, opts);
@@ -593,7 +617,14 @@ function calibrateSubject(M, opts) {
      retention, with the hippocampal parameters already fixed. */
   const cort = calibrateLearningRate(M, opts);
   M.cal.lrCC = cort.lrCC;
-  return { hippocampal: hip, tauHdays: chosenTau, cortical: cort };
+  const report = { hippocampal: hip, tauHdays: chosenTau, cortical: cort };
+  if (!P.noCalCache) {
+    try {
+      fs2.mkdirSync(path2.dirname(cp), { recursive: true });
+      fs2.writeFileSync(cp, JSON.stringify({ cal: M.cal, report }));
+    } catch (e) { /* cache is an optimisation, never a requirement */ }
+  }
+  return report;
 }
 
 module.exports = { adefaults, pRecall, calibrateHippocampalDrive, calibrateSubject, buildSubject, resetCortical, runNight, calibrateLearningRate,

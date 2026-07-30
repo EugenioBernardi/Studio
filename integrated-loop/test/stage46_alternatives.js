@@ -61,11 +61,11 @@ function runProfile(prof) {
   const rec = DELAYS.map(() => []), dens = [], pcr = [], frac = [];
   for (const S of SUBJ) {
     const M = S.M;
-    A.resetCortical(M); A.applyProfile(M, prof, S.baseW); M._hcache = new Map();
+    A.resetCortical(M); A.applyProfile(M, prof, S.baseW);
     const n = A.runNight(M, prof);
     dens.push(n.spindleDensity); pcr.push(n.physioCoupledRate); frac.push(n.replayFraction);
     DELAYS.forEach((d, i) => rec[i].push(A.recallAtDelay(M, d, prof).recall));
-    M.cons.wCCmax = S.baseW; M._hcache = new Map();
+    M.cons.wCCmax = S.baseW;
   }
   return { recall: rec.map(mean), density: mean(dens), pcr: mean(pcr), frac: mean(frac) };
 }
