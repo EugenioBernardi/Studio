@@ -42,8 +42,6 @@
     "test:scheduled": "node test/stage39_scheduled_consolidation.js",
     "test:topographic": "node test/stage40_topographic.js",
     "test:confound": "node test/stage41_capacity_confound.js",
-    "test:topographic": "node test/stage40_topographic.js",
-    "test:confound": "node test/stage41_capacity_confound.js",
     "test:atn": "node test/stage42_atn_pointer.js",
     "test:alf": "node test/stage43_alf.js",
     "test:cross-scale": "node test/stage5.js",

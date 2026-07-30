@@ -128,7 +128,7 @@ function runNight(M, opts) {
   const nSlots = Math.floor(seconds * P.fSO);
   const iedPerSlot = (P.iedRate / 60) / P.fSO;    // expected IEDs arriving per slot
 
-  let physio = 0, captured = 0, iedTotal = 0, iedSpindles = 0, writes = 0;
+  let physio = 0, captured = 0, iedTotal = 0, iedSpindles = 0, writes = 0, suppressed = 0;
   let turn = 0;
   for (let s = 0; s < nSlots; s++) {
     // how many IEDs arrived near this slot (Poisson, small-count sampling)
@@ -143,6 +143,10 @@ function runNight(M, opts) {
       if (!taken && rnd() < P.coupling) taken = true;
     }
     if (taken) { captured++; continue; }           // structurally intact, semantically empty
+
+    // A drug that dampens high-frequency bursting removes some physiological ripples too. The slot
+    // stays free — nothing captured it — but no replay rides it, so nothing is written.
+    if (P.physioSuppression && rnd() < P.physioSuppression) { suppressed++; continue; }
 
     // Physiological event: replay reinstates ONE item and writes its transition.
     //
@@ -173,7 +177,7 @@ function runNight(M, opts) {
   // the quantity this model says actually matters, and which scalp EEG does not currently report
   const replayFraction = nSlots > 0 ? physio / nSlots : 0;
 
-  return { nSlots, physio, captured, iedTotal, iedSpindles, writes,
+  return { nSlots, physio, captured, suppressed, iedTotal, iedSpindles, writes,
            spindleDensity, couplingStrength, replayFraction,
            iedRatePerMin: iedTotal / minutes };
 }
@@ -197,7 +201,9 @@ function hippocampalSupport(delayDays, P) { return Math.exp(-delayDays / P.tauHd
 /* items of the sequence recoverable via the hippocampus at a given support level */
 function hippoRoute(M, support, P) {
   const order = M.order, got = new Set([0]);
-  const scale = P.driveScale0 * support;
+  // driveMul < 1 represents hippocampal sclerosis or entorhinal tau: the index survives but drives
+  // cortex less effectively, so the early (hippocampus-dependent) route is itself degraded
+  const scale = P.driveScale0 * support * (P.driveMul == null ? 1 : P.driveMul);
   if (scale < 0.02) return got;                     // trace effectively gone
   for (let k = 1; k < order.length; k++) {
     const target = new Set(M.hpc.indices[order[k]].cortex);
@@ -303,5 +309,92 @@ function calibrateLearningRate(M, opts) {
   return { lrCC: best, achieved };
 }
 
+/* =====================================================================
+   TWO DISEASES THAT SHARE A FINAL COMMON PATH.
+
+   Both temporal lobe epilepsy and Alzheimer's disease produce accelerated forgetting, and both do
+   it partly through interictal discharges — subclinical epileptiform activity is present in a
+   substantial minority of AD patients (Vossel; Palop & Mucke), which is the shared node. But they
+   arrive there by different routes, and the model says the routes are distinguishable at the
+   bedside. Each disease is expressed through parameters that already exist, not through new ones.
+
+   TEMPORAL LOBE EPILEPSY — a CAPTURE disorder.
+     • high IED rate with high coupling: the channel is hijacked
+     • hippocampal sclerosis, when present, additionally weakens the hippocampal route (shorter
+       tauH, reduced reinstatement drive). Transient epileptic amnesia sits at the mild end —
+       discharges without much structural damage — which is exactly why TEA presents as PURE ALF
+       with a normal 30-minute test, while TLE with sclerosis presents as ordinary amnesia.
+     • slot SUPPLY is normal: these patients sleep.
+
+   ALZHEIMER'S DISEASE — a SUPPLY-AND-CAPACITY disorder that also has capture.
+     • sleep fragmentation reduces slow-oscillation up-states, so there are FEWER slots to begin
+       with (reduced effective night)
+     • synaptic and cortical loss reduces how much any one transition can hold (lower wCCmax)
+     • entorhinal/hippocampal tau shortens the hippocampal trace (shorter tauH)
+     • plus subclinical epileptiform capture, at a lower rate than epilepsy
+
+   THE DISCRIMINATING PREDICTION. Both give ALF, but the sleep study differs: epilepsy keeps or
+   raises spindle density while AD lowers it, and only AD shows the reduced slot supply. So spindle
+   density separates the two mechanisms even though the behavioural phenotype is shared.
+   ===================================================================== */
+function diseaseProfile(name, severity) {
+  const s = severity == null ? 1.0 : severity;
+  switch (name) {
+    case "healthy":
+      return { iedRate: 0, coupling: 0, nightMin: 60, tauHdays: 3.0, wCCscale: 1.0, driveMul: 1.0 };
+    case "TEA":                 // transient epileptic amnesia: discharges, little structural damage
+      return { iedRate: 25 * s, coupling: 0.9, nightMin: 60, tauHdays: 3.0,
+               wCCscale: 1.0, driveMul: 1.0 };
+    case "TLE-HS":              // temporal lobe epilepsy with hippocampal sclerosis
+      return { iedRate: 40 * s, coupling: 0.9, nightMin: 60, tauHdays: 3.0 - 1.4 * s,
+               wCCscale: 1.0, driveMul: 1 - 0.45 * s };
+    case "AD":                  // Alzheimer's: fewer slots, weaker slots, less capacity, some capture
+      // Reduced spindle density is one of the better-replicated sleep findings in AD, and it is a
+      // deficit in GENERATING physiological coupling events rather than in having them stolen. It
+      // is therefore the same variable the drug acts on at high dose (physioSuppression), which is
+      // the point: AD's channel is UNDERSUPPLIED where epilepsy's is HIJACKED, and a drug that
+      // frees the channel cannot help a channel that was never occupied.
+      return { iedRate: 12 * s, coupling: 0.7, nightMin: 60 * (1 - 0.40 * s),
+               physioSuppression: 0.30 * s,
+               tauHdays: 3.0 - 1.6 * s, wCCscale: 1 - 0.35 * s, driveMul: 1 - 0.30 * s };
+    default: throw new Error("unknown disease " + name);
+  }
+}
+
+/* apply a profile to a subject for one condition. wCCmax is restored by the caller via
+   resetCortical + reapply, so profiles never leak between conditions. */
+function applyProfile(M, prof, baseWCCmax) {
+  M.cons.wCCmax = baseWCCmax * prof.wCCscale;
+}
+
+/* Levetiracetam, modelled by its mechanism rather than as a generic "improvement".
+ *
+ * LEV acts at SV2A and preferentially dampens HIGH-FREQUENCY BURST firing, which is what makes it
+ * an antiepileptic that is relatively gentle on normal transmission. But sharp-wave ripples ARE
+ * high-frequency bursts. So the same action that suppresses discharges must, at sufficient dose,
+ * suppress physiological ripples too — and physiological ripples are the vehicle consolidation
+ * rides on.
+ *
+ * That predicts an INVERTED U in dose, with no extra assumption: low dose removes capture and
+ * memory improves; high dose starts removing the replay itself and memory falls again. This is the
+ * unexplained feature of Bakker et al. (2015), where 62.5 and 125 mg BID improved memory in
+ * amnestic MCI and 250 mg did not. `selectivity` is how much more sensitive discharges are than
+ * physiological ripples; it is the one quantity this account rests on and it is falsifiable. */
+function levetiracetam(prof, dose, opts) {
+  const o = opts || {};
+  const selectivity = o.selectivity == null ? 3.0 : o.selectivity;
+  const kIED = o.kIED == null ? 1.6 : o.kIED;          // per unit dose
+  const suppIED = 1 - Math.min(0.97, kIED * dose);
+  const suppPhys = 1 - Math.min(0.97, (kIED / selectivity) * dose);
+  // the drug's suppression COMPOUNDS with any the disease already imposes — a survival product,
+  // not a replacement. Overwriting it would silently cure AD's reduced spindle generation.
+  const intrinsic = prof.physioSuppression || 0;
+  return Object.assign({}, prof, {
+    iedRate: prof.iedRate * suppIED,
+    physioSuppression: 1 - (1 - intrinsic) * suppPhys,
+  });
+}
+
 module.exports = { adefaults, buildSubject, resetCortical, runNight, calibrateLearningRate,
-  recallAtDelay, hippocampalSupport, hippoRoute, cortexRoute, mulberry32 };
+  recallAtDelay, hippocampalSupport, hippoRoute, cortexRoute, mulberry32,
+  diseaseProfile, applyProfile, levetiracetam };
