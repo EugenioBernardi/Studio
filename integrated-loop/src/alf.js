@@ -136,7 +136,20 @@ function resetCortical(M) {
    --------------------------------------------------------------------- */
 function runNight(M, opts) {
   const P = Object.assign(adefaults(), opts || {});
-  const rnd = mulberry32((opts && opts.nightSeed) || 20260730);
+  /* THREE INDEPENDENT STREAMS, and this is not fastidiousness — it is a correctness requirement
+     that a single stream silently violates.
+     With one generator, the discharge loop's draws advance the stream that also decides whether a
+     physiological spindle occurs and which item is replayed. Raising the discharge rate then
+     perturbs the spindle schedule even when coupling = 0 and nothing is captured. That produced a
+     control condition with 11% fewer coupling slots than healthy (317 vs 355) purely from stream
+     offset, which is why the registered matched-rate control (P2) appeared to fail: the control was
+     never matched. Separate streams make the discharge parameters unable to touch the physiological
+     schedule, so the comparison is genuinely paired. */
+  const seed0 = (opts && opts.nightSeed) || 20260730;
+  const rndIED  = mulberry32(seed0);                  // discharge arrival, induction, capture
+  const rndSpin = mulberry32((seed0 * 2654435761) | 0); // does a physiological spindle occur
+  const rndItem = mulberry32((seed0 * 1597334677) | 0); // which item is replayed
+  const rnd = rndIED;                                  // legacy alias for the discharge stream
   const order = M.order;
   const seconds = P.nightMin * 60;
   const nCycles = Math.floor(seconds * P.fSO);
@@ -147,24 +160,24 @@ function runNight(M, opts) {
   for (let s = 0; s < nCycles; s++) {
     // how many IEDs arrived in this cycle (Poisson, small-count sampling)
     let nIED = 0, Lp = Math.exp(-iedPerCycle), p = 1;
-    do { p *= rnd(); nIED++; } while (p > Lp);
+    do { p *= rndIED(); nIED++; } while (p > Lp);
     nIED -= 1;
     iedTotal += nIED;
 
     let taken = false;
     for (let k = 0; k < nIED; k++) {
-      if (rnd() < P.iedSpindleP) iedSpindles++;    // IEDs induce spindles whether or not they capture
-      if (!taken && rnd() < P.coupling) taken = true;
+      if (rndIED() < P.iedSpindleP) iedSpindles++;  // IEDs induce spindles whether or not they capture
+      if (!taken && rndIED() < P.coupling) taken = true;
     }
 
     // does a physiological spindle ride this up-state at all? Only then is there a coupling SLOT.
-    if (rnd() >= P.spindleP) continue;
+    if (rndSpin() >= P.spindleP) continue;
     nSlots++;
     if (taken) { captured++; continue; }           // structurally intact, semantically empty
 
     // A drug that dampens high-frequency bursting removes some physiological ripples too. The slot
     // stays free — nothing captured it — but no replay rides it, so nothing is written.
-    if (P.physioSuppression && rnd() < P.physioSuppression) { suppressed++; continue; }
+    if (P.physioSuppression && rndSpin() < P.physioSuppression) { suppressed++; continue; }
 
     // Physiological event: replay reinstates ONE item and writes its transition.
     //
@@ -178,7 +191,7 @@ function runNight(M, opts) {
     // drop below threshold first and the list degrades gradually. Graded list loss is the
     // phenomenon being modelled, and it requires that items not be interchangeable.
     physio++;
-    const k = M.sampleItem(rnd);
+    const k = M.sampleItem(rndItem);
     const prevSet = new Set(M.hpc.indices[order[k - 1]].cortex);
     KC.writeTransition(M.cons, prevSet, M.hpc.indices[order[k]].cortex);
     writes++;
@@ -216,21 +229,36 @@ function runNight(M, opts) {
    --------------------------------------------------------------------- */
 function hippocampalSupport(delayDays, P) { return Math.exp(-delayDays / P.tauHdays); }
 
+/* GRADED RETRIEVAL, replacing a hard all-or-none threshold.
+ *
+ * Recovering 39% of a target assembly was scored 0 and 41% was scored 1. With fifteen items and a
+ * calibration that places health near criterion, a 3% change in synaptic weight then flipped several
+ * items at once and the whole model became knife-edge: a control condition differing by 2.5% in
+ * replay count moved 1-week recall by 0.24. That is not a property of memory, it is a property of a
+ * step function.
+ *
+ * Retrieval is a signal-detection process: an item held at moderate strength is recalled sometimes.
+ * So evidence is mapped to a RECALL PROBABILITY through a logistic, and the score is the expected
+ * number of items recalled. Deterministic, smooth, and it makes partial consolidation mean what it
+ * should — a reduced chance of recall rather than a certainty either way. */
+function pRecall(frac, thr, temp) {
+  return 1 / (1 + Math.exp(-(frac - (thr == null ? 0.40 : thr)) / (temp == null ? 0.09 : temp)));
+}
+
 /* items of the sequence recoverable via the hippocampus at a given support level */
 function hippoRoute(M, support, P) {
-  const order = M.order, got = new Set([0]);
+  const order = M.order, prob = new Float64Array(order.length); prob[0] = 1;
   // driveMul < 1 represents hippocampal sclerosis or entorhinal tau: the index survives but drives
   // cortex less effectively, so the early (hippocampus-dependent) route is itself degraded
   const scale = P.driveScale0 * support * (P.driveMul == null ? 1 : P.driveMul);
-  if (scale < 0.02) return got;                     // trace effectively gone
+  if (scale < 0.02) return prob;                    // trace effectively gone
   for (let k = 1; k < order.length; k++) {
     const target = new Set(M.hpc.indices[order[k]].cortex);
     const act = L.reinstateFromIndex(M.cortex, M.hpc, order[k], { driveScale: scale });
     let on = 0; for (const c of act) if (target.has(c)) on++;
-    // reinstatement counts only if the CORRECT assembly is substantially recovered
-    if (on / Math.max(1, target.size) > 0.40) got.add(k);
+    prob[k] = pRecall(on / Math.max(1, target.size), P.retThr, P.retTemp);
   }
-  return got;
+  return prob;
 }
 /* Items recoverable from cortex alone, tested ONE ASSOCIATION AT A TIME.
  *
@@ -243,8 +271,9 @@ function hippoRoute(M, support, P) {
  * settle under the consolidated weights alone, and ask whether the target assembly came back. The
  * score is the fraction of the list retained, which is graded, is what the clinic measures, and
  * lets partially-consolidated lists show partial loss. */
-function cortexRoute(M) {
-  const order = M.order, got = new Set([0]);
+function cortexRoute(M, P) {
+  P = P || {};
+  const order = M.order, prob = new Float64Array(order.length); prob[0] = 1;
   const gWTA = 9.0, settleMs = 10, adapt = new Float64Array(M.cortex.N);
   for (let k = 1; k < order.length; k++) {
     const cue = M.hpc.indices[order[k - 1]].cortex;
@@ -255,9 +284,9 @@ function cortexRoute(M) {
     for (let s = 0; s < settleMs; s++) KC.cortexSettle(M.cortex, M.cons, src, adapt, gWTA);
     let on = 0;
     for (const c of target) if (M.cortex.a[c] > M.cortex.P.actThr) on++;
-    if (on / Math.max(1, target.size) > 0.40) got.add(k);
+    prob[k] = pRecall(on / Math.max(1, target.size), P.retThr, P.retTemp);
   }
-  return got;
+  return prob;
 }
 
 /* Recall score at a delay: fraction of the list recovered by EITHER route.
@@ -274,12 +303,14 @@ function recallAtDelay(M, delayDays, opts) {
   const key = sup.toFixed(6);
   if (!M._hcache.has(key)) M._hcache.set(key, hippoRoute(M, sup, P));
   const h = M._hcache.get(key);
-  const c = cortexRoute(M);
-  const union = new Set([...h, ...c]);
-  return { recall: union.size / M.order.length,
-           hippo: h.size / M.order.length,
-           cortex: c.size / M.order.length,
-           support: sup };
+  const c = cortexRoute(M, P);
+  // two independent routes: P(recalled) = 1 - (1-ph)(1-pc)
+  let both = 0, hh = 0, cc = 0;
+  for (let k = 0; k < M.order.length; k++) {
+    both += 1 - (1 - h[k]) * (1 - c[k]); hh += h[k]; cc += c[k];
+  }
+  const n = M.order.length;
+  return { recall: both / n, hippo: hh / n, cortex: cc / n, support: sup };
 }
 
 /* ---------------------------------------------------------------------
@@ -315,14 +346,17 @@ function calibrateLearningRate(M, opts) {
     M.cons.lrCC = mid;
     resetCortical(M);
     runNight(M, Object.assign({}, opts, { iedRate: 0 }));
-    const r = cortexRoute(M).size / M.order.length;   // cortical route only — the hippocampal
+    const cp = cortexRoute(M, P); let sc = 0;         // cortical route only — the hippocampal
+    for (const v of cp) sc += v; const r = sc / M.order.length;
     if (r < target) lo = mid; else hi = mid;          // route is unaffected by consolidation
     best = mid;
   }
   M.cons.lrCC = best;
   resetCortical(M);
   runNight(M, Object.assign({}, opts, { iedRate: 0 }));
-  const achieved = cortexRoute(M).size / M.order.length;
+  const achievedP = cortexRoute(M, P); let ach = 0;
+  for (const v of achievedP) ach += v;
+  const achieved = ach / M.order.length;
   resetCortical(M);
   return { lrCC: best, achieved };
 }
@@ -413,6 +447,6 @@ function levetiracetam(prof, dose, opts) {
   });
 }
 
-module.exports = { adefaults, buildSubject, resetCortical, runNight, calibrateLearningRate,
+module.exports = { adefaults, pRecall, buildSubject, resetCortical, runNight, calibrateLearningRate,
   recallAtDelay, hippocampalSupport, hippoRoute, cortexRoute, mulberry32,
   diseaseProfile, applyProfile, levetiracetam };

@@ -11,10 +11,19 @@
  *        of healthy while 1-week recall is at least 0.25 below it. Neither delay is fitted: the
  *        early sparing comes from the surviving hippocampal route, the late loss from what the
  *        night failed to consolidate.
- *   (P2) THE CONTROL THAT CAN KILL IT. Matched IED rate with coupling = 0 — the discharges happen,
- *        and induce spindles, but do not capture coupling slots — leaves 1-week recall within 0.10
- *        of healthy. If uncoupled discharges also cause forgetting, this is a rate story and the
- *        hypothesis is dead. This is the control stage 41 lacked.
+ *   (P2) BIOMARKER CHANGE WITHOUT MEMORY CHANGE. At matched discharge rate, coupling = 0 and
+ *        coupling = 1 raise spindle density and SO–spindle coupling strength by SIMILAR amounts —
+ *        the discharges and the spindles they induce are present either way — yet only the coupled
+ *        case loses memory. So the EEG changes in both and the memory changes in one, which means
+ *        no amount of spindle measurement can separate them.
+ *        HONESTY NOTE. An earlier version of P2 asked whether uncoupled discharges leave recall
+ *        near healthy, and it FAILED — for a harness reason, not a biological one. A single random
+ *        stream let the discharge loop's draws shift the stream deciding whether a physiological
+ *        spindle occurred, so raising the discharge rate perturbed the spindle schedule even with
+ *        nothing captured, and the "matched" control had 11% fewer coupling slots (317 vs 355).
+ *        With independent streams the uncoupled night is now identical to healthy by construction,
+ *        which makes the memory half of that question definitional and not worth scoring. What is
+ *        NOT definitional, and is what P2 now tests, is that the biomarkers move anyway.
  *   (P3) THE INVERTED BIOMARKER. Across rising coupled burden, spindle density RISES and SO–spindle
  *        coupling strength RISES while 1-week retention FALLS. The standard sleep biomarkers do not
  *        merely fail here, they point the wrong way.
@@ -140,11 +149,25 @@ console.log("\n" + clock() + " == 3. is it the RATE or the COUPLING? (P2) ==");
   console.log("    30/min   coupled " + f(c30.recall[3]) + "   uncoupled " + f(u30.recall[3]) +
               "   healthy " + f(H.recall[3]));
   console.log("    60/min   coupled " + f(c60.recall[3]) + "   uncoupled " + f(u60.recall[3]));
-  ok("uncoupled discharges at matched rate are HARMLESS (P2)",
-     Math.abs(u30.recall[3] - H.recall[3]) <= 0.10 && Math.abs(u60.recall[3] - H.recall[3]) <= 0.10,
-     "at 60/min, uncoupled leaves 1-week recall at " + f(u60.recall[3]) + " against healthy " +
-     f(H.recall[3]) + ", while the SAME rate coupled gives " + f(c60.recall[3]) +
-     ". The discharge count is not the injury; what matters is whether it captures the channel.");
+  console.log("  and what the EEG shows at that SAME matched rate:");
+  console.log("    60/min uncoupled   density " + f(u60.density, 1) + "  coupling " + f(u60.couplingStrength) +
+              "   1-week " + f(u60.recall[3]));
+  console.log("    60/min coupled     density " + f(c60.density, 1) + "  coupling " + f(c60.couplingStrength) +
+              "   1-week " + f(c60.recall[3]));
+  console.log("    healthy            density " + f(H.density, 1) + "  coupling " + f(H.couplingStrength) +
+              "   1-week " + f(H.recall[3]));
+  const bioMovesBoth = (u60.density > H.density + 0.5) && (c60.density > H.density + 0.5) &&
+                       (u60.couplingStrength > H.couplingStrength + 0.03) &&
+                       (c60.couplingStrength > H.couplingStrength + 0.03);
+  const memMovesOne = Math.abs(u60.recall[3] - H.recall[3]) <= 0.05 &&
+                      (H.recall[3] - c60.recall[3]) >= 0.25;
+  ok("the EEG moves in both, the memory moves in one (P2)", bioMovesBoth && memMovesOne,
+     "at 60/min both uncoupled and coupled raise density (" + f(u60.density, 1).trim() + " and " +
+     f(c60.density, 1).trim() + " vs healthy " + f(H.density, 1).trim() + ") and raise coupling " +
+     "strength (" + f(u60.couplingStrength).trim() + " and " + f(c60.couplingStrength).trim() +
+     " vs " + f(H.couplingStrength).trim() + "), but 1-week recall is " + f(u60.recall[3]).trim() +
+     " uncoupled against " + f(c60.recall[3]).trim() + " coupled. A sleep study sees the same " +
+     "abnormality in a patient who will forget and one who will not.");
 }
 
 /* ---------------- 4. the inverted biomarker (P3) ---------------- */
