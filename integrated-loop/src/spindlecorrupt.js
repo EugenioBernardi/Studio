@@ -60,7 +60,10 @@ function defaults() {
   return {
     nightMin: 60,
     fSO: 0.9,                 // Hz — slow oscillation
-    spindleP: 0.10,           // P(physiological spindle rides an up-state) → 5.4/min in health
+    spindleP: 0.18,           // P(physiological spindle rides an up-state) → 5.2/min in health.
+                              // Re-anchored from 0.10 when the generator became depletable: with
+                              // `res` averaging <1 even in health, the old value gave 3.4/min. This
+                              // is an anchor to the healthy human spindle rate, not a result.
 
     // ---- disease level, DISCHARGE-INDEPENDENT (constraint 6)
     spindleLoss: 0.0,         // fractional reduction in spindle GENERATION
@@ -68,6 +71,37 @@ function defaults() {
 
     // ---- discharges
     iedRate: 0,               // per minute
+    /* THE SPINDLE GENERATOR IS A SHARED, DEPLETABLE RESOURCE — and this is the correction that
+       stage-48 forced. The first version treated physiological spindles and IED-induced spindles as
+       two independent additive processes. That is not what the thalamocortical circuit does, and the
+       model paid for it: spindle density rose with discharge rate at rho = +0.87, directly
+       contradicting constraint 6, and inflating the density forced a larger fitted generation loss
+       which in turn crushed the delivering rate to 0.25 of control against Schiller's 0.51.
+
+       Three independent lines say the generator is shared and self-limiting:
+         Ngo 2015     driving the circuit with repeated SO-locked clicks does NOT keep producing
+                      spindles — phase-locked spindle activity fades rapidly within a train, and the
+                      authors name spindle refractoriness as the protective mechanism. You cannot add
+                      spindles by driving harder.
+         Stoyell 2021 spindle rate is ANTICORRELATED with spike rate within a patient followed
+                      longitudinally, "consistent with a competitively shared underlying
+                      thalamocortical circuitry".
+         Pan 2025     in a thalamocortical network model, once spike discharges become abundant they
+                      inhibit spindle occurrence outright.
+
+       So an IED does not add a spindle for free: it fires a generator that then cannot fire again
+       until it recovers, consuming the opportunity a physiological spindle would have taken. The
+       memory cost stops being stipulated ("induced spindles deliver nothing") and becomes
+       DISPLACEMENT — the induced event spends the generator at a moment when no replay was
+       scheduled, and the refractory blocks the spindle that would have carried some.
+
+       This also changes what constraint 6 means. Bender's null is not evidence that discharges leave
+       spindles alone; it is what a shared generator predicts, because induction (+) and depletion (-)
+       cancel in the COUNT while the content is destroyed either way. Whether that cancellation is
+       generic or knife-edge is a question for the sweep, not something to assert here. */
+    resTau: 8.0,              // s — recovery time constant of the spindle generator
+    resCost: 1.0,             // fraction of available generator resource spent per spindle event
+
     pInduce: 0.05,            // P(an IED induces a spindle where none was starting).
                               //
                               // MORPHOLOGICALLY NORMAL BUT FUNCTIONALLY EMPTY, and the distinction
@@ -156,13 +190,21 @@ function runNight(M, opts) {
   let durSum = 0, ampSum = 0, cSum = 0;
   const cBase = P.cPhys * (1 - P.couplingLoss);
 
+  // shared generator: `res` is availability in [0,1], spent by any spindle, recovering with resTau
+  const dtCycle = 1 / P.fSO;
+  const recover = 1 - Math.exp(-dtCycle / Math.max(1e-6, P.resTau));
+  let res = 1;
+
   for (let i = 0; i < nCycles; i++) {
+    res += (1 - res) * recover;
+
     let nIED = 0, Lp = Math.exp(-iedPerCycle), p = 1;
     do { p *= rIED(); nIED++; } while (p > Lp);
     nIED -= 1;
     iedTotal += nIED;
 
-    const spindleStarts = rSpin() < spP;
+    // a physiological spindle needs both the drive AND an available generator
+    const spindleStarts = rSpin() < spP * res;
 
     if (spindleStarts) {
       // does a discharge land on this ongoing spindle and deform it?
@@ -170,6 +212,7 @@ function runNight(M, opts) {
       for (let k = 0; k < nIED; k++) if (rIED() < P.pCorrupt) { hit = true; break; }
       if (hit) {
         corrupted++;
+        res *= (1 - P.resCost);
         durSum += P.durNormal + P.durCorruptAdd;
         ampSum += P.ampNormal + P.ampCorruptAdd;
         cSum += cBase + P.cCorruptAdd;
@@ -188,6 +231,7 @@ function runNight(M, opts) {
         continue;
       }
       normal++;
+      res *= (1 - P.resCost);
       durSum += P.durNormal; ampSum += P.ampNormal; cSum += cBase;
       if (budget <= 0) { starved++; continue; }   // no replay left to ride this spindle
       budget--;
@@ -198,14 +242,17 @@ function runNight(M, opts) {
       continue;
     }
 
-    // no physiological spindle: a discharge may INDUCE one, and induced spindles are normal
-    // (constraint 5), so they deliver replay like any other
+    // No physiological spindle this cycle. A discharge may still fire the generator — but it fires
+    // THE SAME generator, scaled by what is available, and spends it. That is the whole correction:
+    // induction competes with physiological spindles rather than adding to them.
     let ind = false;
-    for (let k = 0; k < nIED; k++) if (rIED() < P.pInduce) { ind = true; break; }
+    for (let k = 0; k < nIED; k++) if (rIED() < P.pInduce * res) { ind = true; break; }
     if (ind) {
-      // counted by a spindle detector, contributes normal morphology to the averages, delivers
-      // nothing and consumes nothing — there was no replay scheduled for it to carry or waste
+      // morphologically normal (constraint 5) and counted by a detector, but it carries nothing —
+      // there was no replay scheduled for this moment — and the resource it spends is no longer
+      // available to the physiological spindle that would have carried some.
       induced++;
+      res *= (1 - P.resCost);
       durSum += P.durNormal; ampSum += P.ampNormal; cSum += cBase;
     }
   }
