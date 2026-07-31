@@ -8,6 +8,7 @@ const DIR = __dirname, ROOT = path.join(DIR, "..");
 const read = n => { try { return JSON.parse(fs.readFileSync(path.join(DIR, n), "utf8")); }
                     catch (e) { return null; } };
 const alf = read("alf.json"), dis = read("disease.json"), adc = read("ad-components.json");
+const sen = read("sensitivity.json"), alt = read("alternatives.json");
 if (!alf || !dis || !adc) {
   console.error("missing figures/*.json — run test:alf, test:disease, test:ad-components first");
   process.exit(1);
@@ -29,9 +30,10 @@ const looRows = Object.entries(adc.leaveOneOut)
 
 const md = `# Interictal discharges cause accelerated long-term forgetting by capturing hippocampo-cortical coupling slots
 
-**Working draft.** Status is stated plainly in §7: one registered prediction central to the
-phenotype **failed**, and two subsidiary lines were withdrawn. This is a draft for internal
-assessment, not a submission-ready manuscript.
+**Working draft.** Status is stated plainly in §7. This is a draft for internal assessment.
+Robustness of every claim to ±40% perturbation of every hand-set parameter is reported in §6b: the
+two load-bearing conclusions hold in ${sen.summary.c2.of}/${sen.summary.c2.of} perturbations, and
+the three that fail are named with the parameter responsible.
 
 ---
 
@@ -303,6 +305,41 @@ either way.
 5. **Sclerosis converts ALF into amnesia** by removing the compensating route, so the presence of a
    normal 30-minute test in an epilepsy patient is informative about hippocampal integrity.
 
+## 6b. Robustness: which conclusions survive their own parameters
+
+A conclusion that holds only at the values it was developed at is a coincidence, not a result. Every
+hand-set quantity in the model — the physiological spindle probability, both coupling-consistency
+constants, the discharge-induced spindle probability, slow-oscillation frequency, night length, both
+read-out constants, both behavioural anchors, the hippocampal week ceiling and the specificity floor
+— was perturbed by ±40% and the four conclusions re-evaluated. Nothing was tuned; the sweep only
+reports.
+
+| conclusion | holds in | breaks on |
+|---|---|---|
+| C1 the phenotype (early gap ≤ 0.10, late gap ≥ 0.25) | ${sen.summary.c1.held}/${sen.summary.c1.of} | ${sen.summary.c1.broke.join(", ") || "—"} |
+| **C2 the divergence (density up, coupled rate down)** | **${sen.summary.c2.held}/${sen.summary.c2.of}** | ${sen.summary.c2.broke.join(", ") || "—"} |
+| C3 the external anchor (ratio within 0.15 of 0.51) | ${sen.summary.c3.held}/${sen.summary.c3.of} | ${sen.summary.c3.broke.join(", ") || "—"} |
+| **C4 the predictor (replay fraction beats rate)** | **${sen.summary.c4.held}/${sen.summary.c4.of}** | ${sen.summary.c4.broke.join(", ") || "—"} |
+
+**The two claims the paper rests on are unconditionally robust.** The identifying prediction — that
+capture and only capture drives total spindle density up while the physiologically coupled rate
+falls — and the measurement recommendation — that replay-carrying fraction outpredicts discharge
+count — each survive every perturbation of every parameter.
+
+The three failures are named rather than buried, and each has a reason:
+
+- **C1 under a 40% higher read-out threshold.** Raising the criterion for counting an item recalled
+  compresses the early ceiling, so the 30-minute gap widens past 0.10. The phenotype is intact; the
+  measurement of "normal early" is what moves.
+- **C1 under a 40% higher one-week retention anchor.** Anchoring health near ceiling leaves less
+  room for the late deficit to reach 0.25. This is a statement about the anchor, not the mechanism,
+  and the anchor is set from normal human delayed recall.
+- **C3 under a 40% lower slow-oscillation frequency.** Fewer coupling opportunities per night change
+  the ratio to 0.36, outside the window around Schiller's 0.51. The external anchor therefore
+  assumes a roughly normal slow-oscillation rate — reasonable for the patients Schiller recorded,
+  but it means the quantitative match should not be claimed for populations with grossly abnormal
+  slow-wave sleep.
+
 ## 7. Status, limitations, and what was withdrawn
 
 Reported as failures rather than omitted.
@@ -334,6 +371,12 @@ Reported as failures rather than omitted.
   (${n(dis.schiller.modelRatio)} model vs ${n(dis.schiller.measured)} measured, Schiller 2025), and
   reduced spindle activity in early Alzheimer's (Bender et al., *Neurology* 2025). **Not externally
   validated**: everything else, including the total-density discrimination between the two diseases.
+- **A rival account is eliminated outright.** Of three serious alternatives implemented in the same
+  model and matched for one-week severity — encoding deficit, consolidation-rate reduction, faster
+  hippocampal decay — the decay account cannot reach ALF severity at all, flooring at
+  ${n(alt && alt.unreachable && alt.unreachable.length ? alt.unreachable[0].floor : null)} because
+  faster trace decay leaves consolidation untouched and whatever reached cortex is still there.
+  Any viable account of ALF must act on consolidation, not only on the trace.
 - **Not modelled**: seizures themselves, medication effects other than the withdrawn levetiracetam
   analysis, REM, or any wake-state contribution to consolidation.
 

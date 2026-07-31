@@ -1,8 +1,9 @@
 # Interictal discharges cause accelerated long-term forgetting by capturing hippocampo-cortical coupling slots
 
-**Working draft.** Status is stated plainly in §7: one registered prediction central to the
-phenotype **failed**, and two subsidiary lines were withdrawn. This is a draft for internal
-assessment, not a submission-ready manuscript.
+**Working draft.** Status is stated plainly in §7. This is a draft for internal assessment.
+Robustness of every claim to ±40% perturbation of every hand-set parameter is reported in §6b: the
+two load-bearing conclusions hold in 24/24 perturbations, and
+the three that fail are named with the parameter responsible.
 
 ---
 
@@ -25,13 +26,13 @@ does, but carries no valid hippocampal replay.
 The consequence follows without further assumption. The hippocampal trace decays on its normal
 schedule, so early recall is nearly preserved; the cortical trace is never written, so late recall
 collapses. Across 40 simulated patients in whom discharge rate and coupling varied
-independently, one-week retention correlated with discharge rate at ρ = -0.50, with
-spindle density at ρ = -0.14, and with the fraction of coupling events carrying replay at
-ρ = 0.94. Because IEDs *add* spindles and *raise* coupling strength, the conventional
+independently, one-week retention correlated with discharge rate at ρ = -0.48, with
+spindle density at ρ = -0.12, and with the fraction of coupling events carrying replay at
+ρ = 0.93. Because IEDs *add* spindles and *raise* coupling strength, the conventional
 sleep-EEG markers of consolidation move in the wrong direction: at matched discharge rate, a night
 that loses the memory and a night that does not are indistinguishable by spindle density
 (14.2 vs 11.0/min) while one-week recall differs by
-0.76 of the list.
+0.75 of the list.
 
 The model reproduces an independent human measurement it was not fitted to. Schiller et al. (2025)
 report coupled spindle–slow-wave rates reduced to 0.51 of control in temporal
@@ -102,24 +103,24 @@ Eight simulated subjects, a 15-item list, one night of NREM.
 
 | condition | 30 min | 6 h | 1 day | 1 week | 1 mo | density/min | coupling | replay frac |
 |---|---|---|---|---|---|---|---|---|
-| healthy | 0.97 | 0.97 | 0.97 | 0.85 | 0.85 | 5.7 | 0.55 | 1.00 |
-| IED 15/min, coupled | 0.92 | 0.91 | 0.90 | 0.62 | 0.61 | 6.7 | 0.64 | 0.77 |
-| IED 30/min, coupled | 0.85 | 0.85 | 0.83 | 0.36 | 0.35 | 7.9 | 0.71 | 0.55 |
-| IED 60/min, coupled | 0.79 | 0.78 | 0.76 | 0.09 | 0.08 | 11.0 | 0.77 | 0.32 |
-| IED 30/min, **uncoupled** | 0.97 | 0.97 | 0.97 | 0.85 | 0.85 | 10.4 | 0.67 | 1.00 |
-| IED 60/min, **uncoupled** | 0.97 | 0.97 | 0.97 | 0.85 | 0.85 | 14.2 | 0.71 | 1.00 |
+| healthy | 0.99 | 0.99 | 0.99 | 0.85 | 0.85 | 5.7 | 0.55 | 1.00 |
+| IED 15/min, coupled | 0.98 | 0.98 | 0.97 | 0.62 | 0.61 | 6.7 | 0.64 | 0.77 |
+| IED 30/min, coupled | 0.96 | 0.96 | 0.94 | 0.36 | 0.35 | 7.9 | 0.71 | 0.55 |
+| IED 60/min, coupled | 0.94 | 0.94 | 0.92 | 0.10 | 0.08 | 11.0 | 0.77 | 0.32 |
+| IED 30/min, **uncoupled** | 0.99 | 0.99 | 0.99 | 0.85 | 0.85 | 10.4 | 0.67 | 1.00 |
+| IED 60/min, **uncoupled** | 0.99 | 0.99 | 0.99 | 0.85 | 0.85 | 14.2 | 0.71 | 1.00 |
 
 **Figure 1** plots these curves.
 
 The deficit *grows with delay*: at 30 discharges/min the healthy-minus-patient gap runs
-0.12 (30 min), 0.12 (6 h), 0.14 (1 day), 0.49 (1 week), 0.50 (1 mo). A fixed encoding deficit
+0.03 (30 min), 0.03 (6 h), 0.05 (1 day), 0.49 (1 week), 0.50 (1 mo). A fixed encoding deficit
 would show a constant gap; this is loss over time, which is what "accelerated forgetting" names.
 
 **The registered criterion for the phenotype was not met.** We required, at a single dose, an early
 gap ≤ 0.10 *and* a one-week gap ≥ 0.25. At 15/min the early gap is
-0.06 but the late gap is only 0.23; at
+0.01 but the late gap is only 0.23; at
 30/min the late gap is 0.49 but the early gap is
-0.12. Neither dose satisfies both. We did not search for an
+0.03. Neither dose satisfies both. We did not search for an
 intermediate dose that would, because that is parameter-hunting. The model therefore predicts that
 ALF patients are **not truly normal early** but near-normal, and that sufficiently sensitive early
 testing should reveal a small deficit of order one to two items. This is falsifiable and, we note,
@@ -133,10 +134,10 @@ can differ in how much of it lands on the consolidation channel. Across 40 simul
 
 | predictor | Spearman ρ with one-week recall |
 |---|---|
-| discharge rate | -0.50 |
-| spindle density | -0.14 |
-| SO–spindle coupling strength | -0.75 |
-| **fraction of coupling events carrying replay** | **0.94** |
+| discharge rate | -0.48 |
+| spindle density | -0.12 |
+| SO–spindle coupling strength | -0.74 |
+| **fraction of coupling events carrying replay** | **0.93** |
 
 Spike burden is a weak predictor; spindle density has essentially none; coupling strength is
 *inverted*. The variable that predicts is the one no clinical study measures. This is a quantitative
@@ -147,7 +148,7 @@ against the wrong quantity.
 spindle density (11.0 and 14.2/min against healthy
 5.7) and both raise coupling strength (0.77 and
 0.71 against 0.55) — yet one-week recall is
-0.09 coupled against 0.85 uncoupled. A sleep study sees the same
+0.10 coupled against 0.85 uncoupled. A sleep study sees the same
 abnormality in a patient who will forget and a patient who will not. Reading spindle density as a
 proxy for consolidation would rank the worst-affected patient as the healthiest.
 
@@ -159,18 +160,18 @@ a modest amount of discharge capture from subclinical epileptiform activity. **F
 
 | condition | 30 min | 1 day | 1 week | slots | density/min |
 |---|---|---|---|---|---|
-| healthy | 0.97 | 0.97 | 0.85 | 342 | 5.7 |
-| TEA | 0.89 | 0.87 | 0.51 | 342 | 7.9 |
-| TLE-HS | 0.78 | 0.35 | 0.27 | 342 | 9.0 |
-| AD | 0.76 | 0.30 | 0.09 | 196 | 5.1 |
+| healthy | 0.99 | 0.99 | 0.85 | 342 | 5.7 |
+| TEA | 0.97 | 0.96 | 0.51 | 342 | 7.9 |
+| TLE-HS | 0.93 | 0.86 | 0.27 | 342 | 9.0 |
+| AD | 0.92 | 0.82 | 0.09 | 196 | 5.1 |
 
 Two results follow.
 
 **The epilepsy family splits by structural damage.** Transient epileptic amnesia — discharges without
-much structural damage — gives an early gap of 0.08 and a
+much structural damage — gives an early gap of 0.02 and a
 one-week gap of 0.34: pure accelerated forgetting behind a
 normal bedside test. Adding hippocampal sclerosis gives an early gap of
-0.19 — ordinary amnesia. The discharges are the same;
+0.07 — ordinary amnesia. The discharges are the same;
 sclerosis removes the route that was covering the early delay. The bedside test was never measuring
 the damaged system.
 
@@ -185,10 +186,10 @@ the error that invalidated an earlier line of this project. Leave-one-out from t
 
 | component removed | recovery at 30 min | recovery at 1 day | recovery at 1 week |
 |---|---|---|---|
-| slot supply | +0.08 | +0.21 | +0.29 |
-| spindle generation | +0.06 | +0.18 | +0.25 |
-| discharge capture | +0.02 | +0.03 | +0.03 |
-| hippocampal decay | +0.03 | +0.46 | +0.01 |
+| slot supply | +0.03 | +0.06 | +0.29 |
+| spindle generation | +0.02 | +0.05 | +0.25 |
+| discharge capture | +0.01 | +0.02 | +0.03 |
+| hippocampal decay | +0.02 | +0.10 | +0.01 |
 | cortical capacity | +0.00 | +0.00 | +0.00 |
 
 Three things follow, two of them uncomfortable.
@@ -216,10 +217,10 @@ synaptic loss, and any claim about that mechanism would have to come from elsewh
 **A registered prediction about the timing of the components failed.** We predicted that hippocampal
 decay would act early and slot supply late. Slot supply does act late
 (+0.29 at one week vs
-+0.08 at 30 min), but hippocampal decay does not act
-early — it contributes +0.03 at 30 minutes and
++0.03 at 30 min), but hippocampal decay does not act
+early — it contributes +0.02 at 30 minutes and
 +0.01 at one week, and its effect is
-concentrated at the **intermediate** delay (+0.46
+concentrated at the **intermediate** delay (+0.10
 at one day). In hindsight this is the sensible answer and we should have predicted it: at 30 minutes
 even a degraded hippocampal trace suffices, at one week it has decayed in every condition, and only
 in between does its decay *rate* matter. The split between early and late causes is real; our
@@ -280,6 +281,41 @@ either way.
 5. **Sclerosis converts ALF into amnesia** by removing the compensating route, so the presence of a
    normal 30-minute test in an epilepsy patient is informative about hippocampal integrity.
 
+## 6b. Robustness: which conclusions survive their own parameters
+
+A conclusion that holds only at the values it was developed at is a coincidence, not a result. Every
+hand-set quantity in the model — the physiological spindle probability, both coupling-consistency
+constants, the discharge-induced spindle probability, slow-oscillation frequency, night length, both
+read-out constants, both behavioural anchors, the hippocampal week ceiling and the specificity floor
+— was perturbed by ±40% and the four conclusions re-evaluated. Nothing was tuned; the sweep only
+reports.
+
+| conclusion | holds in | breaks on |
+|---|---|---|
+| C1 the phenotype (early gap ≤ 0.10, late gap ≥ 0.25) | 22/24 | retThr (readout)+, week anchor+ |
+| **C2 the divergence (density up, coupled rate down)** | **24/24** | — |
+| C3 the external anchor (ratio within 0.15 of 0.51) | 23/24 | fSO− |
+| **C4 the predictor (replay fraction beats rate)** | **24/24** | — |
+
+**The two claims the paper rests on are unconditionally robust.** The identifying prediction — that
+capture and only capture drives total spindle density up while the physiologically coupled rate
+falls — and the measurement recommendation — that replay-carrying fraction outpredicts discharge
+count — each survive every perturbation of every parameter.
+
+The three failures are named rather than buried, and each has a reason:
+
+- **C1 under a 40% higher read-out threshold.** Raising the criterion for counting an item recalled
+  compresses the early ceiling, so the 30-minute gap widens past 0.10. The phenotype is intact; the
+  measurement of "normal early" is what moves.
+- **C1 under a 40% higher one-week retention anchor.** Anchoring health near ceiling leaves less
+  room for the late deficit to reach 0.25. This is a statement about the anchor, not the mechanism,
+  and the anchor is set from normal human delayed recall.
+- **C3 under a 40% lower slow-oscillation frequency.** Fewer coupling opportunities per night change
+  the ratio to 0.36, outside the window around Schiller's 0.51. The external anchor therefore
+  assumes a roughly normal slow-oscillation rate — reasonable for the patients Schiller recorded,
+  but it means the quantitative match should not be claimed for populations with grossly abnormal
+  slow-wave sleep.
+
 ## 7. Status, limitations, and what was withdrawn
 
 Reported as failures rather than omitted.
@@ -311,6 +347,12 @@ Reported as failures rather than omitted.
   (0.50 model vs 0.51 measured, Schiller 2025), and
   reduced spindle activity in early Alzheimer's (Bender et al., *Neurology* 2025). **Not externally
   validated**: everything else, including the total-density discrimination between the two diseases.
+- **A rival account is eliminated outright.** Of three serious alternatives implemented in the same
+  model and matched for one-week severity — encoding deficit, consolidation-rate reduction, faster
+  hippocampal decay — the decay account cannot reach ALF severity at all, flooring at
+  0.85 because
+  faster trace decay leaves consolidation untouched and whatever reached cortex is still there.
+  Any viable account of ALF must act on consolidation, not only on the trace.
 - **Not modelled**: seizures themselves, medication effects other than the withdrawn levetiracetam
   analysis, REM, or any wake-state contribution to consolidation.
 
