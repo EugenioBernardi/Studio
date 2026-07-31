@@ -69,14 +69,29 @@ function adefaults() {
     // ---- what a coupling event looks like on scalp EEG, taken from Uehara 2026
     cPhys: 0.55,         // SO–spindle phase consistency of a physiological coupling event
     cIED: 0.82,          // ...of an IED-induced one. HIGHER — this is the measured finding.
-    iedSpindleP: 0.15,   // P(an IED induces a frontal spindle), against a physiological baseline of
-                         // spindleP = 0.10 — so a discharge raises spindle probability by about
-                         // half, which is what "spindle occurrence increased 0.4–0.8 s after IEDs"
-                         // (Uehara 2026) supports. An earlier version used 0.85, i.e. nearly every
-                         // discharge spawning a spindle, which produced a healthy-vs-epilepsy
-                         // density ratio of 5x that no sleep study reports. The elevation is real
-                         // but modest, and the "runs hot" claim has to survive at the modest value
-                         // or it is not a claim about patients.
+    iedSpindleP: 0.05,   // P(an IED induces a frontal spindle).
+                         //
+                         // FALSIFIED AT 0.15 AND REDUCED HERE, and the correction removes what this
+                         // model advertised as its identifying prediction. Bender et al. (Neurology
+                         // 2023), 81 TLE patients against 28 non-epilepsy controls on overnight
+                         // EEG, report spindle density REDUCED by ~30% in TLE and spindle-SO
+                         // coupling strength REDUCED, with NO significant association between any
+                         // spindle measure and hippocampal IED rate. At 0.15 this model predicted
+                         // density RISING 5.7 -> 8.9/min and coupling strength rising 0.55 -> 0.73.
+                         // Both directions are wrong against 81 patients.
+                         //
+                         // Uehara (2026) genuinely did observe spindle occurrence rising 0.4-0.8 s
+                         // after a discharge, so peri-IED induction is real; but a local
+                         // event-locked increase is compatible with a NET whole-night reduction
+                         // once capture removes more physiological events than induction adds.
+                         // 0.05 keeps the induction Uehara measured while letting the net density
+                         // fall, which is what the whole-night data show.
+                         //
+                         // NOTE WHAT THIS PARAMETER DOES NOT TOUCH: one-week recall is 0.247 at both
+                         // 0.15 and 0, identical to three decimals. Induced spindles carry no replay,
+                         // so they never affected memory - they only ever affected the BIOMARKER.
+                         // The mechanism is untouched by this correction; the prediction built on it
+                         // is not.
     // ---- retrieval
     encodeScale: 1.0,    // ENCODING STRENGTH. A weakly encoded memory has both a weaker hippocampal
                          // index (so it reinstates cortex less well) and less to replay (so each
