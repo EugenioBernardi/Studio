@@ -63,6 +63,26 @@ probability at ≲0.02. It is not explained by the model**, and it is not presen
 The depletable generator is kept anyway — it is the more correct circuit whether or not it helps.
 `spindleP` re-anchored 0.10 → 0.18 to hold healthy density at 5.2/min.
 
+### Confirmatory re-run with the depletable generator
+
+Every failing row moved toward its target, none crossed, nothing regressed:
+
+| row | as registered | with shared generator | target |
+|---|---|---|---|
+| C3 delivering ratio | 0.25 | 0.32 | 0.51 ± 0.12 (needs ≥ 0.39) |
+| C6 ρ(density, discharge rate) | +0.87 | +0.70 | ~0 |
+| C7 coincidence vs rate | 0.29 vs 0.64 | 0.50 vs 0.78 | coincidence must win |
+
+C1/C2 still pass (fitted `spindleLoss` 0.60 → 0.55, density ratio 0.69); C4/C5 unchanged at +75 ms and
++2.0 µV. A consistent ~25–30 % of the way to target, from one mechanism change, with no row going
+backwards. That is a right-in-kind, too-weak-in-magnitude signature, not a wrong mechanism.
+
+**The re-run did not complete.** The process died after C8's budget-0.7 row without writing the 0.5
+row or the summary line; the task captured no exit status and disk was not the cause. C8's post-fix
+status is therefore unknown — at budget 0.7 the difference had already gone non-negative (+0.04,
+against −0.09 pre-fix), so the effect had shifted to requiring a scarcer pool, but whether it
+survives at 0.5 was not measured and is not assumed here.
+
 ## C7 is false in the model, and it was the clinical hook
 
 C7 predicted that coincidence fraction would outpredict discharge rate for one-week recall. It
@@ -116,3 +136,32 @@ is that IEDs consume or replace sharp-wave ripples would:
 
 That is a different model, not a repair of this one, and it should not be started without saying so
 first.
+
+## The larger error, which is about level of description
+
+Both models in this line are **actuarial models of spindle events**. `spindlecorrupt.js` contains no
+phase variable — spindles are a Bernoulli draw per slow-oscillation cycle, discharges are Poisson,
+and "coupling strength" is an assigned scalar rather than a phase relationship anything computes.
+That is not the level this project works at, and `src/spindlegate.js` already holds a thalamic
+reticular oscillator that produces spindles emergently at 5.0/min and 759 ms — both in human range —
+which was measured earlier in this same line of work and then not used.
+
+Two consequences follow, and both are visible in the results above.
+
+**Constraints were listed but never checked against the mechanism class.** C3 cannot be an emergent
+check: with density fitted to 0.70 and corruption removing a share of the survivors, the delivering
+ratio is algebraically 0.70 × (1 − corrupted fraction), so hitting 0.51 requires corrupting exactly
+27 % — a second fit, not a test. C6 is the same: any mechanism where discharges *add* detector-visible
+spindles in proportion to discharge rate must give ρ > 0 against a measured null. Both are settled by
+arithmetic on paper. Neither needed a 748-second run to discover.
+
+**The envelope abstraction is why the repair came up short.** Ngo's spindle refractoriness is T-type
+calcium de-inactivation in reticular neurons. Modelling it as `res *= (1 - resCost)` with exponential
+recovery is the envelope again, and it recovered ~25–30 % of each gap — the same shortfall seen
+earlier when emergent corruption magnitude gave 0–32 ms against Sákovics's measured +126 ms. The same
+missing physics, twice.
+
+So the pre-build protocol did not fail on the literature search this time; the search was adequate.
+It failed because a constraint list cannot rescue a model built at the wrong level of description,
+and because no step required deriving whether the proposed mechanism could produce the required signs
+and magnitudes *at all* before coding began. Both gaps belong in the protocol.
