@@ -48,6 +48,7 @@
     "test:ad-components": "node test/stage45_ad_components.js",
     "test:alternatives": "node test/stage46_alternatives.js",
     "test:sensitivity": "node test/stage47_sensitivity.js",
+    "test:constraints": "node test/stage48_constraints.js",
     "figures": "node figures/build-figures.js",
     "test:cross-scale": "node test/stage5.js",
     "test:full": "npm test && npm run test:cross-scale"
