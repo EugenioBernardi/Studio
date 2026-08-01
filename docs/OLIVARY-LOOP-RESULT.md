@@ -1,4 +1,17 @@
+# WITHDRAWN — see the retraction at the top
+
 # Result: the olivocerebellar loop has two failure modes, and essential tremor is not the synchrony one
+
+> ## RETRACTION
+>
+> **The headline finding below does not survive its own follow-up check and is withdrawn.** The
+> conclusions about "two failure modes", the gap-junction dissociation (P3), and the frequency
+> invariance (P5) all rest on a healthy baseline that is wrong. Details in
+> `OLIVARY-LOOP-RETRACTION.md`. What survives is the sign analysis, and it is a negative result:
+> **no cerebellar cortical lesion can produce olivary hypersynchrony**, because every one of them
+> raises nucleo-olivary drive and therefore de-couples the olive. That is robust across coupling
+> regimes and heterogeneities and it is the reason the hypothesis fails.
+
 
 **4 of 5 registered rows pass. The row that fails is the informative one**, and it changes the
 conclusion from the hypothesis as registered in `OLIVARY-LOOP-PREBUILD.md` into a sharper claim.
