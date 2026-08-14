@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Brian2 codegen artefacts
+output/
+*.so
+
+# Downloaded OpenNeuro data — never commit; these run to hundreds of GB
+data/
+derivatives/
+*.edf
+*.fif
+*.set
+*.nii
+*.nii.gz
+
+# Figures are regenerable; CSV summaries in results/ are small and tracked
+results/*.png

@@ -1,0 +1,12 @@
+# Brian2 2.9 still references np.ndarray.ptp, removed in numpy 2.3.
+# With numpy >= 2.3 `import brian2` raises AttributeError at import time.
+numpy>=2.0,<2.3
+brian2>=2.9
+scipy>=1.11
+matplotlib>=3.7
+
+# For the OpenNeuro side (docs/03-openneuro-mapping.md):
+#   mne>=1.6
+#   mne-bids>=0.14
+#   openneuro-py>=2024.2
+#   fooof>=1.1        # or specparam; use this, not observables.py, on real EEG
