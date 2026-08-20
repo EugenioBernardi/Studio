@@ -1,0 +1,100 @@
+module.exports = [
+{
+ slug:'olivary-synchrony', title:'Olivary Synchrony', favicon:'🌀',
+ kicker:'TREMOR MECHANISM', h1:'Olivary Synchrony',
+ status:'validated', pills:['7/7 checks','10 seeds','baseline validated first','models/olive-v2.js'],
+ desc:'Whether olivary synchrony can build a tremor rhythm from 1 Hz spiking, and which cerebellar lesion could ever cause it.',
+ thesis:'Essential tremor is disputed between a camp that makes the inferior olive a pacemaker and a camp that calls it irrelevant. This model answers the objection that decides between them, then finds that neither camp gets essential tremor.',
+ circuit:'input + <b>phase gate</b> → complex spike → Purkinje pause ⊣ DCN → <b>nucleo-olivary GABA shunts the gap junctions</b> → olivary coupling',
+ notes:[{t:'<b>Built after a withdrawal.</b> The first version of this model reported a tremor result on a healthy baseline that hummed at 6 Hz <i>more coherently than the diseased one</i>. Here the healthy circuit is validated against an explicit no-rhythm null before any lesion is interpreted.'}],
+ stats:[
+  {k:'94 vs 94 ± 28',v:'Healthy spectral sharpness against a no-oscillation null — the baseline is genuinely quiet'},
+  {k:'1.001 → 1.016',v:'Per-cell complex-spike rate across the whole coupling ladder. It does not change.'},
+  {k:'76 → 4984',v:'Spectral sharpness across that same ladder. Only synchrony changed.'}],
+ body:'<p><strong>The design fault that caused the withdrawal.</strong> Version one emitted a complex spike on every crossing of the subthreshold phase, so a population of near-identical clocks <em>had</em> to carry a 6 Hz component whether healthy or diseased. The rhythm was baked into the generator.</p><p>Physiologically the oscillation <strong>gates</strong> spiking rather than driving it: a complex spike needs coincident synaptic input arriving inside a depolarised window. With input at random times and cells at scattered phases the output is near-Poisson and carries no rhythm — the healthy state version one could never produce.</p><p><strong>And this is where synchrony does work.</strong> Coupling aligns the gating windows, and aligned windows convert the same aperiodic input into a rhythmic population output with the spike rate untouched.</p>',
+ rows:[
+  {c:'Healthy per-cell complex-spike rate',r:'1.009 Hz/cell'},
+  {c:'Healthy rhythm above the null',r:'none — 94 vs 94 ± 28'},
+  {c:'Healthy olivary coherence',r:'R = 0.177'},
+  {c:'Rhythm tracks the olive (fIO 3 / 6 / 9 Hz)',r:'3.1 / 6.2 / 8.6 Hz'},
+  {c:'Cortical CF→PC lesion, any shunt strength',r:'R falls 0.18 → 0.14',tone:'bad'},
+  {c:'Cortical lesion rhythm above null',r:'never',tone:'bad'},
+  {c:'Dentato-olivary lesion',r:'R → 0.98, sharpness 9342'}],
+ keep:[
+  'The <strong>no-oscillation null</strong>. A filtered point process scores ~94 with no rhythm present at all, so every spectral number is meaningless in isolation. Version one’s "sharpness 45" was noise.',
+  'Complex spikes must be <strong>input-gated, not phase-driven</strong>, or the rhythm is an artefact of the spike rule.',
+  '<strong>Validate the baseline before interpreting any lesion.</strong> A registered prediction suite says nothing if the control condition is wrong, because every row is a comparison against it.'],
+ openTitle:'What it concludes, and its limits',
+ open:[
+  '<strong>The 1 Hz objection is a category error.</strong> Cells firing at 1 Hz demonstrably produce a 6.2 Hz population rhythm, because per-cell rate and population rhythm are different quantities.',
+  '<strong>But essential tremor still cannot work this way.</strong> Its pathology is cortical, and every cortical lesion reduces Purkinje output, disinhibits the nuclei, raises nucleo-olivary drive and de-couples the olive. The sign is structural, not a tuning outcome.',
+  'The dispute reduces to <strong>one measurable number</strong>: how much does tonic nucleo-olivary tone shunt olivary electrical coupling? Below about twofold, nothing in the cerebellum can drive the olive into rhythm.',
+  'Mean-field phases only — no conductances, no T-type calcium. Output is nuclear firing, not limb displacement.',
+  'The oculopalatal frequency match requires <em>choosing</em> a slower olivary frequency, so it is a consistency note rather than a prediction.']
+},
+{
+ slug:'integrated-loop', title:'The Integrated Loop', favicon:'🔁',
+ kicker:'SYSTEMS CONSOLIDATION', h1:'The Integrated Loop',
+ status:'partial', pills:['~40 stages','several deliberately red','one retraction','integrated-loop/'],
+ desc:'Sensory cortex, entorhinal cortex, hippocampus, thalamus and parietal cortex running as one circuit, with the validation discipline as the actual contribution.',
+ thesis:'One codebase in which cortex, entorhinal cortex, hippocampus, thalamus and posterior parietal cortex run as a single circuit, headless and dependency-free. <b>The contribution is the integration and the discipline of the validation, not new biology.</b>',
+ circuit:'sensory cortex ⇄ entorhinal ⇄ <b>hippocampus</b> ⇄ consolidation &nbsp;·&nbsp; NREM thalamocortical gate &nbsp;·&nbsp; bilateral vision · two hippocampi · two parietal cortices · limbic thalamus',
+ stats:[
+  {k:'0 knife-edge',v:'Stage 16 sensitivity sweep: 4 claims robust, 2 moderate, none depending on a chosen parameter'},
+  {k:'8 of 16',v:'Stage 17 external calibration against published ranges — reported as it fell',tone:'warn'},
+  {k:'Stage 41',v:'The control that was never run. It retracted stages 38–40.',tone:'bad'}],
+ body:'<p>Fifteen-plus stage suites, each carrying its predictions in the file header <em>including predictions of failure</em>, so a miss cannot be reinterpreted as a hit afterwards. Several tests ship deliberately red.</p><p><strong>The retraction is the most useful thing in it.</strong> Stage 41 ran the one missing control — the reticular gate with no competition between sectors. The capacity signature that stage 39 had attributed to the scheduler appeared in full with the mechanism switched off. The cause was arithmetic: one memory per ripple, with the ripple count fixed by the night’s length, is a budget set before any thalamus is consulted.</p><p>The lesion dissociation that looked like evidence for a thalamic gate is reproduced exactly by a content-blind coin at p = 0.</p>',
+ rowsTitle:'Selected stages',
+ rows:[
+  {c:'1 · sparse, near-orthogonal, completing assemblies',r:'8/8'},
+  {c:'2 · entorhinal→DG→CA3 index binding',r:'9/9'},
+  {c:'3 · ripple-paced replay, forward ≫ backward',r:'7/7'},
+  {c:'5 · slow-oscillation triggers replay, spindle gates it',r:'9/9'},
+  {c:'7 · HMAX front-end',r:'1/4 deliberately',tone:'warn'},
+  {c:'12 · chiasm, six lesion sites, per-eye perimetry',r:'14/14'},
+  {c:'13 · two hippocampi: material specificity, H.M., Wada',r:'15/15'},
+  {c:'14 · neglect: extinction, bisection, the paradox',r:'15/15 + 1 predicted fail'},
+  {c:'15 · limbic thalamus, diencephalic amnesia',r:'16/16'},
+  {c:'17 · external calibration audit',r:'8/16 in range',tone:'warn'},
+  {c:'24 · ten thousand cells, homeostatic excitability',r:'9/14',tone:'warn'},
+  {c:'41 · the missing scheduler control',r:'retracts 38–40',tone:'bad'}],
+ keep:[
+  '<strong>Register predictions before running</strong>, including predictions of failure, in the test file header.',
+  '<strong>Replicate before believing.</strong> A mean difference with half the seeds agreeing is not a result; the per-seed consistency count is printed.',
+  '<strong>Never sweep a parameter until something crosses significance.</strong> Where a sweep would have manufactured an effect, the null is reported instead.',
+  'Reset from <code>defaults()</code>, never from a copied literal. A stale duplicated value once applied three times too much inhibition, silently.'],
+ open:['Stage 14 pseudoneglect comes out with the wrong <em>sign</em>.','Stage 11 tilt illusion is exactly 0.0° at every angle once the filters are fine.','Stages 27–37 are recorded only in commit messages and the columnar-architecture document.']
+},
+{
+ slug:'accelerated-forgetting', title:'Accelerated Forgetting', favicon:'🪦',
+ kicker:'FALSIFIED LINE', h1:'Accelerated Forgetting',
+ status:'retracted', pills:['capture model retired','corruption model 5/8','both falsified'],
+ desc:'Two models of accelerated long-term forgetting in epilepsy, both falsified, and the literature check that would have stopped either before it was built.',
+ thesis:'Two successive accounts of why people with temporal-lobe epilepsy forget normally at thirty minutes and catastrophically at a week. <b>Both are dead.</b> The record is kept because the way they died is the useful part.',
+ circuit:'discharge → spindle <b>capture</b> (retired) &nbsp;·&nbsp; discharge → spindle <b>corruption</b> (failed) &nbsp;·&nbsp; ripple ⇄ spindle ⇄ slow oscillation',
+ notes:[
+  {bad:true,t:'<b>The capture model predicted spindle density preserved or increased with discharge rate.</b> Bender et al. (Neurology 2023, n = 81) measured density reduced by about 30 %, coupling reduced, and no association with hippocampal discharge rate. Every clause inverted. A capture model is additive by construction; no parameter setting yields fewer spindles.'},
+  {bad:true,t:'<b>Both papers were published before the model was built</b>, and both are returned by an ordinary PubMed query. The pre-build search asked whether the idea had been published, and never whether it had been falsified.'}],
+ stats:[
+  {k:'ρ = +0.87',v:'Density against discharge rate in the corruption model, against a measured null',tone:'bad'},
+  {k:'0.25 vs 0.51',v:'Coupled-rate ratio — the one registered emergent check, missed by a factor of two',tone:'bad'},
+  {k:'0.29 vs 0.64',v:'Coincidence fraction versus spike rate as predictors — the clinical claim, backwards',tone:'bad'}],
+ body:'<p>The second model corrupted the spindles a discharge coincided with, rather than adding new ones, specifically to satisfy Bender. It reproduced four of six measured constraints and contradicted two.</p><p>A repair grounded in three independent findings — that driving the circuit does not keep producing spindles, that spindle rate anticorrelates with spike rate, and that abundant discharges suppress spindles outright — moved every failing row about a quarter of the way to target and crossed none.</p><p><strong>One prediction survived.</strong> A corrupted spindle is worse than an absent one, but only when replay is a scarce resource — and the comparison runs against the hypothesis, since the corruption arm delivers 9 % more spindles and still ends 0.29 lower.</p>',
+ rowsTitle:'The corruption model against its registered rows',
+ rows:[
+  {c:'C1 · spindle density −30 %',r:'0.69 — fitted',tone:'plain'},
+  {c:'C2 · coupling strength reduced',r:'0.55 → 0.47 — fitted',tone:'plain'},
+  {c:'C3 · coupled rate 0.51 of control',r:'0.25 — FAIL',tone:'bad'},
+  {c:'C4 · coincident spindles longer, larger',r:'+71 ms, +1.9 µV'},
+  {c:'C5 · induced spindles morphologically normal',r:'unchanged'},
+  {c:'C6 · no density/rate association',r:'ρ +0.87 — FAIL',tone:'bad'},
+  {c:'C7 · coincidence outpredicts spike rate',r:'0.29 vs 0.64 — FAIL',tone:'bad'},
+  {c:'C8 · corrupted worse than absent',r:'−0.29, limiting budget only'}],
+ keep:[
+  '<strong>Search for falsification, not just novelty.</strong> Enumerate every predicted direction and search each one both ways before writing code.',
+  '<strong>Internal consistency does not protect a wrong mechanism.</strong> The capture model passed twenty-plus checks, was robust to ±40 % sweeps, and matched an external dataset it was never fitted to.',
+  'Independent RNG streams per stochastic process. One shared stream produced a false negative that took real time to find.',
+  'A <strong>logistic read-out</strong>, not a threshold — under a step function a 2.5 % weight change moved recall by 0.24.'],
+ openTitle:'Where it points, if anywhere',
+ open:['Both models put the pathology in spindle <em>events</em>, and spindle events are tightly constrained by measurement. The only row that survived puts the lesion in the ripple pool — which is also the only place a discharge-driven decrease has actually been measured.']
+}];
