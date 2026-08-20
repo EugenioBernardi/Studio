@@ -1,0 +1,22 @@
+const {chromium}=require('playwright');const fs=require('fs');
+(async()=>{
+ const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+ const pg=await b.newPage({viewport:{width:1400,height:1000}});
+ const errs=[];
+ pg.on('pageerror',e=>errs.push(String(e).slice(0,160)));
+ pg.on('console',m=>{const t=m.text(); if(m.type()==='error'&&!/Failed to load resource/.test(t))errs.push(t.slice(0,160));});
+ const body=fs.readFileSync('live/olivary-synchrony.html','utf8');
+ await pg.setContent('<!doctype html><html><head><meta charset="utf-8"></head><body>'+body+'</body></html>',{waitUntil:'load'});
+ const read=async()=>pg.evaluate(()=>({R:mR.textContent,CS:mCS.textContent,sh:mSh.textContent,f:mF.textContent,nul:mNull.textContent,v:verdict.textContent.slice(0,70)}));
+ await pg.waitForTimeout(14000);
+ console.log('\n=== IN-BROWSER, healthy (gGap 8) ==='); console.log(await read());
+ await pg.evaluate(()=>{const s=document.getElementById('gGap');s.value=24;s.dispatchEvent(new Event('input'));});
+ await pg.waitForTimeout(14000);
+ console.log('\n=== after dragging gap coupling to 24 ==='); console.log(await read());
+ await pg.screenshot({path:'shots/olivary-synchrony.png'});
+ await pg.evaluate(()=>{const s=document.getElementById('gGap');s.value=8;s.dispatchEvent(new Event('input'));document.querySelector('[data-les="cf"]').click();});
+ await pg.waitForTimeout(14000);
+ console.log('\n=== CF->PC x6 lesion (essential tremor) ==='); console.log(await read());
+ console.log('\nerrors: '+(errs.length?errs.join(' | '):'none'));
+ await b.close(); process.exit(errs.length?1:0);
+})();

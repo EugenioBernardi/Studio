@@ -9,15 +9,17 @@ const M={
  'higher-order-thalamus':'d56dd614-32af-4349-8d65-1d8f968ed4a5','cochlea-to-belt':'b3b4f6da-4daa-47a3-9cd6-fa810ae52574'};
 const models=[...require('./data1.js'),...require('./data2.js'),...require('./data3.js')];
 const by=s=>models.find(m=>m.slug===s);
+const LIVE=new Set(['kuramoto-assembly','basal-ganglia','cerebellum','amygdala','olivary-synchrony',
+ 'spindles-spike-wave','index-and-replay','two-visual-streams','cochlea-to-belt','higher-order-thalamus']);
 const GROUPS=[
- {t:'Validated models', n:'Headless, seed-replicated, with a validation record in the repository.',
+ {t:'Validated models', n:'Headless, seed-replicated, with a validation record in the repository. All five run live in the browser — open one and drag a slider.',
   s:['kuramoto-assembly','basal-ganglia','cerebellum','amygdala','olivary-synchrony']},
- {t:'The integrated system', n:'Many circuits as one, where the validation discipline is the contribution.',
-  s:['integrated-loop']},
- {t:'Built, but the validation record is missing', n:'The apps run and these are the project’s own figures for them. The standalone validation documents are among the files CLAUDE.md flags as absent from the working tree, so nothing here has been re-verified.',
+ {t:'Built, but the validation record is missing', n:'These run live too. The figures are the project’s own record: the standalone validation documents are among the files CLAUDE.md flags as absent from the working tree, so nothing here has been re-verified.',
   s:['spindles-spike-wave','index-and-replay','two-visual-streams','cochlea-to-belt']},
- {t:'Negative results, kept deliberately', n:'A negative result with a mechanism is worth more than a positive one without. These are here because the way they failed is the useful part.',
-  s:['higher-order-thalamus','accelerated-forgetting']}];
+ {t:'Negative results, kept deliberately', n:'A negative result with a mechanism is worth more than a positive one without. These are here because the way they failed is the useful part. The pulvinar model runs live; the forgetting line is a record only.',
+  s:['higher-order-thalamus','accelerated-forgetting']},
+ {t:'Headless only — no interactive version', n:'Multi-night and multi-stage simulations with no single watchable state. These two remain written records rather than simulators.',
+  s:['integrated-loop']}];
 const {esc}=require('./shell.js');
 const badge={validated:'ok',partial:'warn',retracted:'bad',withdrawn:'bad',negative:'warn',undocumented:'warn'};
 const label={validated:'validated',partial:'partial',retracted:'retracted',negative:'negative result',undocumented:'record absent'};
@@ -26,7 +28,7 @@ const cards=g=>g.s.map(s=>{const m=by(s);return `<a class="card" href="${U}${M[s
   <span class="cbody"><span class="ct">${esc(m.title)}</span>
   <span class="ck">${esc(m.kicker)}</span>
   <span class="cd">${esc(m.desc)}</span>
-  <span class="pill ${badge[m.status]}">${esc(label[m.status])}</span></span></a>`}).join('');
+  <span class="prow"><span class="pill ${badge[m.status]}">${esc(label[m.status])}</span>${LIVE.has(s)?'<span class="pill live">live model</span>':'<span class="pill plainp">record</span>'}</span></span></a>`}).join('');
 const EXTRA=`
 .lede{font-size:1.2rem; max-width:66ch; line-height:1.6}
 .grp{display:flex; flex-direction:column; gap:14px}
@@ -40,13 +42,15 @@ const EXTRA=`
 .ct{font-family:"Space Grotesk",sans-serif; font-weight:600; font-size:1.04rem; color:var(--ink); letter-spacing:-.01em}
 .ck{font-family:"IBM Plex Mono",monospace; font-size:.68rem; letter-spacing:.09em; color:var(--faint)}
 .cd{font-size:.87rem; color:var(--dim); line-height:1.5}
-.card .pill{margin-top:4px}
+.prow{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+.pill.live{color:var(--accent)}
+.pill.plainp{color:var(--faint)}
 @media (prefers-reduced-motion:reduce){.card:hover{transform:none}}
 `;
 let html=require('./shell.js').page({
  title:'Metastable Brain', kicker:'TWELVE CIRCUITS', h1:'Metastable Brain',
- status:'validated', pills:['12 systems','5 fully validated','3 negative or retracted'],
- thesis:'Interactive, numerically validated neural circuit simulators. Every model is a real dynamical system rendered as coupled <b>little clocks</b> — nothing here is a scripted animation.',
+ status:'validated', pills:['12 systems','10 live models','5 fully validated','3 negative or retracted'],
+ thesis:'Interactive, numerically validated neural circuit simulators. Every model is a real dynamical system rendered as coupled <b>little clocks</b> — nothing here is a scripted animation. <b>Ten of the twelve run live in the browser</b>: open one and drag a slider.',
  circuit:'<b>Simulate first, draw second.</b> &nbsp;·&nbsp; nothing that should be emergent may be scripted &nbsp;·&nbsp; register predictions before running &nbsp;·&nbsp; replicate before believing &nbsp;·&nbsp; report failures with a mechanism',
  footer:'Every figure on these pages is computed. Where a validation record is missing from the repository, the page says so.'
 });

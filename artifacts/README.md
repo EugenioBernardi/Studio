@@ -1,10 +1,36 @@
 # Artifact pages — one per simulated system
 
-Thirteen published pages: twelve system cards and an index. They share one design system so they
-read as panels from the same rack, which is the correct treatment for a family of instrument cards.
+Thirteen published pages. **Ten are the live simulators**, not summaries: the existing single-file
+apps, converted for publishing, plus one new interactive build for the olivary model. Two systems
+(the integrated loop and the accelerated-forgetting line) are multi-night headless simulations with
+no single watchable state, so they remain written records.
 
-    node build.js     # writes out/<slug>.html for all twelve
+    node convert.js   # apps/*.html -> live/<slug>.html  (strips the doctype/html/head/body
+                      # wrapper the publisher supplies, retitles, injects the nav strip)
+    node mkolive.js   # builds live/olivary-synchrony.html, inlining models/olive-v2.js verbatim
+    node verify.js    # loads every converted page in Chromium: console errors, canvas actually
+                      # drew, controls present. Font-host failures are excluded and reported.
+    node vlive.js     # re-verifies the olivary page reproduces the HEADLESS numbers
+    node build.js     # the two record-only pages
     node index.js     # writes out/metastable-brain.html, with the published URLs inlined
+
+## Re-verification, per CLAUDE.md section 1 step 3
+
+`vlive.js` compares the shipped page against `models/olive-v2.js` run headless. It caught two real
+bugs in the page (not the model) before publishing:
+
+1. `filled` was never reset when a slider moved, so the spectrum was computed over a buffer that had
+   just been zeroed — a zero-padded splice that smeared the peak away entirely. Coupling at 24 read
+   as *quiet*.
+2. Coherence was read as an instantaneous snapshot while the model reports a running mean. A
+   finite-size snapshot fluctuates hugely: healthy read 0.454 against a headless 0.180.
+
+After the fixes: healthy R 0.188 vs headless 0.180; coupling-24 R 0.855 vs 0.843; CF-lesion R 0.155
+vs 0.139; complex-spike rate 1.03–1.06 Hz/cell throughout against a headless 1.01–1.03.
+
+Absolute sharpness is lower in the page than headless (332 vs 4984) because the live measurement
+window is 12.3 s against 40 s, and sharpness scales with window length. The page therefore judges
+rhythm by the **ratio to the live null**, not by the absolute number.
 
 `shell.js` holds the design system (dark-first tokens, all three theme states, Space Grotesk labels
 + IBM Plex Mono numerals per CLAUDE.md §7). `data1/2/3.js` hold the content. To update a page, edit
