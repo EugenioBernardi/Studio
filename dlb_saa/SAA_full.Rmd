@@ -40,13 +40,18 @@ f_cat12 <- file.path(desktop_path, "CAT12_Hammers_DK_SPIN.xlsx")
 ## Optional: FreeSurfer normative Z from the visual-hallucination pipeline.
 ## If present, the imaging section adds a cross-pipeline check on the same
 ## subjects; if absent, that subsection is skipped and everything else runs.
-f_aseg  <- file.path(desktop_path, "Z_ASEG_MERGED.xlsx")
+f_aseg  <- file.path(desktop_path, "Z_ASEG_MERGED.xlsx")   # subcortical volume Z
+f_aparc <- file.path(desktop_path, "Z_APARC_MERGED.xlsx")  # cortical thickness Z
 
 have_cat12 <- file.exists(f_cat12)
 have_aseg  <- file.exists(f_aseg)
+have_aparc <- file.exists(f_aparc)
 ## Default so that chunk-level eval conditions resolve even when the imaging
 ## file is absent and the chunk that sets this never runs.
-imaging_ok <- FALSE
+imaging_ok  <- FALSE
+restrict_ok <- FALSE
+sub_ok      <- FALSE
+ct_ok       <- FALSE
 
 ## ---------------------------------------------------------------------------
 ## MERGE OPTIONS
@@ -1030,7 +1035,9 @@ if (!have_cat12)
   cat("> **CAT12_Hammers_DK_SPIN.xlsx was not found in the SAA folder — ",
       "the whole imaging section is skipped.**\n")
 if (have_cat12 && !have_aseg)
-  cat("> *Z_ASEG_MERGED.xlsx not found; the cross-pipeline check is skipped.*\n")
+  cat("> *Z_ASEG_MERGED.xlsx not found; the FreeSurfer subcortical analysis is skipped.*\n")
+if (have_cat12 && !have_aparc)
+  cat("> *Z_APARC_MERGED.xlsx not found; the cortical thickness analysis is skipped.*\n")
 ```
 
 ```{r cat12-load, eval=have_cat12}
@@ -1258,6 +1265,8 @@ by either route and is reported rather than silently absorbed.
 ```{r combat-setup, eval=imaging_ok}
 COMBAT_MIN_BATCH <- 8     # minimum scans per protocol for ComBat
 COMBAT_MAX_LEVELS <- 4    # above this, protocol-as-covariate costs too much df
+DOMINANT_FRAC <- 0.80     # if one protocol holds this share and the rest are
+                          # unmodellable, restrict to it rather than give up
 
 img$batch <- if ("batch" %in% names(img)) {
   b <- trimws(as.character(img$batch)); b[b %in% c("", "NA")] <- NA; b
@@ -1275,6 +1284,20 @@ combat_pkg <- if (requireNamespace("neuroCombat", quietly = TRUE)) "neuroCombat"
 
 combat_ok  <- n_batch >= 2 && min_batch_n >= COMBAT_MIN_BATCH && !is.na(combat_pkg)
 covar_ok   <- !combat_ok && n_batch >= 2 && n_batch <= COMBAT_MAX_LEVELS && min_batch_n >= 3
+
+## When one protocol carries almost everything and the remainder are single
+## scans, neither ComBat nor a covariate can work — but discarding a handful of
+## scans removes the batch problem outright and costs little. That is a better
+## trade than carrying an unadjustable scanner effect through every model.
+dominant <- NA_character_; restrict_ok <- FALSE
+if (n_batch >= 2) {
+  bn <- rowSums(batch_tab)
+  top <- names(bn)[which.max(bn)]
+  if (max(bn) / sum(bn) >= DOMINANT_FRAC && all(batch_tab[top, ] >= 3) &&
+      !combat_ok && !covar_ok) {
+    dominant <- top; restrict_ok <- TRUE
+  }
+}
 
 if (!is.null(batch_tab)) {
   print(kable(as.data.frame.matrix(batch_tab) %>%
@@ -1296,11 +1319,18 @@ cat(if (n_batch <= 1) {
             "neither neuroCombat nor sva is installed (install one to enable it)"
           else sprintf("the smallest protocol has %d scans, below the %d needed",
                        min_batch_n, COMBAT_MIN_BATCH))
+} else if (restrict_ok) {
+  sprintf(paste0("**Restricted to the dominant protocol `%s`** (%d of %d scans). ",
+    "With %d protocols and the smallest holding %d scan(s), neither ComBat nor a ",
+    "protocol covariate can be estimated; dropping %d scan(s) removes the batch ",
+    "effect entirely. The full sample is retained as a sensitivity check.\n"),
+    dominant, sum(batch_tab[dominant, ]), sum(batch_tab), n_batch, min_batch_n,
+    sum(batch_tab) - sum(batch_tab[dominant, ]))
 } else {
   sprintf("**Neither ComBat nor protocol adjustment is usable** (%d protocols, smallest n = %d). Scanner effects remain in the estimates and must be stated as a limitation.\n",
           n_batch, min_batch_n)
 })
-if (confounded)
+if (confounded && !restrict_ok)
   cat("\n> **Warning: at least one protocol contains only one SAA group.** ",
       "Protocol and SAA status are partly confounded; no harmonisation can ",
       "separate them, and the affected estimates should be treated as unsafe.\n")
@@ -1358,7 +1388,19 @@ if (combat_ok && length(feature_cols)) {
   }
 }
 
-## Fallback: protocol as a covariate in every model.
+## Restriction fallback: analyse the dominant protocol only.
+if (restrict_ok) {
+  img <- img %>% filter(!is.na(batch) & batch == dominant)
+  imaging_ok <- nrow(img) >= MIN_N_MODEL &&
+                sum(img$saa_any_pos == "Positive", na.rm = TRUE) >= 3 &&
+                sum(img$saa_any_pos == "Negative", na.rm = TRUE) >= 3
+  cat(sprintf("Restricted to protocol %s: %d scans (%d SAA+, %d SAA-).",
+              dominant, nrow(img),
+              sum(img$saa_any_pos == "Positive", na.rm = TRUE),
+              sum(img$saa_any_pos == "Negative", na.rm = TRUE)))
+}
+
+## Covariate fallback: protocol as a term in every model.
 EXTRA_COVARS <- if (!combat_ok && covar_ok) "batch" else character(0)
 if (length(EXTRA_COVARS)) img$batch <- factor(img$batch)
 
@@ -1382,6 +1424,12 @@ cat(sprintf(paste0(
 GLOBALS <- c(MRI_TIV = "Total intracranial volume", MRI_GM_Tot = "Total grey matter",
              MRI_WM = "Total white matter", MRI_CSF_Tot = "Total CSF",
              MRI_WMH_Tot = "White-matter hyperintensities")
+
+## Shared by every forest/volcano plot below, so it must be defined in a chunk
+## that always runs -- not inside a conditionally evaluated plotting chunk.
+sig_colour <- function(P, Q, Beta)
+  ifelse(!is.na(Q) & Q < .05, ifelse(Beta > 0, "#0072B2", "#D55E00"),
+         ifelse(!is.na(P) & P < .05, "#000000", "gray60"))
 
 ## Adding FDR to a result frame that came back empty must not error: map_dfr()
 ## returns a 0x0 tibble when every model is skipped, and that has no P column.
@@ -1503,9 +1551,6 @@ show_family(sec, "SECONDARY: medial temporal grey matter. A positive β = relati
 ```
 
 ```{r primary-forest, fig.width=7.5, fig.height=4, eval=imaging_ok && nrow(prim)>0}
-sig_colour <- function(P, Q, Beta)
-  ifelse(!is.na(Q) & Q < .05, ifelse(Beta > 0, "#0072B2", "#D55E00"),
-         ifelse(!is.na(P) & P < .05, "#000000", "gray60"))
 fam <- bind_rows(prim, sec) %>%
   mutate(col = sig_colour(P, Q, Beta),
          Region = factor(Region, levels = rev(unique(Region))))
@@ -1682,7 +1727,7 @@ near_dat <- img %>% filter(is.na(mri_gap) | mri_gap <= 365)
 
 sens <- map_dfr(NIGRO, function(r) {
   base <- fit_one(paste0("gm_", r), img)
-  pre  <- if (exists("img_raw") && isTRUE(combat_ok))
+  pre  <- if (exists("img_raw") && (isTRUE(combat_ok) || isTRUE(restrict_ok)))
             fit_one(paste0("gm_", r), img_raw) else NULL
   prop <- if (paste0("prop_", r) %in% names(prop_dat))
     fit_one(paste0("prop_", r), prop_dat,
@@ -1692,7 +1737,7 @@ sens <- map_dfr(NIGRO, function(r) {
   near <- fit_one(paste0("gm_", r), near_dat)
   if (is.null(base)) return(NULL)
   tibble(Region = pretty_region(r),
-         `Pre-ComBat` = if (is.null(pre)) "—" else sprintf("%.2f (p=%.3f)", pre$Beta, pre$P),
+         `All protocols` = if (is.null(pre)) "—" else sprintf("%.2f (p=%.3f)", pre$Beta, pre$P),
          `TIV covariate` = sprintf("%.2f (p=%.3f)", base$Beta, base$P),
          `Proportional`  = if (is.null(prop)) "—" else sprintf("%.2f (p=%.3f)", prop$Beta, prop$P),
          `+ IQR`         = if (is.null(iqrm)) "—" else sprintf("%.2f (p=%.3f)", iqrm$Beta, iqrm$P),
@@ -1702,91 +1747,342 @@ if (nrow(sens)) {
   names(sens)[ncol(sens)] <- sprintf("MRI <=1 y (n=%d)", nrow(near_dat))
   kable(sens, caption = paste("Nigrostriatal family across harmonisation,",
         "normalisation and inclusion choices. Beta in SD units except the",
-        "proportional column. A large Pre-ComBat vs TIV-covariate gap means",
-        "scanner effects were doing real work.")) %>%
+        "proportional column. A large gap between the all-protocols column and",
+        "the main estimate means scanner effects were doing real work.")) %>%
     kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
 }
 ```
 
 
-## Cross-pipeline check (FreeSurfer aseg)
+## FreeSurfer normative Z-scores (aparc + aseg)
 
-```{r fs-compare, eval=imaging_ok}
-## The visual-hallucination work concluded that a CAT12/Hammers thalamic effect
-## failed to reproduce in FreeSurfer -- but it fitted the two pipelines on
-## DIFFERENT subject sets, so a sample difference and a pipeline difference were
-## confounded. Here both run on the same subjects, which separates them.
-if (!have_aseg) {
-  cat("Z_ASEG_MERGED.xlsx not found in the SAA folder — cross-pipeline check skipped.\n",
-      "Copy it over from the visual-hallucination project to enable this section.")
-} else {
-  aseg <- read_x(f_aseg) %>% tidy_names() %>%
-    mutate(NHC = norm_id(sub("_.*$", "", SubjectID)),
-           MRI_DATE_D = as_date_safe(sub("^[^_]*_", "", SubjectID)))
-  fsmap <- c(Thalamus = "thal", Caudate = "caud", Putamen = "put",
-             Pallidum = "pal", Hippocampus = "hippo", Amygdala = "amyg",
-             Accumbens = "accumb")
-  for (s in names(fsmap)) {
-    l <- paste0("L", fsmap[[s]]); r <- paste0("R", fsmap[[s]])
-    aseg[[paste0("fs_", s)]] <- if (all(c(l, r) %in% names(aseg))) {
-      rowMeans(cbind(num_safe(aseg[[l]]), num_safe(aseg[[r]])), na.rm = FALSE)
-    } else NA_real_
+Two further files carry **normative Z-scores** from FreeSurfer: `Z_ASEG_MERGED`
+(7 bilateral subcortical structures) and `Z_APARC_MERGED` (34 bilateral
+Desikan–Killiany cortical thickness regions) — the same atlas and pipeline as
+the cortical-thickness work on visual hallucinations, so the two projects become
+directly comparable.
+
+Three things differ from the CAT12 analysis above and change how the models are
+specified:
+
+- **The values are already normative**, standardised against a multi-site
+  reference. Adjusting again for age and sex is a deliberate double adjustment,
+  kept for consistency with the earlier work; it is conservative, not neutral.
+- **Thickness is not volume.** TIV is not a covariate for cortical thickness,
+  and these files do not carry TIV anyway.
+- **`SITE`, `Vendor` and `FreeSurfer_Version` are batch variables**, and a
+  normative Z computed against a pooled reference does not by itself remove
+  residual site or version effects. They are harmonised on the same terms as the
+  CAT12 protocols.
+
+```{r fs-load, eval=imaging_ok}
+## SubjectID encodes NHC and the scan date, e.g. 1234567_2021-05-14
+parse_fs <- function(path) {
+  d <- read_x(path) %>% tidy_names()
+  d$NHC        <- norm_id(sub("_.*$", "", d$SubjectID))
+  d$MRI_DATE_D <- as_date_safe(sub("^[^_]*_", "", d$SubjectID))
+  d
+}
+
+## The exported column names are corrupted: every region containing the letters
+## "na" has lost them (entorhinal -> entorhil, supramarginal -> supramargil),
+## which is the signature of a stray gsub("na", "") upstream. Repaired here for
+## display only; the underlying columns keep their exported names.
+REGION_REPAIR <- c(entorhil = "entorhinal", supramargil = "supramarginal")
+repair_region <- function(x) ifelse(x %in% names(REGION_REPAIR),
+                                    REGION_REPAIR[x], x)
+
+fs_aseg  <- if (have_aseg)  parse_fs(f_aseg)  else NULL
+fs_aparc <- if (have_aparc) parse_fs(f_aparc) else NULL
+
+## subcortical: Lthal/Rthal ... Laccumb/Raccumb
+ASEG_MAP <- c(Thalamus = "thal", Caudate = "caud", Putamen = "put",
+              Pallidum = "pal", Hippocampus = "hippo", Amygdala = "amyg",
+              Accumbens = "accumb")
+if (!is.null(fs_aseg)) {
+  for (nm in names(ASEG_MAP)) {
+    l <- paste0("L", ASEG_MAP[[nm]]); r <- paste0("R", ASEG_MAP[[nm]])
+    fs_aseg[[paste0("fs_", nm)]] <- if (all(c(l, r) %in% names(fs_aseg)))
+      rowMeans(cbind(num_safe(fs_aseg[[l]]), num_safe(fs_aseg[[r]])),
+               na.rm = FALSE) else NA_real_
   }
+}
 
-  ja2 <- list(x = img %>% select(NHC, sample_d, saa_any_pos, SEX, age_at_sample,
-                                 MRI_TIV, dplyr::starts_with("gm_")),
-              y = aseg %>% select(NHC, MRI_DATE_D, dplyr::starts_with("fs_")),
-              by = "NHC")
-  if (utils::packageVersion("dplyr") >= "1.1.0") ja2$relationship <- "many-to-many"
-  both_pipe <- suppressWarnings(do.call(inner_join, ja2)) %>%
-    mutate(g2 = abs(as.numeric(MRI_DATE_D - sample_d))) %>%
-    group_by(NHC) %>% arrange(ifelse(is.na(g2), Inf, g2), .by_group = TRUE) %>%
-    slice(1) %>% ungroup()
+## cortical: L_<region>_thickavg / R_<region>_thickavg
+aparc_regions <- character()
+if (!is.null(fs_aparc)) {
+  thick <- grep("_thickavg$", names(fs_aparc), value = TRUE)
+  aparc_regions <- unique(sub("^[LR]_", "", sub("_thickavg$", "", thick)))
+  for (br in aparc_regions) {
+    l <- paste0("L_", br, "_thickavg"); r <- paste0("R_", br, "_thickavg")
+    fs_aparc[[paste0("ct_", br)]] <- if (all(c(l, r) %in% names(fs_aparc)))
+      rowMeans(cbind(num_safe(fs_aparc[[l]]), num_safe(fs_aparc[[r]])),
+               na.rm = FALSE) else NA_real_
+  }
+}
+```
 
-  hmap <- c(Thalamus = "thalamus", Caudate = "caudate.nucleus",
-            Putamen = "putamen", Pallidum = "pallidum",
-            Hippocampus = "TL.hippocampus", Amygdala = "TL.amygdala",
-            Accumbens = "nucleus.accumbens")
-  cmp <- map_dfr(names(hmap), function(s) {
-    a <- fit_one(paste0("fs_", s), both_pipe)
-    b <- fit_one(paste0("gm_", hmap[[s]]), both_pipe)
-    if (is.null(a) || is.null(b)) return(NULL)
-    tibble(Structure = s, n = a$n,
-           Beta_FS = a$Beta, P_FS = a$P,
-           Beta_CAT = b$Beta, P_CAT = b$P)
+```{r fs-merge, eval=imaging_ok}
+## Attach a FreeSurfer table to the cohort, keeping the scan nearest the sample.
+attach_fs <- function(fs, prefix) {
+  if (is.null(fs)) return(NULL)
+  keep <- c("NHC", "MRI_DATE_D", grep(paste0("^", prefix), names(fs), value = TRUE),
+            intersect(c("SITE", "Vendor", "FreeSurfer_Version"), names(fs)))
+  jf <- list(x = df_both %>% select(NHC, sample_d, saa_any_pos, SEX, age_at_sample,
+                                    any_of(c("hallucinations"))),
+             y = fs %>% select(all_of(keep)), by = "NHC")
+  if (utils::packageVersion("dplyr") >= "1.1.0") jf$relationship <- "many-to-many"
+  suppressWarnings(do.call(inner_join, jf)) %>%
+    mutate(fs_gap = abs(as.numeric(MRI_DATE_D - sample_d))) %>%
+    filter(is.na(fs_gap) | fs_gap <= MAX_MRI_GAP) %>%
+    group_by(NHC) %>% arrange(ifelse(is.na(fs_gap), Inf, fs_gap), .by_group = TRUE) %>%
+    slice(1) %>% ungroup() %>%
+    mutate(saa_any_pos = factor(saa_any_pos, levels = c("Negative", "Positive")))
+}
+
+sub_fs <- attach_fs(fs_aseg,  "fs_")
+ct_fs  <- attach_fs(fs_aparc, "ct_")
+
+fs_ok <- function(d) !is.null(d) && nrow(d) >= MIN_N_MODEL &&
+  sum(d$saa_any_pos == "Positive", na.rm = TRUE) >= 3 &&
+  sum(d$saa_any_pos == "Negative", na.rm = TRUE) >= 3
+sub_ok <- fs_ok(sub_fs); ct_ok <- fs_ok(ct_fs)
+
+fs_batch_report <- function(d, label) {
+  if (is.null(d) || !nrow(d)) return(invisible(NULL))
+  for (b in intersect(c("SITE", "Vendor", "FreeSurfer_Version"), names(d))) {
+    tb <- table(d[[b]], d$saa_any_pos, useNA = "no")
+    if (nrow(tb) > 1)
+      print(kable(as.data.frame.matrix(tb) %>% tibble::rownames_to_column(b),
+            caption = sprintf("%s: scans per %s by SAA status", label, b)) %>%
+        kable_styling(full_width = FALSE,
+                      bootstrap_options = c("striped", "condensed")))
+  }
+}
+cat(sprintf("Subcortical (aseg): %s. Cortical thickness (aparc): %s.\n",
+  if (is.null(sub_fs)) "file absent" else sprintf("%d subjects (%d SAA+)", nrow(sub_fs),
+    sum(sub_fs$saa_any_pos == "Positive", na.rm = TRUE)),
+  if (is.null(ct_fs)) "file absent" else sprintf("%d subjects (%d SAA+)", nrow(ct_fs),
+    sum(ct_fs$saa_any_pos == "Positive", na.rm = TRUE))))
+fs_batch_report(sub_fs, "aseg"); fs_batch_report(ct_fs, "aparc")
+```
+
+```{r fs-harmonise, eval=imaging_ok}
+## Same decision rule as the CAT12 protocols, applied to SITE (falling back to
+## Vendor). Z-scores being normative does not make them site-free.
+harmonise_fs <- function(d, prefix) {
+  if (is.null(d) || !nrow(d)) return(list(data = d, note = "no data"))
+  bcol <- NA_character_
+  for (cand in c("SITE", "Vendor", "FreeSurfer_Version"))
+    if (cand %in% names(d) && length(unique(na.omit(d[[cand]]))) > 1) { bcol <- cand; break }
+  if (is.na(bcol)) return(list(data = d, note = "single site/vendor — no harmonisation needed"))
+
+  bt_raw <- as.character(d[[bcol]]); ok <- !is.na(bt_raw)
+  tb <- table(bt_raw[ok])
+  feats <- grep(paste0("^", prefix), names(d), value = TRUE)
+  feats <- feats[vapply(feats, function(cc) all(is.finite(d[[cc]][ok])), logical(1))]
+
+  if (min(tb) >= COMBAT_MIN_BATCH && !is.na(combat_pkg) && length(feats)) {
+    mm_df <- droplevels(as.data.frame(d[ok, c("saa_any_pos", "SEX", "age_at_sample")]))
+    keepv <- vapply(names(mm_df), function(cc) {
+      x <- mm_df[[cc]]
+      if (is.factor(x) || is.character(x)) length(unique(x[!is.na(x)])) >= 2
+      else { v <- suppressWarnings(stats::var(as.numeric(x), na.rm = TRUE))
+             is.finite(v) && v > 0 }
+    }, logical(1))
+    trm <- names(mm_df)[keepv]
+    if (!"saa_any_pos" %in% trm)
+      return(list(data = d, note = "SAA contrast constant — harmonisation skipped"))
+    mm <- model.matrix(as.formula(paste("~", paste(trm, collapse = " + "))), data = mm_df)
+    dm <- t(as.matrix(d[ok, feats, drop = FALSE]))
+    hz <- try({
+      if (combat_pkg == "neuroCombat")
+        neuroCombat::neuroCombat(dat = dm, batch = factor(bt_raw[ok]), mod = mm)$dat.combat
+      else sva::ComBat(dat = dm, batch = factor(bt_raw[ok]), mod = mm,
+                       par.prior = TRUE, prior.plots = FALSE)
+    }, silent = TRUE)
+    if (!inherits(hz, "try-error")) {
+      hh <- t(hz)
+      for (k in seq_along(feats)) d[[feats[k]]][ok] <- hh[, k]
+      return(list(data = d, note = sprintf("ComBat applied over %s (%d levels, smallest n = %d)",
+                                           bcol, length(tb), min(tb))))
+    }
+  }
+  ## fallback: carry the batch as a covariate
+  d$fs_batch <- factor(bt_raw)
+  list(data = d, note = sprintf("ComBat not applicable over %s (smallest n = %d); carried as a covariate",
+                                bcol, min(tb)), covar = "fs_batch")
+}
+
+h_sub <- harmonise_fs(sub_fs, "fs_"); sub_fs <- h_sub$data
+h_ct  <- harmonise_fs(ct_fs,  "ct_"); ct_fs  <- h_ct$data
+FS_SUB_COVARS <- c("SEX", "age_at_sample", if (!is.null(h_sub$covar)) h_sub$covar)
+FS_CT_COVARS  <- c("SEX", "age_at_sample", if (!is.null(h_ct$covar))  h_ct$covar)
+cat("aseg  harmonisation: ", h_sub$note, "\n", sep = "")
+cat("aparc harmonisation: ", h_ct$note,  "\n", sep = "")
+```
+
+### Subcortical volume (FreeSurfer aseg)
+
+```{r fs-subcortical, eval=imaging_ok && sub_ok}
+## Striatal structures are the a priori family for alpha-synuclein seeding;
+## aseg carries no substantia nigra, so the nigral hypothesis stays with CAT12.
+FS_PRIMARY <- c("Putamen", "Caudate", "Pallidum", "Accumbens")
+
+fs_sub_res <- map_dfr(names(ASEG_MAP), function(nm) {
+  o <- fit_one(paste0("fs_", nm), sub_fs, covars = FS_SUB_COVARS)
+  if (is.null(o)) return(NULL)
+  bind_cols(tibble(Structure = nm,
+                   Family = ifelse(nm %in% FS_PRIMARY, "Striatal (a priori)", "Other")), o)
+})
+if (nrow(fs_sub_res)) {
+  fs_sub_res$Q_all <- p.adjust(fs_sub_res$P, "BH")
+  ap <- fs_sub_res$Structure %in% FS_PRIMARY
+  fs_sub_res$Q_ap <- NA_real_
+  if (any(ap)) fs_sub_res$Q_ap[ap] <- p.adjust(fs_sub_res$P[ap], "BH")
+  write.csv(fs_sub_res, file.path(results_path, "FS_subcortical_SAA.csv"), row.names = FALSE)
+  fs_sub_res %>% arrange(P) %>%
+    transmute(Structure, Family, n, n_pos, Beta = round(Beta, 3),
+              `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
+              p = round(P, 4), `q (BH/7)` = round(Q_all, 3),
+              `q (a priori/4)` = ifelse(is.na(Q_ap), "—", as.character(round(Q_ap, 3)))) %>%
+    kable(caption = "FreeSurfer subcortical normative Z by SAA status (adjusted for sex and age).") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped", "condensed"))
+}
+```
+
+### Cortical thickness (FreeSurfer aparc, Desikan–Killiany)
+
+```{r fs-cortical, eval=imaging_ok && ct_ok}
+## A priori for DLB: posterior / occipito-parietal thinning, tested as its own
+## family; medial temporal is tested separately because the DLB prediction there
+## is relative PRESERVATION, i.e. the opposite sign.
+CT_POSTERIOR <- c("cuneus", "pericalcarine", "lingual", "lateraloccipital",
+                  "precuneus", "superiorparietal", "inferiorparietal")
+CT_MEDTEMP   <- c("entorhil", "parahippocampal", "fusiform", "temporalpole")
+
+ct_fit <- function(regions, label) {
+  map_dfr(regions, function(br) {
+    cc <- paste0("ct_", br)
+    if (!cc %in% names(ct_fs)) return(NULL)
+    o <- fit_one(cc, ct_fs, covars = FS_CT_COVARS)
+    if (is.null(o)) return(NULL)
+    bind_cols(tibble(Region = repair_region(br), token = br, Family = label), o)
   })
+}
 
-  if (nrow(cmp)) {
-    write.csv(cmp, file.path(results_path, "Imaging_cross_pipeline.csv"),
+ct_post <- ct_fit(intersect(CT_POSTERIOR, aparc_regions), "Posterior (a priori)")
+ct_mt   <- ct_fit(intersect(CT_MEDTEMP,   aparc_regions), "Medial temporal")
+ct_fam  <- bind_rows(ct_post, ct_mt)
+if (nrow(ct_fam))
+  ct_fam <- ct_fam %>% group_by(Family) %>% mutate(Q = p.adjust(P, "BH")) %>%
+    ungroup() %>% arrange(Family, P)
+
+ct_all <- ct_fit(aparc_regions, "Whole cortex")
+if (nrow(ct_all)) {
+  ct_all$Q <- p.adjust(ct_all$P, "BH")
+  write.csv(ct_all, file.path(results_path, "FS_cortical_thickness_SAA.csv"),
+            row.names = FALSE)
+}
+
+if (nrow(ct_fam))
+  ct_fam %>% transmute(Family, Region, n, n_pos, Beta = round(Beta, 3),
+      `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
+      Direction = ifelse(Beta > 0, "thicker in SAA+", "thinner in SAA+"),
+      p = round(P, 4), `q (within family)` = round(Q, 3)) %>%
+    kable(caption = "A priori cortical families, SAA+ vs SAA-. FDR within each family.") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped", "condensed"))
+```
+
+```{r fs-cortical-scan, eval=imaging_ok && ct_ok}
+if (nrow(ct_all)) {
+  cat(sprintf("Whole-cortex scan: %d regions, %d surviving BH-FDR, %d nominally p<0.05 (%.1f expected by chance).\n",
+      nrow(ct_all), sum(ct_all$Q < .05, na.rm = TRUE),
+      sum(ct_all$P < .05, na.rm = TRUE), .05 * nrow(ct_all)))
+  ct_all %>% arrange(P) %>% head(15) %>%
+    transmute(Region, n, n_pos, Beta = round(Beta, 3),
+              `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
+              p = round(P, 4), `q (BH/34)` = round(Q, 3)) %>%
+    kable(caption = "Top 15 cortical regions — exploratory whole-cortex scan.") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped", "condensed"),
+                  font_size = 11)
+}
+```
+
+```{r fs-cortical-forest, fig.width=8, fig.height=9, eval=imaging_ok && ct_ok && nrow(ct_all)>0}
+ct_plot <- ct_all %>%
+  mutate(col = sig_colour(P, Q, Beta),
+         Region = factor(Region, levels = rev(Region[order(Beta)])))
+ggplot(ct_plot, aes(Beta, Region, colour = col)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+  geom_errorbarh(aes(xmin = CI_l, xmax = CI_u), height = .25, linewidth = 1.1) +
+  geom_point(size = 1.9) +
+  scale_colour_identity() +
+  labs(title = "Cortical thickness vs SAA status — 34 DK regions",
+       x = "Beta (SAA+ vs SAA-, normative Z units)", y = "",
+       caption = "Blue/orange = BH-FDR q<0.05; black = nominal p<0.05; grey = ns") +
+  theme(axis.text.y = element_text(size = 9), legend.position = "none")
+```
+
+### Is the SAA signature the same as the visual-hallucination signature?
+
+```{r saa-vs-vh, eval=imaging_ok && ct_ok && nrow(ct_all)>0}
+## Both contrasts fitted on the SAME subjects and the same regions, then the two
+## beta maps correlated. This asks whether SAA positivity and hallucinations
+## mark the same cortex, which no single-contrast analysis can answer.
+vh_available <- "hallucinations" %in% names(ct_fs) &&
+  n_distinct(na.omit(ct_fs$hallucinations)) >= 2
+
+if (!vh_available) {
+  cat("Hallucination status is not available in the merged cortical sample — comparison skipped.")
+} else {
+  fit_vh_local <- function(cc) {
+    d <- ct_fs %>% select(all_of(c(cc, "hallucinations", FS_CT_COVARS))) %>%
+      drop_na() %>% droplevels()
+    if (nrow(d) < MIN_N_MODEL || n_distinct(d$hallucinations) < 2) return(NULL)
+    d[[cc]] <- as.numeric(scale(d[[cc]]))
+    cv <- FS_CT_COVARS[vapply(FS_CT_COVARS, function(x) {
+      v <- d[[x]]
+      if (is.factor(v) || is.character(v)) length(unique(v[!is.na(v)])) >= 2
+      else { vv <- suppressWarnings(stats::var(as.numeric(v), na.rm = TRUE))
+             is.finite(vv) && vv > 0 }
+    }, logical(1))]
+    fml <- sprintf("`%s` ~ hallucinations%s", cc,
+                   if (length(cv)) paste0(" + `", paste(cv, collapse = "` + `"), "`") else "")
+    m <- try(lm(as.formula(fml), data = d), silent = TRUE)
+    if (inherits(m, "try-error")) return(NULL)
+    sm <- summary(m)$coefficients
+    rn <- grep("^hallucinations", rownames(sm), value = TRUE)[1]
+    if (is.na(rn) || is.na(sm[rn, "Estimate"])) return(NULL)
+    tibble(Beta_VH = unname(sm[rn, "Estimate"]), P_VH = unname(sm[rn, "Pr(>|t|)"]))
+  }
+  vh_res <- map_dfr(ct_all$token, function(br) {
+    o <- fit_vh_local(paste0("ct_", br))
+    if (is.null(o)) return(NULL)
+    bind_cols(tibble(token = br), o)
+  })
+  cmp_map <- inner_join(ct_all %>% select(token, Region, Beta_SAA = Beta, P_SAA = P),
+                        vh_res, by = "token")
+  if (nrow(cmp_map) >= 5) {
+    ctest <- suppressWarnings(cor.test(cmp_map$Beta_SAA, cmp_map$Beta_VH,
+                                       method = "spearman", exact = FALSE))
+    write.csv(cmp_map, file.path(results_path, "SAA_vs_VH_cortical_map.csv"),
               row.names = FALSE)
-    print(kable(cmp %>% transmute(Structure, n,
-        FreeSurfer = sprintf("%.2f (p=%.3f)", Beta_FS, P_FS),
-        CAT12      = sprintf("%.2f (p=%.3f)", Beta_CAT, P_CAT),
-        Agree = ifelse(sign(Beta_FS) == sign(Beta_CAT), "same direction", "OPPOSITE")),
-      caption = sprintf("Same %d subjects, same model, two segmentations. beta in SD units.",
-                        max(cmp$n))) %>%
-      kable_styling(full_width = FALSE,
-                    bootstrap_options = c("striped", "condensed")))
-  } else cat("Too few subjects imaged in both pipelines to compare.")
+    print(ggplot(cmp_map, aes(Beta_VH, Beta_SAA)) +
+      geom_hline(yintercept = 0, colour = "grey85") +
+      geom_vline(xintercept = 0, colour = "grey85") +
+      geom_smooth(method = "lm", formula = y ~ x, se = TRUE, colour = "#0072B2") +
+      geom_point(size = 2, alpha = .8) +
+      labs(title = "Do SAA status and visual hallucinations mark the same cortex?",
+           subtitle = sprintf("%d DK regions, same subjects; Spearman rho = %.2f, p = %.3f",
+                              nrow(cmp_map), unname(ctest$estimate), ctest$p.value),
+           x = "Beta, hallucinations (VH+ vs VH-)",
+           y = "Beta, SAA (positive vs negative)",
+           caption = "A positive slope means the two contrasts thin the same regions."))
+  } else cat("Too few regions could be fitted for both contrasts to compare them.")
 }
 ```
 
-```{r fs-compare-plot, fig.width=6, fig.height=4.5, eval=imaging_ok}
-if (have_aseg && exists("cmp") && nrow(cmp) >= 3) {
-  ggplot(cmp, aes(Beta_FS, Beta_CAT, label = Structure)) +
-    geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey60") +
-    geom_hline(yintercept = 0, colour = "grey85") +
-    geom_vline(xintercept = 0, colour = "grey85") +
-    geom_point(size = 3, colour = "#0072B2") +
-    geom_text(nudge_y = .05, size = 3.2) +
-    labs(title = "Cross-pipeline agreement, same subjects",
-         subtitle = sprintf("n = %d imaged in both pipelines; r = %.2f", max(cmp$n),
-                            suppressWarnings(cor(cmp$Beta_FS, cmp$Beta_CAT,
-                                                 use = "complete.obs"))),
-         x = "beta, FreeSurfer (aseg)", y = "beta, CAT12 (Hammers)",
-         caption = "Points on the dashed line replicate across segmentations.")
-}
-```
 
 ## Interpretation notes
 
@@ -1808,14 +2104,15 @@ cat(sprintf("
 - **Ventricles and corpus callosum** are excluded from the grey-matter analysis
   (their Hammers grey-matter volume is partial-volume noise) and the ventricles
   from the white-matter analysis.
-- **Still CAT12-only.** Drop `Z_ASEG_MERGED.xlsx` into the SAA folder and the
-  cross-pipeline comparison in SAA_revised.Rmd becomes available on this same
-  subject set — the check the visual-hallucination work needed and did not have.
+- **Pipelines.** CAT12/Hammers above; FreeSurfer normative Z (aseg + aparc)
+  below, on the same subjects, which is the cross-pipeline check the
+  visual-hallucination work needed and did not have.
 ",
 nrow(img), n1, mde,
 if (n_batch <= 1) "Single protocol; no scanner harmonisation required."
   else if (isTRUE(combat_ok)) sprintf("ComBat applied across %d protocols, protecting the SAA contrast, sex, age and TIV.", n_batch)
   else if (isTRUE(covar_ok)) sprintf("ComBat not applicable (smallest protocol n = %d); protocol carried as a model covariate.", min_batch_n)
+  else if (isTRUE(restrict_ok)) sprintf("Restricted to the dominant protocol %s; %d scan(s) on other protocols excluded.", dominant, sum(batch_tab) - sum(batch_tab[dominant, ]))
   else "Scanner effects NOT harmonised — state this as a limitation.",
 if (nrow(prim)) sprintf("Best region %s, β = %.2f [%.2f, %.2f], p = %.3f, q = %.3f.",
   prim$Region[1], prim$Beta[1], prim$CI_l[1], prim$CI_u[1], prim$P[1], prim$Q[1])
