@@ -1,0 +1,1624 @@
+---
+title: "DLB Cohort Analysis — CSF α-synuclein SAA"
+subtitle: "Clinical, biofluid and imaging profile by seed-amplification assay status"
+author: "E. Bernardi"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: hide
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", dpi = 150)
+
+library(readxl);  library(dplyr);   library(tidyr);   library(lubridate)
+library(stringr); library(purrr);   library(tibble)
+library(gtsummary); library(gt);    library(ggplot2); library(knitr)
+library(kableExtra)
+
+theme_set(theme_minimal(base_size = 12))
+set.seed(20260826)
+```
+
+```{r config}
+## ---------------------------------------------------------------------------
+## PATHS
+## ---------------------------------------------------------------------------
+desktop_path <- "~/Desktop/Ricerca/Lewy_R/SAA"
+results_path <- file.path(desktop_path, "Results")
+dir.create(results_path, recursive = TRUE, showWarnings = FALSE)
+
+f_clin  <- file.path(desktop_path, "datafreeze_lewy.xlsx")
+f_bio   <- file.path(desktop_path, "BIOFLUIDS_CLINICAL.xlsx")
+f_cat12 <- file.path(desktop_path, "CAT12_Hammers_DK_SPIN.xlsx")
+## Optional: FreeSurfer normative Z from the visual-hallucination pipeline.
+## If present, the imaging section adds a cross-pipeline check on the same
+## subjects; if absent, that subsection is skipped and everything else runs.
+f_aseg  <- file.path(desktop_path, "Z_ASEG_MERGED.xlsx")
+
+have_cat12 <- file.exists(f_cat12)
+have_aseg  <- file.exists(f_aseg)
+
+## ---------------------------------------------------------------------------
+## MERGE OPTIONS
+## ---------------------------------------------------------------------------
+MAX_GAP_DAYS <- 365   # visit <-> sample; pairs beyond this are flagged
+MAX_MRI_GAP  <- 730   # sample <-> MRI
+IQR_MIN      <- 70    # CAT12 image-quality rating, %; below ~70 = grade D
+MIN_N_MODEL  <- 15    # minimum complete cases to fit an imaging model
+
+## ---------------------------------------------------------------------------
+## DATA-QUALITY GUARDS
+## Values outside these ranges are set to NA and reported in section 2.
+## Kept as a regression check: an earlier run produced Mayo = 21 (SD 62) on a
+## 0-4 scale, which turned out to come from the baseline-date row selection
+## rather than from sentinel codes. If this table is ever non-empty, the source
+## column is wrong.
+## ---------------------------------------------------------------------------
+SENTINELS <- c(-9, -99, -999, 888, 999, 9999, -1)
+
+PLAUSIBLE <- tribble(
+  ~var,                    ~lo, ~hi,
+  "edad",                    18, 110,
+  "EDUC",                     0,  30,
+  "puntuaciones",             0,  30,   # MoCA total
+  "visuoespacialp",           0,   5,
+  "identificacionp",          0,   3,
+  "atencionp",                0,   6,
+  "lenguajep",                0,   3,
+  "abstraccionp",             0,   2,
+  "orientacionp",             0,   6,
+  "mis",                      0,  15,   # MoCA memory index
+  "mayo_total_score",         0,   4,   # 4 dichotomous items
+  "updrs1a_total_score",      0,  24,
+  "updrs1b_total_score",      0,  28,
+  "updrs2_total_score",       0,  52,
+  "updrs3_total_score",       0, 132,
+  "hoehn_yahr",               0,   5,
+  "sppb_total_score",         0,  12,
+  "sppb_subtotal1",           0,   4,
+  "sppb_subtotal2",           0,   4,
+  "sppb_subtotal3",           0,   4,
+  "mta",                      0,   4,
+  "fazekas",                  0,   3,
+  "MMSE",                     0,  30,
+  "GDS",                      1,   7,
+  "gds_visit",                1,   7
+)
+
+## ---------------------------------------------------------------------------
+## ANALYTE PANEL — only assays with real coverage are tabulated.
+## The previous run printed "NA (NA)" rows for sTREM2, SNAP-25, NPTX2, TDP-43
+## and two plasma H0010 assays (n <= 1). MIN_PER_GROUP removes them.
+## ---------------------------------------------------------------------------
+MIN_PER_GROUP <- 8
+## assays reported on a log scale (right-skewed concentrations)
+LOG_SCALE <- "NFL|NFLIGHT|GFAP|YKL40|STREM2|TREM2|TAU|TDP43|SNAP25|NPTX2|ABETA|AB4|AB1"
+```
+
+# Data loading and merge
+
+```{r load}
+## ---------------------------------------------------------------------------
+## guess_max = Inf is essential. readxl types each column from the first 1000
+## rows; in a long REDCap export the visit-level columns (UPDRS, MoCA, SPPB)
+## are empty on the leading enrolment rows and would be typed <logical>,
+## silently discarding every value below row 1000.
+## ---------------------------------------------------------------------------
+read_x <- function(p) read_excel(p, guess_max = Inf, .name_repair = "minimal")
+
+clin_raw <- read_x(f_clin)
+bio_raw  <- read_x(f_bio)
+
+## drop blank / duplicated column names produced by Excel
+tidy_names <- function(df) {
+  df <- df[, names(df) != "" & !is.na(names(df)), drop = FALSE]
+  df[, !duplicated(names(df)), drop = FALSE]
+}
+clin_raw <- tidy_names(clin_raw); bio_raw <- tidy_names(bio_raw)
+
+## ---- helpers --------------------------------------------------------------
+norm_id <- function(x) {                       # 0012345 == 12345
+  x <- toupper(trimws(as.character(x)))
+  x[x %in% c("", "NA", "NULL", "-", "0")] <- NA
+  x <- gsub("[^0-9A-Z]", "", x)
+  num <- !is.na(x) & grepl("^[0-9]+$", x)
+  x[num] <- sub("^0+", "", x[num])
+  x[!is.na(x) & x == ""] <- NA
+  x
+}
+
+as_date_safe <- function(x) {                  # Date / POSIXct / serial / text
+  if (inherits(x, "Date"))   return(x)
+  if (inherits(x, "POSIXt")) return(as.Date(x))
+  if (is.numeric(x)) {
+    out <- as.Date(rep(NA, length(x)))
+    ok <- !is.na(x) & x > 10000 & x < 60000
+    out[ok] <- as.Date(x[ok], origin = "1899-12-30"); return(out)
+  }
+  x <- trimws(as.character(x))
+  x[x %in% c("", "NA", "NaN", "NULL", "-", "#N/A")] <- NA
+  out <- as.Date(rep(NA, length(x)))
+  ser <- !is.na(x) & grepl("^[0-9]{5}(\\.[0-9]+)?$", x)
+  out[ser] <- as.Date(as.numeric(x[ser]), origin = "1899-12-30")
+  for (f in c("%Y-%m-%d","%d/%m/%Y","%d-%m-%Y","%Y/%m/%d","%d.%m.%Y","%Y%m%d")) {
+    todo <- !is.na(x) & is.na(out)
+    if (!any(todo)) break
+    out[todo] <- as.Date(substr(x[todo], 1, 10), format = f)
+  }
+  out[!is.na(out) & (out < as.Date("1900-01-01") | out > Sys.Date() + 365)] <- NA
+  out
+}
+
+num_safe <- function(x) {                      # "<200", "1,5", " 12 "
+  if (is.numeric(x)) return(x)
+  v <- gsub("\\s", "", gsub("[<>=]", "", trimws(as.character(x))))
+  v <- ifelse(grepl(",", v) & !grepl("\\.", v), gsub(",", ".", v), gsub(",", "", v))
+  suppressWarnings(as.numeric(v))
+}
+
+has_col <- function(df, x) x %in% names(df)
+```
+
+```{r clinical-reshape}
+## ---------------------------------------------------------------------------
+## The REDCap export is LONG: subject-level fields sit on the enrolment event,
+## visit-level fields on repeating instances. Collapsing without carrying the
+## subject-level fields down loses either the core symptoms or the scores.
+## ---------------------------------------------------------------------------
+nhc_col <- grep("^nhc$", names(clin_raw), ignore.case = TRUE, value = TRUE)[1]
+stopifnot(!is.na(nhc_col))
+
+clin <- clin_raw %>%
+  mutate(NHC = norm_id(.data[[nhc_col]])) %>%
+  filter(!is.na(NHC))
+
+## Per-visit date. THE ORIGINAL SCRIPT USED visit_date_base_lewy, which is the
+## baseline date (constant per subject) -- the "closest visit" rule was
+## therefore never applied. visit_date is the per-instance column.
+clin$visit_d <- as_date_safe(if (has_col(clin, "visit_date")) clin$visit_date else NA)
+clin$visit_fallback <- as_date_safe(
+  if (has_col(clin, "visit_date_base_lewy")) clin$visit_date_base_lewy else NA)
+clin$visit_any <- coalesce(clin$visit_d, clin$visit_fallback)
+
+## Columns that belong to a VISIT (never carried across rows)
+visit_pat <- paste0("^(visit_date|redcap_event_instance|neurologist|visitdiagnosis|",
+  "gds_visit|medication|hoehn_yahr|diagnostico_visita|updrs|sppb|mayo|zarit|",
+  "lethargic|sleep_day|disorganized|staring|fecha|puntuaciones|resultado|mis$|",
+  "visuoespacial|identificacion|atencion|lenguaje|abstraccion|orientacion|",
+  "at_|len_|directos|inversos|letras|serie7|repeticion|fluidez|num_palab|",
+  "rostro|seda|templo|clavel|rojo|speech|facial|rigidity|tapping|handmovements|",
+  "pronation|legagility|arising|gait|freezing|postural|globalspont|kinetictremor|",
+  "resttremor|constancy|dyskinesia|posture|movilidad|autocuidado|actividades|",
+  "dolor_|ansiedad|depresion|termometro|a_[0-9]|d_[0-9]|resumen_|seguimiento)")
+visit_cols   <- grep(visit_pat, names(clin), value = TRUE)
+subject_cols <- setdiff(names(clin), c(visit_cols, "NHC", "visit_d",
+                                       "visit_fallback", "visit_any"))
+
+clin <- clin %>%
+  group_by(NHC) %>%
+  mutate(across(all_of(subject_cols),
+                ~ if (all(is.na(.x))) .x else coalesce(.x, .x[which(!is.na(.x))[1]]))) %>%
+  ungroup()
+
+clin_visits <- clin %>% filter(!is.na(visit_any)) %>%
+  distinct(NHC, visit_any, .keep_all = TRUE)
+clin_nodate <- clin %>% filter(!NHC %in% clin_visits$NHC) %>%
+  distinct(NHC, .keep_all = TRUE)
+clin_use <- bind_rows(clin_visits, clin_nodate)
+```
+
+```{r biofluid-merge}
+bio <- bio_raw %>%
+  mutate(NHC  = norm_id(.data[["NHC"]]),
+         NHCb = if (has_col(bio_raw, "NHC2")) norm_id(.data[["NHC2"]]) else NA_character_) %>%
+  mutate(NHC = coalesce(NHC, NHCb)) %>%
+  filter(!is.na(NHC)) %>%
+  distinct(across(everything()), .keep_all = TRUE)
+
+bio$sample_d <- as_date_safe(bio$SAMPLEDATE)
+
+join_args <- list(x = clin_use, y = bio, by = "NHC", suffix = c("_clin", "_bio"))
+if (utils::packageVersion("dplyr") >= "1.1.0")
+  join_args$relationship <- "many-to-many"
+
+merged_df <- suppressWarnings(do.call(inner_join, join_args)) %>%
+  mutate(date_diff = abs(as.numeric(sample_d - visit_any)),
+         .rank = ifelse(is.na(date_diff), Inf, date_diff)) %>%
+  group_by(NHC) %>%
+  arrange(.rank, visit_any, sample_d, .by_group = TRUE) %>%
+  slice(1) %>% ungroup() %>%
+  mutate(gap_over_limit = !is.na(date_diff) & date_diff > MAX_GAP_DAYS)
+
+merge_note <- sprintf(
+  paste("Clinical: %s subjects / %s dated visits. Biofluids: %s subjects / %s samples.",
+        "Merged: %s subjects. Visit-sample gap: median %s d [IQR %s-%s], %s%% within 90 d,",
+        "%s pair(s) beyond %s d."),
+  n_distinct(clin$NHC), nrow(clin_visits), n_distinct(bio$NHC), nrow(bio),
+  nrow(merged_df),
+  round(median(merged_df$date_diff, na.rm = TRUE)),
+  round(quantile(merged_df$date_diff, .25, na.rm = TRUE)),
+  round(quantile(merged_df$date_diff, .75, na.rm = TRUE)),
+  round(100 * mean(merged_df$date_diff <= 90, na.rm = TRUE)),
+  sum(merged_df$gap_over_limit, na.rm = TRUE), MAX_GAP_DAYS)
+cat(merge_note)
+```
+
+```{r gap-plot, fig.width=6.5, fig.height=3}
+ggplot(merged_df %>% filter(!is.na(date_diff)), aes(date_diff)) +
+  geom_histogram(bins = 40, fill = "#4C72B0", colour = "white") +
+  geom_vline(xintercept = c(90, MAX_GAP_DAYS), linetype = c("dashed", "dotted"),
+             colour = c("#D55E00", "grey40")) +
+  labs(title = "Interval between clinical visit and biofluid sampling",
+       x = "|visit date − sample date| (days)", y = "Subjects",
+       caption = "Dashed = 90 d; dotted = analysis limit")
+```
+
+# Data quality
+
+```{r derive}
+## ---- safe recoders --------------------------------------------------------
+## ANCHORED patterns. The original used str_detect(x, "pos|1"), which matches
+## any string containing a "1" (e.g. "10", "0.15", a plate code).
+recode_saa <- function(x) {
+  v <- tolower(trimws(as.character(x)))
+  out <- rep(NA_character_, length(v))
+  out[grepl("^(0|neg|negative|negativo|negativa)$", v)] <- "Negative"
+  out[grepl("^(1|pos|positive|positivo|positiva)$", v)] <- "Positive"
+  out[grepl("^(2|3|9|ind|indet|indeterminate|inconclusive|dudoso|equivocal)$", v)] <-
+    "Indeterminate"
+  factor(out, levels = c("Negative", "Positive", "Indeterminate"))
+}
+
+recode_yesno <- function(x) {
+  v <- tolower(trimws(as.character(x)))
+  v[v %in% c("", "na", "null", "-", "9", "99", "unknown", "desconocido", "nd")] <- NA
+  out <- rep(NA_character_, length(v))
+  out[grepl("^(0|no|n|absent|ausente|negative|negativo|normal|false)$", v)] <- "No"
+  out[grepl("^(1|2|yes|y|si|s[ií]|present|presente|positive|positivo|abnormal|anormal|patologico|true)$", v)] <- "Yes"
+  factor(out, levels = c("No", "Yes"))
+}
+
+## Free-text/multi-level fields that must be collapsed rather than shown raw.
+## The previous run printed DaT-SCAN and PSG with their full level sets
+## (including "Scheduled", "NA", "RBD+SAHS+PLM"), producing an uninterpretable
+## chi-squared across administrative categories.
+recode_datscan <- function(x) {
+  v <- tolower(trimws(as.character(x)))
+  out <- rep(NA_character_, length(v))
+  out[grepl("normal", v) & !grepl("abnormal|anormal|patolog", v)] <- "Normal"
+  out[grepl("abnormal|anormal|patolog|altered|alterado", v)] <- "Abnormal"
+  factor(out, levels = c("Normal", "Abnormal"))
+}
+recode_psg <- function(x) {                 # RBD present on PSG, yes/no
+  v <- tolower(trimws(as.character(x)))
+  out <- rep(NA_character_, length(v))
+  out[grepl("no rbd|sin rbd", v)] <- "No"
+  out[grepl("rbd", v) & !grepl("no rbd|sin rbd", v)] <- "Yes"
+  out[grepl("scheduled|pending|programad|^na$|^$", v)] <- NA
+  factor(out, levels = c("No", "Yes"))
+}
+
+clamp <- function(x, lo, hi, label) {
+  v <- num_safe(x)
+  v[v %in% SENTINELS] <- NA
+  bad <- !is.na(v) & (v < lo | v > hi)
+  if (any(bad)) qc_log[[label]] <<- sum(bad)
+  v[bad] <- NA
+  v
+}
+
+qc_log <- list()
+
+analytic_df <- merged_df
+analytic_df$saa3_raw <- if (has_col(analytic_df, "CSF_ALPHASYN_SAA03"))
+  recode_saa(analytic_df$CSF_ALPHASYN_SAA03) else factor(rep(NA, nrow(analytic_df)),
+                                                         levels = c("Negative","Positive"))
+
+## apply plausibility limits
+for (i in seq_len(nrow(PLAUSIBLE))) {
+  vn <- PLAUSIBLE$var[i]
+  if (has_col(analytic_df, vn))
+    analytic_df[[vn]] <- clamp(analytic_df[[vn]], PLAUSIBLE$lo[i],
+                               PLAUSIBLE$hi[i], vn)
+}
+
+analytic_df <- analytic_df %>%
+  mutate(
+    SEX = factor(ifelse(grepl("^(f|female|mujer|femenino)$", tolower(trimws(SEX))),
+                        "Female",
+                 ifelse(grepl("^(m|male|hombre|var|masculino)", tolower(trimws(SEX))),
+                        "Male", NA)), levels = c("Female", "Male")),
+
+    saa_local_pos  = recode_saa(CSF_ALPHASYN_SAA02),
+    saa_munich_pos = recode_saa(CSF_ALPHASYN_SAA01),
+    saa_third      = saa3_raw,
+
+    ## Own-site result preferred, Munich as fallback. The original rule coded
+    ## ANY positive as Positive, which silently resolved every discordant pair
+    ## in favour of Positive -- incompatible with the concordance analysis.
+    saa_any_pos = factor(coalesce(as.character(saa_local_pos),
+                                  as.character(saa_munich_pos)),
+                         levels = c("Negative", "Positive", "Indeterminate")),
+
+    A_clean = factor(case_when(
+      grepl("^(1|pos|positive|positivo|a\\+|\\+)$", tolower(trimws(ASTATUS))) ~ "A+",
+      grepl("^(0|neg|negative|negativo|a-|-)$",     tolower(trimws(ASTATUS))) ~ "A-"),
+      levels = c("A-", "A+")),
+    T_clean = factor(case_when(
+      grepl("^(1|pos|positive|positivo|t\\+|\\+)$", tolower(trimws(TSTATUS))) ~ "T+",
+      grepl("^(0|neg|negative|negativo|t-|-)$",     tolower(trimws(TSTATUS))) ~ "T-"),
+      levels = c("T-", "T+")),
+    AT_profile = factor(if_else(is.na(A_clean) | is.na(T_clean), NA_character_,
+                                paste0(A_clean, " / ", T_clean)),
+                        levels = c("A- / T-", "A- / T+", "A+ / T-", "A+ / T+")),
+
+    ## APOE: genotype string -> carrier. Guarded against a dosage-coded column.
+    apoe4_carrier = {
+      g <- gsub("[^0-9]", "", as.character(APOE))
+      factor(ifelse(is.na(g) | nchar(g) < 2, NA,
+                    ifelse(grepl("4", g), "Yes", "No")), levels = c("No", "Yes"))
+    },
+
+    hallucinations = recode_yesno(hallucinations),
+    fluctuations   = recode_yesno(fluctuations),
+    rbdclinical    = recode_yesno(rbdclinical),
+    parkinsonism   = recode_yesno(parkinsonism),
+    hyposmia       = recode_yesno(hyposmia),
+    dysautonomia   = recode_yesno(dysautonomia),
+    repeatedfalls  = recode_yesno(repeatedfalls),
+    hypersomnia    = recode_yesno(hypersomnia),
+    neurolepticsens= recode_yesno(neurolepticsens),
+    datscan_bin    = recode_datscan(datscan),
+    psg_rbd        = recode_psg(psg),
+
+    ## age at sampling beats a stored age from an unrelated timepoint
+    age_at_sample = {
+      a <- as.numeric(sample_d - as_date_safe(fnac)) / 365.25
+      a[!is.na(a) & (a < 18 | a > 110)] <- NA
+      coalesce(a, num_safe(edad), num_safe(AGE))
+    },
+
+    n_core = rowSums(cbind(hallucinations == "Yes", fluctuations == "Yes",
+                           rbdclinical == "Yes", parkinsonism == "Yes"), na.rm = TRUE),
+    n_core = ifelse(rowSums(!is.na(cbind(hallucinations, fluctuations,
+                                         rbdclinical, parkinsonism))) == 0, NA, n_core),
+
+    ## UPDRS total: NA unless all four parts are present (partial sums are not
+    ## comparable across subjects)
+    total_updrs = ifelse(
+      is.na(updrs1a_total_score) | is.na(updrs1b_total_score) |
+      is.na(updrs2_total_score)  | is.na(updrs3_total_score), NA,
+      updrs1a_total_score + updrs1b_total_score +
+      updrs2_total_score + updrs3_total_score)
+  )
+```
+
+```{r pd-phenotype}
+## ---------------------------------------------------------------------------
+## Motor phenotype (Jankovic): mean tremor / mean akinetic-rigid, from the
+## MDS-UPDRS III items. Absent from the original script.
+## ---------------------------------------------------------------------------
+TREM <- c("posturaltremorr","posturaltremorl","kinetictremorr","kinetictremorl",
+          "resttremorrue","resttremorlue","resttremorrle","resttremorlle",
+          "resttremorlipjaw","constancy")
+AKRI <- c("speech","facialexpression","rigidityneck","rigidityrue","rigiditylue",
+          "rigidityrle","rigiditylle","tappingrue","tappinglue","handmovementsr",
+          "handmovementsl","pronationsupinationr","pronationsupinationl",
+          "tappingrle","tappinglle","legagilityr","legagilityl","arising","gait",
+          "freezing","posturalstability","posture","globalspontaneityl")
+
+item_matrix <- function(df, items) {
+  got <- intersect(items, names(df))
+  if (!length(got)) return(list(m = NULL, used = character()))
+  m <- sapply(got, function(cc) {
+    v <- num_safe(df[[cc]]); v[!is.na(v) & (v < 0 | v > 4)] <- NA; v
+  })
+  list(m = as.matrix(m), used = got)
+}
+tr <- item_matrix(analytic_df, TREM); ak <- item_matrix(analytic_df, AKRI)
+
+mean_min <- function(m, k) {
+  if (is.null(m)) return(rep(NA_real_, nrow(analytic_df)))
+  out <- rowMeans(m, na.rm = TRUE); out[rowSums(!is.na(m)) < k] <- NA_real_; out
+}
+analytic_df$tremor_score  <- mean_min(tr$m, max(3, length(tr$used) %/% 2))
+analytic_df$akrigid_score <- mean_min(ak$m, max(5, length(ak$used) %/% 2))
+analytic_df <- analytic_df %>%
+  mutate(td_ar_ratio = ifelse(!is.na(akrigid_score) & akrigid_score > 0,
+                              tremor_score / akrigid_score, NA_real_),
+         pd_phenotype = factor(case_when(
+           is.na(td_ar_ratio)   ~ NA_character_,
+           td_ar_ratio >= 1.0   ~ "Tremor-dominant",
+           td_ar_ratio <= 0.8   ~ "Akinetic-rigid",
+           TRUE                 ~ "Mixed"),
+           levels = c("Akinetic-rigid", "Mixed", "Tremor-dominant")))
+
+cat(sprintf("UPDRS-III items found: %d/%d tremor, %d/%d akinetic-rigid. Phenotype classifiable in %d subjects.",
+            length(tr$used), length(TREM), length(ak$used), length(AKRI),
+            sum(!is.na(analytic_df$pd_phenotype))))
+```
+
+```{r qc-report}
+qc_tbl <- tibble(Variable = names(qc_log),
+                 `Implausible values set to NA` = unlist(qc_log))
+if (nrow(qc_tbl)) {
+  kable(qc_tbl, caption = paste("Out-of-range values removed. Any non-zero row",
+        "means the source column contains sentinel codes or the wrong field.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+} else cat("No out-of-range values detected.")
+
+saa_raw_check <- bind_rows(
+  tibble(Assay = "SAA02 (Sant Pau)", Raw = as.character(merged_df$CSF_ALPHASYN_SAA02)),
+  tibble(Assay = "SAA01 (Munich)",   Raw = as.character(merged_df$CSF_ALPHASYN_SAA01))) %>%
+  filter(!is.na(Raw)) %>% count(Assay, Raw, sort = TRUE)
+kable(saa_raw_check, caption = "Raw SAA values before recoding — verify every level maps as intended.") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+```
+
+```{r cohorts}
+## Indeterminate results are excluded from group comparisons, not silently merged.
+n_indet <- sum(analytic_df$saa_any_pos == "Indeterminate", na.rm = TRUE)
+
+df_saa2 <- analytic_df %>% filter(saa_local_pos %in% c("Negative","Positive")) %>%
+  mutate(saa_local_pos = droplevels(saa_local_pos))
+df_both <- analytic_df %>% filter(saa_any_pos %in% c("Negative","Positive")) %>%
+  mutate(saa_any_pos = droplevels(saa_any_pos))
+
+saveRDS(list(analytic_df = analytic_df, df_saa2 = df_saa2, df_both = df_both),
+        file.path(results_path, "analytic_df.rds"))
+
+cat(sprintf("Sant Pau (SAA02): n = %d (%d+ / %d-).\nCombined (SAA01+SAA02): n = %d (%d+ / %d-).\nIndeterminate excluded: %d.",
+  nrow(df_saa2), sum(df_saa2$saa_local_pos=="Positive"), sum(df_saa2$saa_local_pos=="Negative"),
+  nrow(df_both), sum(df_both$saa_any_pos=="Positive"), sum(df_both$saa_any_pos=="Negative"),
+  n_indet))
+```
+
+# Clinical demographics
+
+```{r table-helpers}
+## ---- effect sizes ---------------------------------------------------------
+smd_value <- function(x, g) {
+  g <- droplevels(factor(g)); if (nlevels(g) != 2) return(NA_real_)
+  i1 <- g == levels(g)[1]; i2 <- g == levels(g)[2]
+  if (is.numeric(x)) {
+    a <- x[i1]; a <- a[!is.na(a)]; b <- x[i2]; b <- b[!is.na(b)]
+    if (length(a) < 2 || length(b) < 2) return(NA_real_)
+    den <- sqrt((var(a) + var(b)) / 2)
+    return(if (!is.finite(den) || den == 0) NA_real_ else (mean(a) - mean(b)) / den)
+  }
+  f <- droplevels(factor(x)); k <- nlevels(f); if (k < 2) return(NA_real_)
+  p1 <- as.numeric(prop.table(table(f[i1])))[-k]
+  p2 <- as.numeric(prop.table(table(f[i2])))[-k]
+  if (anyNA(p1) || anyNA(p2)) return(NA_real_)
+  if (k == 2) {
+    den <- sqrt((p1*(1-p1) + p2*(1-p2)) / 2)
+    return(if (!is.finite(den) || den == 0) NA_real_ else (p1 - p2) / den)
+  }
+  S <- ((diag(p1, k-1) - outer(p1,p1)) + (diag(p2, k-1) - outer(p2,p2))) / 2
+  inv <- try(solve(S), silent = TRUE); if (inherits(inv,"try-error")) return(NA_real_)
+  as.numeric(sqrt(max(0, t(p1-p2) %*% inv %*% (p1-p2))))
+}
+
+fn_smd <- function(data, variable, by, ...) {
+  v <- smd_value(data[[variable]], data[[by]])
+  if (is.na(v)) NA_character_ else sprintf("%.2f", v)
+}
+
+## Mean difference (continuous) or risk difference (binary), with 95% CI.
+## Supplied as a custom stat rather than via add_difference(), which would
+## collide with add_p() over the p.value column.
+fn_md <- function(data, variable, by, ...) {
+  x <- data[[variable]]; g <- droplevels(factor(data[[by]]))
+  if (nlevels(g) != 2) return(NA_character_)
+  i1 <- g == levels(g)[1]; i2 <- g == levels(g)[2]
+  if (is.numeric(x)) {
+    a <- x[i1]; b <- x[i2]
+    if (sum(!is.na(a)) < 2 || sum(!is.na(b)) < 2) return(NA_character_)
+    tt <- try(t.test(a, b), silent = TRUE)
+    if (inherits(tt, "try-error")) return(NA_character_)
+    return(sprintf("%.2f (%.2f, %.2f)", unname(tt$estimate[1] - tt$estimate[2]),
+                   tt$conf.int[1], tt$conf.int[2]))
+  }
+  f <- droplevels(factor(x)); if (nlevels(f) != 2) return(NA_character_)
+  hi <- levels(f)[2]
+  x1 <- sum(f[i1] == hi, na.rm = TRUE); n1 <- sum(!is.na(f[i1]))
+  x2 <- sum(f[i2] == hi, na.rm = TRUE); n2 <- sum(!is.na(f[i2]))
+  if (n1 < 2 || n2 < 2) return(NA_character_)
+  pt <- try(prop.test(c(x1, x2), c(n1, n2), correct = FALSE), silent = TRUE)
+  if (inherits(pt, "try-error")) return(NA_character_)
+  sprintf("%.1f%% (%.1f, %.1f)", 100*(x1/n1 - x2/n2),
+          100*pt$conf.int[1], 100*pt$conf.int[2])
+}
+
+## A tbl_summary module: n, median [IQR] or n(%), non-parametric p, difference, SMD.
+## Continuous tests are rank-based; the previous script used Welch t-tests on
+## ordinal (MTA, Fazekas) and heavily skewed (GFAP, NfL) variables.
+mod_cont <- function(data, vars, labels, group_var) {
+  data %>% select(all_of(vars), all_of(group_var)) %>%
+    tbl_summary(by = all_of(group_var), missing = "no",
+                type = list(everything() ~ "continuous"),
+                label = labels,
+                statistic = list(everything() ~ "{median} [{p25}, {p75}]"),
+                digits = list(everything() ~ 1)) %>%
+    add_n() %>%
+    add_p(test = everything() ~ "wilcox.test",
+          pvalue_fun = ~ style_pvalue(.x, digits = 3)) %>%
+    add_stat(fns = everything() ~ fn_md) %>%
+    modify_header(add_stat_1 = "**Diff. (95% CI)**") %>%
+    add_stat(fns = everything() ~ fn_smd) %>%
+    modify_header(add_stat_2 = "**SMD**") %>%
+    bold_p(t = 0.05)
+}
+
+mod_cat <- function(data, vars, labels, group_var) {
+  data %>% select(all_of(vars), all_of(group_var)) %>%
+    tbl_summary(by = all_of(group_var), missing = "no", label = labels) %>%
+    add_n() %>%
+    add_p(test = everything() ~ "fisher.test",
+          pvalue_fun = ~ style_pvalue(.x, digits = 3)) %>%
+    add_stat(fns = everything() ~ fn_md) %>%
+    modify_header(add_stat_1 = "**Diff. (95% CI)**") %>%
+    add_stat(fns = everything() ~ fn_smd) %>%
+    modify_header(add_stat_2 = "**SMD**") %>%
+    bold_p(t = 0.05)
+}
+
+keep_usable <- function(data, vars, min_n = 5) {
+  vars[vapply(vars, function(v) {
+    if (!has_col(data, v)) return(FALSE)
+    x <- data[[v]]
+    sum(!is.na(x)) >= min_n && length(unique(x[!is.na(x)])) > 1
+  }, logical(1))]
+}
+
+format_gt_table <- function(tbl) {
+  as_gt(tbl) %>%
+    tab_style(style = list(cell_fill(color = "#E0E0E0"), cell_text(weight = "bold")),
+              locations = cells_row_groups())
+}
+```
+
+```{r clinical-table}
+LAB <- c(
+  SEX="Female sex", apoe4_carrier="APOE ε4 carrier", age_at_sample="Age at sampling (y)",
+  EDUC="Education (y)", puntuaciones="MoCA total", visuoespacialp="  Visuospatial/executive",
+  identificacionp="  Naming", atencionp="  Attention", lenguajep="  Language",
+  abstraccionp="  Abstraction", orientacionp="  Orientation", mis="  Memory index",
+  total_updrs="MDS-UPDRS total (IA+IB+II+III)", updrs1a_total_score="  Part IA",
+  updrs1b_total_score="  Part IB", updrs2_total_score="  Part II",
+  updrs3_total_score="  Part III", hoehn_yahr="Hoehn & Yahr",
+  pd_phenotype="Motor phenotype", td_ar_ratio="Tremor / akinetic-rigid ratio",
+  hallucinations="Visual hallucinations", fluctuations="Cognitive fluctuations",
+  rbdclinical="Clinical RBD", parkinsonism="Parkinsonism", n_core="Number of core features",
+  hyposmia="Hyposmia", dysautonomia="Dysautonomia", repeatedfalls="Repeated falls",
+  hypersomnia="Hypersomnia", neurolepticsens="Neuroleptic sensitivity",
+  mayo_total_score="Mayo Fluctuations Scale", sppb_total_score="SPPB total",
+  datscan_bin="DaT-SCAN abnormal", psg_rbd="PSG-confirmed RBD",
+  A_clean="Amyloid status", AT_profile="A/T profile", mta="MTA score", fazekas="Fazekas score")
+
+lab_list <- function(v) setNames(as.list(unname(LAB[v])), v) %>%
+  { imap(., function(l, n) as.formula(paste0("`", n, "` ~ '", l, "'"))) } %>% unname()
+
+build_clinical <- function(data, group_var) {
+  blocks <- list(
+    list(t="cat",  v=c("SEX","apoe4_carrier"),                      h="Demographics"),
+    list(t="cont", v=c("age_at_sample","EDUC"),                      h="Demographics"),
+    list(t="cont", v=c("puntuaciones","visuoespacialp","identificacionp","atencionp",
+                       "lenguajep","abstraccionp","orientacionp","mis"),
+                                                                     h="Cognition (MoCA)"),
+    list(t="cont", v=c("total_updrs","updrs1a_total_score","updrs1b_total_score",
+                       "updrs2_total_score","updrs3_total_score","hoehn_yahr"),
+                                                                     h="Motor (MDS-UPDRS)"),
+    list(t="cat",  v="pd_phenotype",                                 h="Motor phenotype"),
+    list(t="cat",  v=c("hallucinations","fluctuations","rbdclinical","parkinsonism"),
+                                                                     h="Core features"),
+    list(t="cont", v="n_core",                                       h="Core features"),
+    list(t="cat",  v=c("hyposmia","dysautonomia","repeatedfalls","hypersomnia",
+                       "neurolepticsens"),                           h="Supportive features"),
+    list(t="cont", v=c("mayo_total_score","sppb_total_score"),        h="Scales"),
+    list(t="cat",  v=c("datscan_bin","psg_rbd","A_clean","AT_profile"), h="Biomarkers & imaging"),
+    list(t="cont", v=c("mta","fazekas"),                             h="Biomarkers & imaging"))
+
+  built <- list(); heads <- character()
+  for (b in blocks) {
+    vv <- keep_usable(data, b$v)
+    if (!length(vv)) next
+    tb <- if (b$t == "cont") mod_cont(data, vv, lab_list(vv), group_var)
+          else               mod_cat (data, vv, lab_list(vv), group_var)
+    built <- c(built, list(tb)); heads <- c(heads, b$h)
+  }
+  tbl_stack(built, group_header = heads) %>%
+    modify_header(label ~ "**Variable**") %>% bold_labels()
+}
+```
+
+## Sant Pau cohort (SAA02)
+
+```{r tbl-saa2}
+gt_demo_saa2 <- build_clinical(df_saa2, "saa_local_pos") %>%
+  format_gt_table() %>%
+  tab_source_note("Continuous: median [IQR], Wilcoxon rank-sum. Categorical: n (%), Fisher exact. Difference = Negative − Positive (Welch). SMD = standardized mean difference. N = subjects with the variable.")
+gtsave(gt_demo_saa2, file.path(results_path, "Clinical_SantPau.html"))
+gt_demo_saa2
+```
+
+## Combined cohort (SAA01 + SAA02)
+
+```{r tbl-both}
+gt_demo_both <- build_clinical(df_both, "saa_any_pos") %>%
+  format_gt_table() %>%
+  tab_source_note("Own-site (SAA02) result used where available, Munich (SAA01) otherwise. This cohort CONTAINS the Sant Pau cohort — the two tables are not independent.")
+gtsave(gt_demo_both, file.path(results_path, "Clinical_Combined.html"))
+gt_demo_both
+```
+
+# Biofluid biomarkers
+
+```{r analyte-panel}
+PANEL <- list(
+  `CSF core AD` = c(CSF_ABRATIO="Aβ42/40 ratio", CSF_ABETA42_E0100="Aβ42",
+                    CSF_ABETA40_E0350="Aβ40", CSF_PTAU181_E0100="p-tau181",
+                    CSF_TTAU_A0010="t-tau"),
+  `CSF glial / synaptic` = c(CSF_NFL_E0600="NfL", CSF_GFAP_S0120="GFAP",
+                    CSF_YKL40_E0500="YKL-40", CSF_STREM2_E2100="sTREM2",
+                    CSF_SNAP25_S0500="SNAP-25", CSF_NPTX2_E0050="NPTX2",
+                    CSF_TOTALTDP43_E0710="Total TDP-43"),
+  `Plasma` = c(PLASMA_AB42_AB40_RATIO_H0010="Aβ42/40 ratio",
+                    PLASMA_PTAU217_S0217="p-tau217 (S0217)",
+                    PLASMA_PTAU217_H0010="p-tau217 (H0010)",
+                    PLASMA_GFAP_S0120="GFAP", PLASMA_NFLIGHT_S0100="NfL"))
+
+## Coverage gate: drop assays without MIN_PER_GROUP observations in BOTH groups.
+coverage_ok <- function(data, v, group_var) {
+  if (!has_col(data, v)) return(FALSE)
+  x <- num_safe(data[[v]]); g <- data[[group_var]]
+  all(tapply(!is.na(x), g, sum, default = 0) >= MIN_PER_GROUP)
+}
+
+build_analytes <- function(data, group_var) {
+  built <- list(); heads <- character()
+  for (pn in names(PANEL)) {
+    vs <- names(PANEL[[pn]])
+    vs <- vs[vapply(vs, coverage_ok, logical(1), data = data, group_var = group_var)]
+    if (!length(vs)) next
+    dd <- data %>% mutate(across(all_of(vs), num_safe))
+    labs <- setNames(as.list(unname(PANEL[[pn]][vs])), vs) %>%
+      imap(function(l, n) as.formula(paste0("`", n, "` ~ '", l, "'"))) %>% unname()
+    tb <- dd %>% select(all_of(vs), all_of(group_var)) %>%
+      tbl_summary(by = all_of(group_var), missing = "no",
+                  type = list(everything() ~ "continuous"),
+                  label = labs,
+                  statistic = list(everything() ~ "{median} [{p25}, {p75}]")) %>%
+      add_n() %>%
+      add_p(test = everything() ~ "wilcox.test",
+            pvalue_fun = ~ style_pvalue(.x, digits = 3)) %>%
+      add_stat(fns = everything() ~ fn_smd) %>%
+      modify_header(add_stat_1 = "**SMD**")
+    built <- c(built, list(tb)); heads <- c(heads, pn)
+  }
+  if (!length(built)) return(NULL)
+  tbl_stack(built, group_header = heads) %>%
+    bold_p(t = 0.05) %>%
+    modify_header(label ~ "**Biomarker**") %>% bold_labels()
+}
+```
+
+```{r analyte-tables}
+gt_analy_saa2 <- build_analytes(df_saa2, "saa_local_pos")
+if (!is.null(gt_analy_saa2)) {
+  gt_analy_saa2 <- gt_analy_saa2 %>% format_gt_table() %>%
+    tab_source_note(sprintf("Assays with <%d observations per group are omitted. q = Benjamini-Hochberg across the whole panel.", MIN_PER_GROUP))
+  gtsave(gt_analy_saa2, file.path(results_path, "Analytical_SantPau.html"))
+}
+gt_analy_saa2
+```
+
+```{r analyte-tables-both}
+gt_analy_both <- build_analytes(df_both, "saa_any_pos")
+if (!is.null(gt_analy_both)) {
+  gt_analy_both <- gt_analy_both %>% format_gt_table()
+  gtsave(gt_analy_both, file.path(results_path, "Analytical_Combined.html"))
+}
+gt_analy_both
+```
+
+```{r panel-fdr}
+## FDR across the whole biomarker panel, computed independently of gtsummary
+## (add_q is not available on stacked tables in every version).
+panel_vars <- unlist(lapply(PANEL, names), use.names = FALSE)
+panel_fdr <- map_dfr(panel_vars, function(v) {
+  if (!has_col(df_both, v)) return(NULL)
+  x <- num_safe(df_both[[v]]); g <- df_both$saa_any_pos
+  ok <- !is.na(x) & !is.na(g)
+  n1 <- sum(ok & g == "Positive"); n0 <- sum(ok & g == "Negative")
+  if (n1 < MIN_PER_GROUP || n0 < MIN_PER_GROUP) return(NULL)
+  w <- suppressWarnings(wilcox.test(x[g == "Positive"], x[g == "Negative"],
+                                    exact = FALSE))
+  tibble(Biomarker = v, n_pos = n1, n_neg = n0,
+         SMD = round(smd_value(x, g), 3), p = w$p.value)
+})
+if (nrow(panel_fdr)) {
+  panel_fdr <- panel_fdr %>% mutate(q_BH = p.adjust(p, "BH"),
+                                    p = signif(p, 3), q_BH = signif(q_BH, 3)) %>%
+    arrange(p)
+  write.csv(panel_fdr, file.path(results_path, "Biomarker_panel_FDR.csv"),
+            row.names = FALSE)
+  kable(panel_fdr, caption = sprintf(
+    "Combined cohort: FDR across all %d panel biomarkers with adequate coverage.",
+    nrow(panel_fdr))) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+} else cat("No panel biomarker reaches the coverage threshold.")
+```
+
+```{r gfap-plot, fig.width=6.5, fig.height=4}
+## GFAP was the strongest signal in the previous run; shown on a log axis with
+## the individual points, because a mean (SD) hides how few subjects drive it.
+if (has_col(df_both, "CSF_GFAP_S0120")) {
+  gd <- df_both %>% mutate(v = num_safe(CSF_GFAP_S0120)) %>% filter(!is.na(v))
+  if (nrow(gd) >= 6)
+    print(ggplot(gd, aes(saa_any_pos, v, fill = saa_any_pos)) +
+      geom_boxplot(width = .45, outlier.shape = NA, alpha = .6) +
+      geom_jitter(width = .12, size = 1.8, alpha = .75) +
+      scale_y_log10() +
+      scale_fill_manual(values = c(Negative = "#E69F00", Positive = "#56B4E9")) +
+      labs(title = "CSF GFAP by SAA status", x = NULL,
+           y = "CSF GFAP (log scale)",
+           subtitle = sprintf("n = %d (%d negative, %d positive)", nrow(gd),
+                              sum(gd$saa_any_pos == "Negative"),
+                              sum(gd$saa_any_pos == "Positive"))) +
+      theme(legend.position = "none"))
+}
+```
+
+# AD co-pathology within SAA-positive subjects
+
+```{r synergy}
+## The original stratified SAA+ subjects by median plasma p-tau217 and then
+## tested plasma p-tau217 as an outcome -- circular by construction. It is kept
+## here only as a labelled manipulation check, and every cell reports n.
+saa_pos <- analytic_df %>%
+  filter(saa_any_pos == "Positive", !is.na(num_safe(PLASMA_PTAU217_S0217))) %>%
+  mutate(p217 = num_safe(PLASMA_PTAU217_S0217),
+         ad_copath_group = factor(ifelse(p217 > median(p217, na.rm = TRUE),
+                                         "High p-tau217", "Low p-tau217"),
+                                  levels = c("Low p-tau217", "High p-tau217")))
+
+if (nrow(saa_pos) >= 2 * MIN_PER_GROUP) {
+  syn_vars <- keep_usable(saa_pos %>% mutate(across(any_of(
+      c("CSF_GFAP_S0120","PLASMA_GFAP_S0120","CSF_NFL_E0600",
+        "PLASMA_NFLIGHT_S0100")), num_safe)),
+      c("CSF_GFAP_S0120","PLASMA_GFAP_S0120","CSF_NFL_E0600","PLASMA_NFLIGHT_S0100",
+        "puntuaciones","total_updrs","age_at_sample"), min_n = 2 * MIN_PER_GROUP)
+  if (length(syn_vars)) {
+    gt_synergy <- saa_pos %>%
+      mutate(across(any_of(syn_vars), num_safe)) %>%
+      select(all_of(syn_vars), ad_copath_group) %>%
+      tbl_summary(by = ad_copath_group, missing = "no",
+                  type = list(everything() ~ "continuous"),
+                  statistic = list(everything() ~ "{median} [{p25}, {p75}]")) %>%
+      add_n() %>% add_p(test = everything() ~ "wilcox.test") %>%
+      add_q(method = "BH") %>% bold_p(t = 0.05) %>%
+      modify_header(label ~ "**Metric**") %>% bold_labels() %>%
+      as_gt() %>%
+      tab_header(title = md("**SAA-positive subjects stratified by plasma p-tau217**"),
+                 subtitle = sprintf("Median split, n = %d. Exploratory.", nrow(saa_pos)))
+    gtsave(gt_synergy, file.path(results_path, "Synergy_SAA_Positive.html"))
+    gt_synergy
+  } else cat("No variable reaches the minimum n for this stratification.")
+} else {
+  cat(sprintf("Only %d SAA-positive subjects have plasma p-tau217 — too few to stratify (need %d).",
+              nrow(saa_pos), 2 * MIN_PER_GROUP))
+}
+```
+
+# UPDRS III and physical performance (SPPB)
+
+```{r updrs-sppb}
+## The original showed a scatter plot only. Correlations are quantified here,
+## per group, with a Fisher r-to-z test of whether they differ.
+cor_one <- function(dat, lab) {
+  x <- num_safe(dat$updrs3_total_score); y <- num_safe(dat$sppb_total_score)
+  ok <- !is.na(x) & !is.na(y); n <- sum(ok)
+  if (n < 5) return(tibble(Group = lab, n = n, rho = NA, p = NA, Pearson_r = NA))
+  sp <- suppressWarnings(cor.test(x[ok], y[ok], method = "spearman", exact = FALSE))
+  pe <- suppressWarnings(cor.test(x[ok], y[ok], method = "pearson"))
+  tibble(Group = lab, n = n, rho = round(unname(sp$estimate), 3),
+         p = signif(sp$p.value, 3), Pearson_r = round(unname(pe$estimate), 3))
+}
+cor_res <- bind_rows(
+  cor_one(df_both %>% filter(saa_any_pos == "Positive"), "SAA positive"),
+  cor_one(df_both %>% filter(saa_any_pos == "Negative"), "SAA negative"),
+  cor_one(df_both, "All (combined)"),
+  cor_one(df_saa2, "All (Sant Pau)"))
+
+a <- cor_res[1,]; b <- cor_res[2,]
+fisher_line <- if (!is.na(a$rho) && !is.na(b$rho) && a$n > 3 && b$n > 3) {
+  z <- (atanh(a$rho) - atanh(b$rho)) / sqrt(1/(a$n-3) + 1/(b$n-3))
+  sprintf("Fisher r-to-z, SAA+ vs SAA−: z = %.2f, p = %.3f", z, 2*pnorm(-abs(z)))
+} else "Too few complete pairs to compare the two correlations."
+
+kable(cor_res, caption = paste("UPDRS III vs SPPB.", fisher_line)) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+write.csv(cor_res, file.path(results_path, "Correlation_UPDRS_SPPB.csv"), row.names = FALSE)
+```
+
+```{r updrs-sppb-plot, fig.width=7.5, fig.height=5}
+pd <- df_both %>%
+  mutate(u = num_safe(updrs3_total_score), s = num_safe(sppb_total_score)) %>%
+  filter(!is.na(u), !is.na(s))
+if (nrow(pd) >= 5) {
+  ggplot(pd, aes(u, s, colour = saa_any_pos)) +
+    geom_point(alpha = .75, size = 2.6) +
+    geom_smooth(method = "lm", se = TRUE, formula = y ~ x) +
+    scale_colour_manual(values = c(Negative = "#E69F00", Positive = "#56B4E9")) +
+    labs(title = "UPDRS III vs SPPB by SAA status",
+         subtitle = sprintf("n = %d complete pairs", nrow(pd)),
+         x = "MDS-UPDRS III", y = "SPPB total", colour = "SAA status") +
+    theme(legend.position = "bottom")
+} else {
+  cat(sprintf("Only %d subjects have both UPDRS III and SPPB — no plot drawn.", nrow(pd)))
+}
+```
+
+# MRI availability
+
+```{r mri-availability}
+mri_avail <- analytic_df %>%
+  mutate(has_mri = !is.na(as_date_safe(mridate)) | !is.na(num_safe(mta)) |
+                   !is.na(num_safe(fazekas))) %>%
+  summarise(`Merged subjects` = n(),
+            `With any MRI record` = sum(has_mri),
+            `With MRI date`   = sum(!is.na(as_date_safe(mridate))),
+            `With MTA score`  = sum(!is.na(num_safe(mta))),
+            `With Fazekas`    = sum(!is.na(num_safe(fazekas))))
+
+mri_by_grp <- df_both %>%
+  mutate(has_mri = ifelse(!is.na(as_date_safe(mridate)) | !is.na(num_safe(mta)) |
+                          !is.na(num_safe(fazekas)), "MRI available", "No MRI")) %>%
+  count(saa_any_pos, has_mri) %>%
+  pivot_wider(names_from = has_mri, values_from = n, values_fill = 0)
+
+kable(t(mri_avail), col.names = "n", caption = "MRI availability, all merged subjects") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+kable(mri_by_grp, caption = "MRI availability within the combined SAA cohort") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+```
+
+# SAA assay concordance
+
+```{r concordance}
+both_assays <- analytic_df %>%
+  filter(saa_munich_pos %in% c("Negative","Positive"),
+         saa_local_pos  %in% c("Negative","Positive")) %>%
+  mutate(saa_munich_pos = droplevels(saa_munich_pos),
+         saa_local_pos  = droplevels(saa_local_pos),
+         concordant = saa_munich_pos == saa_local_pos)
+
+ct <- table(Munich = both_assays$saa_munich_pos, SantPau = both_assays$saa_local_pos)
+
+conc_txt <- if (sum(ct) >= 2 && all(dim(ct) == c(2,2))) {
+  agree <- sum(diag(ct)) / sum(ct)
+  pe <- sum(rowSums(ct) * colSums(ct)) / sum(ct)^2
+  kap <- (agree - pe) / (1 - pe)
+  se  <- sqrt(agree * (1 - agree) / (sum(ct) * (1 - pe)^2))
+  mc  <- suppressWarnings(mcnemar.test(ct, correct = TRUE))
+  sprintf(paste("n = %d subjects have both assays. Agreement %.1f%% (%d/%d).",
+                "Cohen's κ = %.2f (95%% CI %.2f–%.2f). McNemar p = %.3f.",
+                "Munich+/SantPau− = %d; Munich−/SantPau+ = %d."),
+          sum(ct), 100*agree, sum(diag(ct)), sum(ct), kap,
+          kap - 1.96*se, kap + 1.96*se, mc$p.value,
+          ct["Positive","Negative"], ct["Negative","Positive"])
+} else sprintf("Only %d subjects have both assays — no concordance statistics computed.", sum(ct))
+
+as.data.frame.matrix(ct) %>% tibble::rownames_to_column("Munich (SAA01)") %>%
+  gt(rowname_col = "Munich (SAA01)") %>%
+  tab_header(title = md("**SAA concordance — subjects tested on both assays**"),
+             subtitle = conc_txt) %>%
+  tab_spanner(label = "Sant Pau (SAA02)", columns = everything()) %>%
+  cols_align("center") %>% opt_stylize(style = 1, color = "blue")
+```
+
+```{r discordant-listing}
+## Which subjects disagree, with the third assay and AD biomarkers to arbitrate.
+disc <- both_assays %>% filter(!concordant) %>%
+  transmute(NHC, visit = visit_any, sample = sample_d, gap_d = date_diff,
+            Munich = saa_munich_pos, SantPau = saa_local_pos, Third = saa_third,
+            AT_profile, datscan_bin, psg_rbd, rbdclinical, parkinsonism,
+            hallucinations)
+if (nrow(disc)) {
+  write.csv(disc, file.path(results_path, "SAA_discordant_subjects.csv"), row.names = FALSE)
+  kable(disc, caption = "Discordant subjects — review individually.") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
+                  font_size = 11)
+} else cat("No discordant pairs.")
+```
+
+# Exploratory analyte screen
+
+```{r analyte-screen}
+## Hypothesis-generating scan across every CSF/plasma/serum assay with adequate
+## coverage, rather than a hand-picked panel.
+cand <- grep("^(CSF_|PLASMA_|SERUM_)", names(analytic_df), value = TRUE)
+cand <- cand[!grepl("ALPHASYN|SAA[0-9]|PROTEOMICS|METABOLOMICS|SAMPLECODE|STOCK|VOLUME|PROTOCOL|SAMPLETIME|CHRONOLOGY", cand)]
+
+screen_one <- function(cc, dat, gv) {
+  v <- num_safe(dat[[cc]]); g <- dat[[gv]]
+  ok <- !is.na(v) & !is.na(g); v <- v[ok]; g <- droplevels(factor(g[ok]))
+  if (nlevels(g) != 2) return(NULL)
+  n1 <- sum(g == "Positive"); n0 <- sum(g == "Negative")
+  if (n1 < MIN_PER_GROUP || n0 < MIN_PER_GROUP) return(NULL)
+  a <- v[g == "Positive"]; b <- v[g == "Negative"]
+  w <- suppressWarnings(wilcox.test(a, b, exact = FALSE))
+  U <- unname(w$statistic); auc <- U / (n1 * n0)
+  tibble(Analyte = cc, n_pos = n1, n_neg = n0,
+         median_pos = signif(median(a), 4), median_neg = signif(median(b), 4),
+         fold_change = if (median(b) != 0) signif(median(a)/median(b), 3) else NA,
+         rank_biserial = round(2*U/(n1*n0) - 1, 3),
+         AUC = round(max(auc, 1-auc), 3),
+         Direction = ifelse(auc >= .5, "higher in SAA+", "higher in SAA−"),
+         p = w$p.value)
+}
+
+screen <- map_dfr(cand, screen_one, dat = df_both, gv = "saa_any_pos")
+if (nrow(screen)) {
+  screen <- screen %>% mutate(q_BH = p.adjust(p, "BH"),
+                              p = signif(p, 4), q_BH = signif(q_BH, 4)) %>%
+    arrange(p)
+  write.csv(screen, file.path(results_path, "Analyte_screen.csv"), row.names = FALSE)
+  kable(head(screen, 20),
+        caption = sprintf("Top 20 of %d analytes tested (≥%d per group). Exploratory: no adjustment for age, sex, APOE or batch.",
+                          nrow(screen), MIN_PER_GROUP)) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
+                  font_size = 11)
+} else cat(sprintf("No analyte reaches %d observations per group.", MIN_PER_GROUP))
+```
+
+
+# Imaging
+
+## Design
+
+
+At the sample sizes reported below, a whole-atlas scan cannot be the
+primary analysis: the Hammers atlas gives ~80 bilateral grey-matter regions and
+as many white-matter regions, against a few dozen scans. The structure below
+follows the same logic as the cortical-thickness work on visual hallucinations —
+**a small, pre-specified family carries the inference; everything wider is
+explicitly exploratory** — with two additions the previous imaging section
+lacked: image-quality control, and an honest statement of what effect size this
+sample can actually detect.
+
+Four levels, from narrow to wide:
+
+1. **Primary — nigrostriatal family (5 GM regions).** Substantia nigra, putamen,
+   caudate, pallidum, accumbens. This is the a priori target for α-synuclein
+   seeding pathology. BH-FDR over 5.
+2. **Secondary — medial temporal family (3 GM regions).** Hippocampus, amygdala,
+   parahippocampal/ambient gyrus. Tests the classic DLB prediction of *relative
+   preservation* rather than atrophy. BH-FDR over 3.
+3. **Anatomical composites.** Lobar and system-level means. BH-FDR over the set.
+4. **Whole-atlas exploratory scan**, grey and white matter separately, BH-FDR
+   within each.
+
+Plus global tissue volumes (GM, WM, CSF, white-matter hyperintensities) and a
+left–right asymmetry analysis of the nigrostriatal family, since asymmetry is
+biologically meaningful in synucleinopathy and is invisible to the bilateral
+means used so far.
+
+Model throughout: `lm(volume_z ~ SAA + sex + age_at_sample + TIV)`. Volumes are
+z-scored within the analysis sample so that structures spanning two orders of
+magnitude (thalamus ~7 mL, substantia nigra ~0.5 mL) share a comparable β scale.
+
+
+## Atlas and scan data
+
+```{r cat12-check, results='asis'}
+if (!have_cat12)
+  cat("> **CAT12_Hammers_DK_SPIN.xlsx was not found in the SAA folder — ",
+      "the whole imaging section is skipped.**\n")
+if (have_cat12 && !have_aseg)
+  cat("> *Z_ASEG_MERGED.xlsx not found; the cross-pipeline check is skipped.*\n")
+```
+
+```{r cat12-load, eval=have_cat12}
+## The Hammers atlas file. Helpers (num_safe, norm_id, as_date_safe, read_x,
+## tidy_names) are the ones defined in section 1 -- no duplicates.
+cat12 <- read_x(f_cat12) %>% tidy_names()
+cat12$NHC        <- norm_id(cat12$NHC)
+cat12$MRI_DATE_D <- as_date_safe(cat12$MRI_DATE)
+```
+
+```{r atlas-dictionary, eval=have_cat12}
+## ---------------------------------------------------------------------------
+## Parse the Hammers column names into (tissue, region, hemisphere).
+##   MRI_hammers_Vgm_TL.hippocampus.L  ->  gm / TL.hippocampus / L
+##   MRI_hammers_Vgm_brainstem...      ->  gm / brainstem... / unpaired
+## ---------------------------------------------------------------------------
+parse_hammers <- function(nms) {
+  keep <- grep("^MRI_hammers_V(gm|wm)_", nms, value = TRUE)
+  tibble(column = keep) %>%
+    mutate(tissue = ifelse(grepl("_Vgm_", column), "GM", "WM"),
+           stem   = sub("^MRI_hammers_V(gm|wm)_", "", column),
+           hemi   = case_when(grepl("\\.L$", stem) ~ "L",
+                              grepl("\\.R$", stem) ~ "R",
+                              TRUE ~ "U"),
+           region = sub("\\.[LR]$", "", stem))
+}
+atlas <- parse_hammers(names(cat12))
+
+## Structures whose ROI label carries no meaningful tissue volume:
+## ventricles are CSF (their "Vgm" is partial-volume noise) and the corpus
+## callosum is white matter (its "Vgm" likewise).
+DROP_GM <- "ventricle|Third\\.ventricle|corpus\\.callosum"
+DROP_WM <- "ventricle|Third\\.ventricle"
+
+## Lobe / system assignment from the Hammers prefix codes.
+classify <- function(r) {
+  case_when(
+    grepl("^substantia\\.nigra", r)                        ~ "Brainstem/Nigra",
+    grepl("^brainstem", r)                                 ~ "Brainstem/Nigra",
+    grepl("^(caudate|putamen|pallidum|nucleus\\.accumbens)", r) ~ "Basal ganglia",
+    grepl("^thalamus", r)                                  ~ "Thalamus",
+    grepl("^cerebellum", r)                                ~ "Cerebellum",
+    grepl("^insula", r)                                    ~ "Insula",
+    grepl("^CG\\.", r)                                     ~ "Cingulate",
+    grepl("^TL\\.(hippocampus|amygdala|parahippocampal)", r) ~ "Medial temporal",
+    grepl("^TL\\.", r)                                     ~ "Temporal",
+    grepl("^FL\\.", r)                                     ~ "Frontal",
+    grepl("^PL\\.", r)                                     ~ "Parietal",
+    grepl("^OL\\.", r)                                     ~ "Occipital",
+    TRUE                                                   ~ "Other")
+}
+
+## Human-readable labels
+pretty_region <- function(r) {
+  r %>% gsub("^(TL|FL|PL|OL|CG)\\.", "", .) %>%
+    gsub("\\.", " ", .) %>%
+    gsub("\\bremainder\\b", "rem.", .) %>%
+    str_to_sentence()
+}
+
+region_dict <- atlas %>%
+  filter(hemi %in% c("L", "R", "U")) %>%
+  distinct(tissue, region) %>%
+  mutate(system = classify(region), label = pretty_region(region))
+
+kable(region_dict %>% filter(tissue == "GM") %>% count(system, name = "GM regions"),
+      caption = "Hammers regions available per system (grey matter).") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+```
+
+```{r build-bilateral, eval=have_cat12}
+## Bilateral mean. na.rm = FALSE deliberately: a single available hemisphere is
+## NOT a bilateral mean, and silently substituting it biases the comparison.
+build_volumes <- function(dat, tissue_code, drop_pat) {
+  a <- atlas %>% filter(tissue == tissue_code, !grepl(drop_pat, region))
+  regs <- unique(a$region)
+  if (!length(regs)) return(tibble(.rows = nrow(dat)))
+  out <- map_dfc(regs, function(r) {
+    cc <- a$column[a$region == r]
+    v <- if (length(cc) == 2)
+      rowMeans(cbind(num_safe(dat[[cc[1]]]), num_safe(dat[[cc[2]]])), na.rm = FALSE)
+    else num_safe(dat[[cc[1]]])
+    tibble(!!paste0(tolower(tissue_code), "_", r) := v)
+  })
+  out
+}
+vol_gm <- build_volumes(cat12, "GM", DROP_GM)
+vol_wm <- build_volumes(cat12, "WM", DROP_WM)
+
+## left/right kept separately for the asymmetry analysis
+lr_cols <- atlas %>% filter(tissue == "GM", hemi %in% c("L","R"),
+                            !grepl(DROP_GM, region))
+vol_lr <- if (nrow(lr_cols)) {
+  map_dfc(seq_len(nrow(lr_cols)), function(i)
+    tibble(!!paste0("lr_", lr_cols$region[i], "_", lr_cols$hemi[i]) :=
+             num_safe(cat12[[lr_cols$column[i]]])))
+} else {
+  tibble(.rows = nrow(cat12))
+}
+
+cat12_wide <- bind_cols(
+  cat12 %>% select(NHC, MRI_DATE_D, any_of(c("Session","MRI_Protocol")),
+                   MRI_TIV, MRI_GM_Tot, MRI_WM, MRI_CSF_Tot, MRI_WMH_Tot, MRI_IQR) %>%
+    mutate(across(starts_with("MRI_"), ~ if (is.character(.x)) num_safe(.x) else .x)),
+  vol_gm, vol_wm, vol_lr)
+```
+
+```{r merge-imaging, eval=have_cat12}
+ja <- list(x = df_both %>% select(NHC, sample_d, saa_any_pos, SEX, age_at_sample),
+           y = cat12_wide, by = "NHC")
+if (utils::packageVersion("dplyr") >= "1.1.0") ja$relationship <- "many-to-many"
+
+img <- suppressWarnings(do.call(inner_join, ja)) %>%
+  mutate(mri_gap = abs(as.numeric(MRI_DATE_D - sample_d))) %>%
+  group_by(NHC) %>%
+  arrange(ifelse(is.na(mri_gap), Inf, mri_gap), .by_group = TRUE) %>%
+  slice(1) %>% ungroup()
+
+count_pos <- function(d) sum(d$saa_any_pos == "Positive", na.rm = TRUE)
+count_neg <- function(d) sum(d$saa_any_pos == "Negative", na.rm = TRUE)
+
+steps <- tibble(Step = "Subjects with SAA status and a CAT12 scan",
+                n = nrow(img), pos = count_pos(img), neg = count_neg(img))
+
+img <- img %>% filter(is.na(mri_gap) | mri_gap <= MAX_MRI_GAP)
+steps <- bind_rows(steps, tibble(
+  Step = sprintf("After MRI-sample interval <= %d days", MAX_MRI_GAP),
+  n = nrow(img), pos = count_pos(img), neg = count_neg(img)))
+
+img_all <- img                       # pre-QC set, kept for the quality histogram
+img <- img %>% filter(is.na(MRI_IQR) | MRI_IQR >= IQR_MIN)
+steps <- bind_rows(steps, tibble(
+  Step = sprintf("After CAT12 IQR >= %d%%", IQR_MIN),
+  n = nrow(img), pos = count_pos(img), neg = count_neg(img)))
+
+img$saa_any_pos <- factor(img$saa_any_pos, levels = c("Negative", "Positive"))
+```
+
+## Quality control
+
+```{r qc, eval=have_cat12}
+kable(steps %>% rename(`SAA positive` = pos, `SAA negative` = neg),
+      caption = "Imaging sample construction") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+
+cat(sprintf("MRI–sample interval: median %s d [IQR %s–%s], max %s d.\nCAT12 IQR: median %.1f%% [range %.1f–%.1f].",
+  round(median(img$mri_gap, na.rm = TRUE)),
+  round(quantile(img$mri_gap, .25, na.rm = TRUE)),
+  round(quantile(img$mri_gap, .75, na.rm = TRUE)),
+  round(max(img$mri_gap, na.rm = TRUE)),
+  median(img$MRI_IQR, na.rm = TRUE), min(img$MRI_IQR, na.rm = TRUE),
+  max(img$MRI_IQR, na.rm = TRUE)))
+```
+
+```{r qc-plots, fig.width=9, fig.height=3.2, eval=have_cat12}
+p1 <- ggplot(img, aes(mri_gap)) +
+  geom_histogram(bins = 25, fill = "#4C72B0", colour = "white") +
+  labs(x = "|MRI date − sample date| (days)", y = "Scans", title = "Temporal offset")
+p2 <- ggplot(img_all, aes(MRI_IQR, fill = MRI_IQR >= IQR_MIN)) +
+  geom_histogram(bins = 25, colour = "white") +
+  geom_vline(xintercept = IQR_MIN, linetype = "dashed") +
+  scale_fill_manual(values = c("FALSE" = "#D55E00", "TRUE" = "#4C72B0"), guide = "none") +
+  labs(x = "CAT12 image quality rating (%)", y = "Scans", title = "Scan quality")
+if (requireNamespace("patchwork", quietly = TRUE)) {
+  print(patchwork::wrap_plots(p1, p2, nrow = 1))
+} else { print(p1); print(p2) }
+```
+
+```{r power, eval=have_cat12}
+n1 <- sum(img$saa_any_pos == "Positive"); n0 <- sum(img$saa_any_pos == "Negative")
+mde <- (qnorm(0.975) + qnorm(0.80)) * sqrt(1/n1 + 1/n0)
+mde_fdr <- (qnorm(1 - 0.05/2/20) + qnorm(0.80)) * sqrt(1/n1 + 1/n0)
+cat(sprintf(paste0(
+  "Detectable effect (80%% power, α = 0.05, two-sided): |β| ≥ %.2f SD with n = %d ",
+  "positive / %d negative.\nUnder a whole-atlas correction the bar rises to roughly ",
+  "|β| ≥ %.2f SD.\nEffects smaller than this cannot be ruled in or out by this sample."),
+  mde, n1, n0, mde_fdr))
+```
+
+## Global tissue volumes
+
+```{r global, eval=have_cat12}
+GLOBALS <- c(MRI_TIV = "Total intracranial volume", MRI_GM_Tot = "Total grey matter",
+             MRI_WM = "Total white matter", MRI_CSF_Tot = "Total CSF",
+             MRI_WMH_Tot = "White-matter hyperintensities")
+
+fit_one <- function(outcome, data, covars = c("SEX", "age_at_sample", "MRI_TIV"),
+                    zscore = TRUE) {
+  need <- c(outcome, "saa_any_pos", covars)
+  need <- need[need %in% names(data)]
+  if (!outcome %in% need) return(NULL)
+  d <- data %>% select(all_of(unique(c(need, "saa_any_pos")))) %>% drop_na()
+  if (nrow(d) < MIN_N_MODEL || n_distinct(d$saa_any_pos) < 2) return(NULL)
+  if (zscore) d[[outcome]] <- as.numeric(scale(d[[outcome]]))
+  cv <- setdiff(need, c(outcome, "saa_any_pos"))
+  fml <- sprintf("`%s` ~ saa_any_pos%s", outcome,
+                 if (length(cv)) paste0(" + `", paste(cv, collapse = "` + `"), "`") else "")
+  m <- lm(as.formula(fml), data = d)
+  rn <- "saa_any_posPositive"
+  if (!rn %in% rownames(summary(m)$coefficients)) return(NULL)
+  s <- summary(m)$coefficients[rn, ]; ci <- confint(m)[rn, ]
+  tibble(n = nrow(d), n_pos = sum(d$saa_any_pos == "Positive"),
+         Beta = unname(s["Estimate"]), CI_l = ci[1], CI_u = ci[2],
+         P = unname(s["Pr(>|t|)"]))
+}
+
+glob_res <- map_dfr(names(GLOBALS), function(v) {
+  ## TIV is the covariate elsewhere; as an outcome it is modelled without itself
+  cv <- if (v == "MRI_TIV") c("SEX", "age_at_sample") else c("SEX", "age_at_sample", "MRI_TIV")
+  r <- fit_one(v, img, covars = cv)
+  if (is.null(r)) return(NULL)
+  bind_cols(tibble(Measure = unname(GLOBALS[v])), r)
+}) %>% mutate(Q = p.adjust(P, "BH"))
+
+if (nrow(glob_res)) {
+  glob_res %>% transmute(Measure, n, n_pos, Beta = round(Beta, 3),
+    `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
+    p = round(P, 4), `q (BH)` = round(Q, 3)) %>%
+    kable(caption = "Global tissue volumes by SAA status (z-scored; adjusted for sex, age, TIV).") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+}
+```
+
+## Primary analysis — nigrostriatal family
+
+```{r primary, eval=have_cat12}
+NIGRO <- c("substantia.nigra", "putamen", "caudate.nucleus", "pallidum",
+           "nucleus.accumbens")
+MEDTEMP <- c("TL.hippocampus", "TL.amygdala", "TL.parahippocampal.and.ambient.gyrus")
+
+run_family <- function(regions, tissue = "gm", data = img, label = "") {
+  res <- map_dfr(regions, function(r) {
+    cc <- paste0(tissue, "_", r)
+    if (!cc %in% names(data)) return(NULL)
+    o <- fit_one(cc, data)
+    if (is.null(o)) return(NULL)
+    bind_cols(tibble(Region = pretty_region(r), token = r, Family = label), o)
+  })
+  if (!nrow(res)) return(res)
+  res %>% mutate(Q = p.adjust(P, "BH")) %>% arrange(P)
+}
+
+prim <- run_family(NIGRO, label = "Nigrostriatal")
+sec  <- run_family(MEDTEMP, label = "Medial temporal")
+
+show_family <- function(res, cap) {
+  if (!nrow(res)) return(cat("No region in this family could be modelled.\n"))
+  res %>% transmute(Region, n, n_pos, Beta = round(Beta, 3),
+      `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
+      Direction = ifelse(Beta > 0, "larger in SAA+", "smaller in SAA+"),
+      p = round(P, 4), q = round(Q, 3)) %>%
+    kable(caption = cap) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")) %>%
+    row_spec(1, bold = TRUE)
+}
+show_family(prim, "PRIMARY: nigrostriatal grey matter, SAA+ vs SAA− (BH-FDR over the family).")
+```
+
+```{r secondary, eval=have_cat12}
+show_family(sec, "SECONDARY: medial temporal grey matter. A positive β = relative preservation in SAA+.")
+```
+
+```{r primary-forest, fig.width=7.5, fig.height=4, eval=have_cat12 && nrow(prim)>0}
+sig_colour <- function(P, Q, Beta)
+  ifelse(!is.na(Q) & Q < .05, ifelse(Beta > 0, "#0072B2", "#D55E00"),
+         ifelse(!is.na(P) & P < .05, "#000000", "gray60"))
+fam <- bind_rows(prim, sec) %>%
+  mutate(col = sig_colour(P, Q, Beta),
+         Region = factor(Region, levels = rev(unique(Region))))
+ggplot(fam, aes(Beta, Region, colour = col)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+  geom_errorbarh(aes(xmin = CI_l, xmax = CI_u), height = .22, linewidth = 1.3) +
+  geom_point(size = 2.6) +
+  facet_grid(Family ~ ., scales = "free_y", space = "free_y") +
+  scale_colour_identity() +
+  labs(title = "A priori families — regional grey matter vs SAA status",
+       x = "β (SAA+ vs SAA−, SD units)", y = "",
+       caption = "Blue/orange = FDR q<0.05 within family; black = nominal p<0.05; grey = ns") +
+  theme(legend.position = "none")
+```
+
+## Anatomical composites
+
+```{r composites, eval=have_cat12}
+## Mean of the z-scored member regions, so large structures do not dominate.
+gm_regions <- region_dict %>% filter(tissue == "GM", !grepl(DROP_GM, region))
+sys_list <- split(gm_regions$region, gm_regions$system)
+
+comp_dat <- img
+for (sn in names(sys_list)) {
+  cols <- paste0("gm_", sys_list[[sn]])
+  cols <- cols[cols %in% names(comp_dat)]
+  if (!length(cols)) next
+  z <- scale(as.matrix(comp_dat[, cols, drop = FALSE]))
+  comp_dat[[paste0("comp_", make.names(sn))]] <-
+    ifelse(rowSums(!is.na(z)) < ceiling(length(cols)/2), NA, rowMeans(z, na.rm = TRUE))
+}
+
+comp_res <- map_dfr(names(sys_list), function(sn) {
+  cc <- paste0("comp_", make.names(sn))
+  if (!cc %in% names(comp_dat)) return(NULL)
+  o <- fit_one(cc, comp_dat, zscore = FALSE)
+  if (is.null(o)) return(NULL)
+  bind_cols(tibble(System = sn, k_regions = length(sys_list[[sn]])), o)
+})
+if (nrow(comp_res)) {
+  comp_res <- comp_res %>% mutate(Q = p.adjust(P, "BH")) %>% arrange(P)
+  comp_res %>% transmute(System, `regions` = k_regions, n, n_pos,
+      Beta = round(Beta, 3), `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
+      p = round(P, 4), `q (BH)` = round(Q, 3)) %>%
+    kable(caption = "Anatomical composites (mean of z-scored member regions).") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+  write.csv(comp_res, file.path(results_path, "Imaging_composites.csv"), row.names = FALSE)
+}
+```
+
+## Whole-atlas exploratory scan
+
+```{r scan, eval=have_cat12}
+scan_tissue <- function(tissue_code, drop_pat, label) {
+  regs <- region_dict %>% filter(tissue == tissue_code, !grepl(drop_pat, region))
+  pre <- tolower(tissue_code)
+  res <- map_dfr(regs$region, function(r) {
+    cc <- paste0(pre, "_", r)
+    if (!cc %in% names(img)) return(NULL)
+    o <- fit_one(cc, img)
+    if (is.null(o)) return(NULL)
+    bind_cols(tibble(Tissue = label, Region = pretty_region(r), token = r,
+                     System = classify(r)), o)
+  })
+  if (!nrow(res)) return(res)
+  res %>% mutate(Q = p.adjust(P, "BH")) %>% arrange(P)
+}
+
+scan_gm <- scan_tissue("GM", DROP_GM, "Grey matter")
+scan_wm <- scan_tissue("WM", DROP_WM, "White matter")
+scan_all <- bind_rows(scan_gm, scan_wm)
+write.csv(scan_all, file.path(results_path, "Imaging_whole_atlas_scan.csv"),
+          row.names = FALSE)
+
+cat(sprintf("Regions tested: %d grey matter, %d white matter. Surviving BH-FDR within tissue: %d GM, %d WM. Nominally p<0.05: %d GM, %d WM (expected by chance: %.1f and %.1f).",
+  nrow(scan_gm), nrow(scan_wm),
+  sum(scan_gm$Q < .05, na.rm = TRUE), sum(scan_wm$Q < .05, na.rm = TRUE),
+  sum(scan_gm$P < .05, na.rm = TRUE), sum(scan_wm$P < .05, na.rm = TRUE),
+  .05 * nrow(scan_gm), .05 * nrow(scan_wm)))
+```
+
+```{r scan-table, eval=have_cat12}
+if (nrow(scan_all))
+  scan_all %>% arrange(P) %>% head(20) %>%
+    transmute(Tissue, Region, System, n, n_pos, Beta = round(Beta, 3),
+              `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
+              p = round(P, 4), `q (BH within tissue)` = round(Q, 3)) %>%
+    kable(caption = "Top 20 regions across the whole atlas — exploratory, ranked by raw p.") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
+                  font_size = 11)
+```
+
+```{r scan-volcano, fig.width=9, fig.height=4.5, eval=have_cat12 && nrow(scan_all)>0}
+vp <- scan_all %>% mutate(sig = ifelse(Q < .05, "FDR q<0.05",
+                               ifelse(P < .05, "nominal p<0.05", "ns")))
+ggplot(vp, aes(Beta, -log10(P), colour = sig)) +
+  geom_hline(yintercept = -log10(.05), linetype = "dashed", colour = "grey60") +
+  geom_vline(xintercept = 0, linetype = "dotted", colour = "grey70") +
+  geom_point(alpha = .85, size = 2) +
+  facet_wrap(~ Tissue) +
+  scale_colour_manual(values = c("FDR q<0.05" = "#D55E00",
+                                 "nominal p<0.05" = "#000000", "ns" = "grey65")) +
+  labs(title = "Whole-atlas scan: regional volume vs SAA status",
+       subtitle = "Exploratory. Interpret against the detectable-effect bar reported above.",
+       x = "β (SAA+ vs SAA−, SD units)", y = expression(-log[10](p)), colour = NULL) +
+  theme(legend.position = "bottom")
+```
+
+```{r scan-by-system, fig.width=8, fig.height=4.5, eval=have_cat12 && nrow(scan_gm)>0}
+## Is any anatomical system shifted as a whole? A one-sample test of the
+## regional betas within each system — coherence, not significance-counting.
+sys_shift <- scan_gm %>% group_by(System) %>%
+  filter(n() >= 3) %>%
+  summarise(k = n(), mean_beta = mean(Beta, na.rm = TRUE),
+            p_shift = tryCatch(t.test(Beta)$p.value, error = function(e) NA_real_),
+            .groups = "drop") %>%
+  mutate(q = p.adjust(p_shift, "BH")) %>% arrange(mean_beta)
+
+ggplot(sys_shift, aes(mean_beta, reorder(System, mean_beta),
+                      fill = q < .05)) +
+  geom_col(width = .65) +
+  geom_vline(xintercept = 0, colour = "grey40") +
+  scale_fill_manual(values = c("FALSE" = "grey70", "TRUE" = "#D55E00"), guide = "none") +
+  labs(title = "Mean regional effect by anatomical system (grey matter)",
+       subtitle = "Average β across the regions of each system; orange = system-level shift at q<0.05",
+       x = "Mean β (SAA+ vs SAA−, SD units)", y = "")
+kable(sys_shift %>% transmute(System, regions = k, mean_beta = round(mean_beta, 3),
+                              p = round(p_shift, 4), q = round(q, 3)),
+      caption = "System-level coherence of the regional effects.") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+```
+
+## Left–right asymmetry
+
+```{r asymmetry, eval=have_cat12}
+## Asymmetry index = (L − R) / ((L + R)/2). Signed, so a group difference means
+## the pathology is lateralised differently, not just larger.
+asym_res <- map_dfr(NIGRO, function(r) {
+  l <- paste0("lr_", r, "_L"); rr <- paste0("lr_", r, "_R")
+  if (!all(c(l, rr) %in% names(img))) return(NULL)
+  ai <- (img[[l]] - img[[rr]]) / ((img[[l]] + img[[rr]]) / 2)
+  d <- img %>% mutate(AI = ai, absAI = abs(ai))
+  o1 <- fit_one("AI",    d, covars = c("SEX", "age_at_sample"), zscore = FALSE)
+  o2 <- fit_one("absAI", d, covars = c("SEX", "age_at_sample"), zscore = FALSE)
+  if (is.null(o1)) return(NULL)
+  tibble(Region = pretty_region(r), n = o1$n, n_pos = o1$n_pos,
+         Beta_signed = round(o1$Beta, 4), p_signed = round(o1$P, 4),
+         Beta_abs = if (is.null(o2)) NA else round(o2$Beta, 4),
+         p_abs    = if (is.null(o2)) NA else round(o2$P, 4))
+})
+if (nrow(asym_res)) {
+  asym_res <- asym_res %>% mutate(q_signed = round(p.adjust(p_signed, "BH"), 3))
+  kable(asym_res, caption = paste("Asymmetry of the nigrostriatal family.",
+    "Signed = direction of lateralisation; abs = degree of lateralisation regardless of side.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+  write.csv(asym_res, file.path(results_path, "Imaging_asymmetry.csv"), row.names = FALSE)
+} else cat("Left/right columns not available for the nigrostriatal family.")
+```
+
+## Sensitivity analyses
+
+```{r sensitivity, eval=have_cat12}
+## (a) proportional normalisation instead of TIV as a covariate
+## (b) IQR added as a covariate
+## (c) restricted to scans within one year of sampling
+prop_dat <- img
+for (r in NIGRO) {
+  cc <- paste0("gm_", r)
+  if (cc %in% names(prop_dat) && "MRI_TIV" %in% names(prop_dat))
+    prop_dat[[paste0("prop_", r)]] <- prop_dat[[cc]] / prop_dat$MRI_TIV
+}
+iqr_dat  <- img
+near_dat <- img %>% filter(is.na(mri_gap) | mri_gap <= 365)
+
+sens <- map_dfr(NIGRO, function(r) {
+  base <- fit_one(paste0("gm_", r), img)
+  prop <- if (paste0("prop_", r) %in% names(prop_dat))
+    fit_one(paste0("prop_", r), prop_dat, covars = c("SEX", "age_at_sample")) else NULL
+  iqrm <- fit_one(paste0("gm_", r), iqr_dat,
+                  covars = c("SEX", "age_at_sample", "MRI_TIV", "MRI_IQR"))
+  near <- fit_one(paste0("gm_", r), near_dat)
+  if (is.null(base)) return(NULL)
+  tibble(Region = pretty_region(r),
+         `TIV covariate` = sprintf("%.2f (p=%.3f)", base$Beta, base$P),
+         `Proportional`  = if (is.null(prop)) "—" else sprintf("%.2f (p=%.3f)", prop$Beta, prop$P),
+         `+ IQR`         = if (is.null(iqrm)) "—" else sprintf("%.2f (p=%.3f)", iqrm$Beta, iqrm$P),
+         `MRI ≤1 y (n=%d)` = if (is.null(near)) "—" else sprintf("%.2f (p=%.3f)", near$Beta, near$P))
+})
+if (nrow(sens)) {
+  names(sens)[5] <- sprintf("MRI ≤1 y (n=%d)", nrow(near_dat))
+  kable(sens, caption = "Nigrostriatal family under four normalisation / inclusion choices. β in SD units except the proportional column.") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+}
+```
+
+
+## Cross-pipeline check (FreeSurfer aseg)
+
+```{r fs-compare, eval=have_cat12}
+## The visual-hallucination work concluded that a CAT12/Hammers thalamic effect
+## failed to reproduce in FreeSurfer -- but it fitted the two pipelines on
+## DIFFERENT subject sets, so a sample difference and a pipeline difference were
+## confounded. Here both run on the same subjects, which separates them.
+if (!have_aseg) {
+  cat("Z_ASEG_MERGED.xlsx not found in the SAA folder — cross-pipeline check skipped.\n",
+      "Copy it over from the visual-hallucination project to enable this section.")
+} else {
+  aseg <- read_x(f_aseg) %>% tidy_names() %>%
+    mutate(NHC = norm_id(sub("_.*$", "", SubjectID)),
+           MRI_DATE_D = as_date_safe(sub("^[^_]*_", "", SubjectID)))
+  fsmap <- c(Thalamus = "thal", Caudate = "caud", Putamen = "put",
+             Pallidum = "pal", Hippocampus = "hippo", Amygdala = "amyg",
+             Accumbens = "accumb")
+  for (s in names(fsmap)) {
+    l <- paste0("L", fsmap[[s]]); r <- paste0("R", fsmap[[s]])
+    aseg[[paste0("fs_", s)]] <- if (all(c(l, r) %in% names(aseg))) {
+      rowMeans(cbind(num_safe(aseg[[l]]), num_safe(aseg[[r]])), na.rm = FALSE)
+    } else NA_real_
+  }
+
+  ja2 <- list(x = img %>% select(NHC, sample_d, saa_any_pos, SEX, age_at_sample,
+                                 MRI_TIV, dplyr::starts_with("gm_")),
+              y = aseg %>% select(NHC, MRI_DATE_D, dplyr::starts_with("fs_")),
+              by = "NHC")
+  if (utils::packageVersion("dplyr") >= "1.1.0") ja2$relationship <- "many-to-many"
+  both_pipe <- suppressWarnings(do.call(inner_join, ja2)) %>%
+    mutate(g2 = abs(as.numeric(MRI_DATE_D - sample_d))) %>%
+    group_by(NHC) %>% arrange(ifelse(is.na(g2), Inf, g2), .by_group = TRUE) %>%
+    slice(1) %>% ungroup()
+
+  hmap <- c(Thalamus = "thalamus", Caudate = "caudate.nucleus",
+            Putamen = "putamen", Pallidum = "pallidum",
+            Hippocampus = "TL.hippocampus", Amygdala = "TL.amygdala",
+            Accumbens = "nucleus.accumbens")
+  cmp <- map_dfr(names(hmap), function(s) {
+    a <- fit_one(paste0("fs_", s), both_pipe)
+    b <- fit_one(paste0("gm_", hmap[[s]]), both_pipe)
+    if (is.null(a) || is.null(b)) return(NULL)
+    tibble(Structure = s, n = a$n,
+           Beta_FS = a$Beta, P_FS = a$P,
+           Beta_CAT = b$Beta, P_CAT = b$P)
+  })
+
+  if (nrow(cmp)) {
+    write.csv(cmp, file.path(results_path, "Imaging_cross_pipeline.csv"),
+              row.names = FALSE)
+    print(kable(cmp %>% transmute(Structure, n,
+        FreeSurfer = sprintf("%.2f (p=%.3f)", Beta_FS, P_FS),
+        CAT12      = sprintf("%.2f (p=%.3f)", Beta_CAT, P_CAT),
+        Agree = ifelse(sign(Beta_FS) == sign(Beta_CAT), "same direction", "OPPOSITE")),
+      caption = sprintf("Same %d subjects, same model, two segmentations. beta in SD units.",
+                        max(cmp$n))) %>%
+      kable_styling(full_width = FALSE,
+                    bootstrap_options = c("striped", "condensed")))
+  } else cat("Too few subjects imaged in both pipelines to compare.")
+}
+```
+
+```{r fs-compare-plot, fig.width=6, fig.height=4.5, eval=have_cat12}
+if (have_aseg && exists("cmp") && nrow(cmp) >= 3) {
+  ggplot(cmp, aes(Beta_FS, Beta_CAT, label = Structure)) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey60") +
+    geom_hline(yintercept = 0, colour = "grey85") +
+    geom_vline(xintercept = 0, colour = "grey85") +
+    geom_point(size = 3, colour = "#0072B2") +
+    geom_text(nudge_y = .05, size = 3.2) +
+    labs(title = "Cross-pipeline agreement, same subjects",
+         subtitle = sprintf("n = %d imaged in both pipelines; r = %.2f", max(cmp$n),
+                            suppressWarnings(cor(cmp$Beta_FS, cmp$Beta_CAT,
+                                                 use = "complete.obs"))),
+         x = "beta, FreeSurfer (aseg)", y = "beta, CAT12 (Hammers)",
+         caption = "Points on the dashed line replicate across segmentations.")
+}
+```
+
+## Interpretation notes
+
+```{r closing, results='asis', eval=have_cat12}
+top_gm <- if (nrow(scan_gm)) scan_gm[1, ] else NULL
+cat(sprintf("
+- **Sample.** %d scans enter the models (%d SAA-positive). At 80%% power this
+  detects |β| ≥ %.2f SD; anything subtler is simply beyond reach here, so a null
+  result is *uninformative*, not evidence of absence.
+- **Primary family.** %s
+- **Whole-atlas scan.** %d grey-matter and %d white-matter regions tested;
+  %d and %d survive BH-FDR. %s
+- **Reading the exploratory sections.** With ~%d nominal hits expected by chance
+  in the grey-matter scan alone, individual regions there are hypothesis
+  candidates, not findings. The system-level coherence plot is the more
+  trustworthy view: a genuine effect should shift a whole anatomical system, not
+  one isolated parcel.
+- **Ventricles and corpus callosum** are excluded from the grey-matter analysis
+  (their Hammers grey-matter volume is partial-volume noise) and the ventricles
+  from the white-matter analysis.
+- **Still CAT12-only.** Drop `Z_ASEG_MERGED.xlsx` into the SAA folder and the
+  cross-pipeline comparison in SAA_revised.Rmd becomes available on this same
+  subject set — the check the visual-hallucination work needed and did not have.
+",
+nrow(img), n1, mde,
+if (nrow(prim)) sprintf("Best region %s, β = %.2f [%.2f, %.2f], p = %.3f, q = %.3f.",
+  prim$Region[1], prim$Beta[1], prim$CI_l[1], prim$CI_u[1], prim$P[1], prim$Q[1])
+  else "Could not be fitted.",
+nrow(scan_gm), nrow(scan_wm),
+sum(scan_gm$Q < .05, na.rm = TRUE), sum(scan_wm$Q < .05, na.rm = TRUE),
+if (!is.null(top_gm)) sprintf("Strongest grey-matter signal: %s (β = %.2f, p = %.3f).",
+  top_gm$Region, top_gm$Beta, top_gm$P) else "",
+round(.05 * nrow(scan_gm))))
+```
+
+
+# Summary of methodological choices
+
+```{r summary-notes, results='asis'}
+cat(sprintf("
+- **Merge.** Clinical visits paired with the biofluid sample closest in time (`visit_date`, not the baseline date). %s
+- **Long-format REDCap.** Subject-level fields carried down within NHC before collapsing to one row per subject, so core symptoms and visit scores coexist.
+- **Reading.** `guess_max = Inf`, without which readxl types the visit-level columns from the empty enrolment rows and discards their data.
+- **SAA recoding.** Anchored patterns; every raw level is printed above for verification. Indeterminate results excluded (n = %d), not folded into either group.
+- **Combined cohort.** Own-site result preferred, Munich as fallback — discordant pairs are no longer silently coded Positive. This cohort contains the Sant Pau cohort, so the two tables are not independent.
+- **Plausibility limits.** Values outside each scale range are set to NA and counted. In this dataset the guard finds nothing: the impossible Mayo values seen previously (mean 21, SD 62 on a 0–4 scale) came from the baseline-date row selection picking the wrong rows, and the date fix alone resolves them. The guard remains as a regression check.
+- **Tests.** Rank-based for continuous variables, Fisher for categorical, with SMD alongside the mean/risk difference and BH-FDR across each biomarker panel.
+- **Coverage gate.** Assays with fewer than %d observations per group are omitted rather than printed as `NA (NA)`.
+- **Imaging.** Both segmentations on the same subjects, volumes z-scored so structures of different size share an axis, with an a priori 3-structure family alongside the 7-structure FDR.
+", merge_note, n_indet, MIN_PER_GROUP))
+```
+
+# Reproducibility
+
+```{r session}
+sessionInfo()
+```
