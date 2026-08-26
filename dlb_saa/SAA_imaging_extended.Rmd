@@ -1,0 +1,607 @@
+---
+title: "DLB SAA — extended CAT12 / Hammers imaging analysis"
+subtitle: "Regional grey and white matter volume by CSF α-synuclein SAA status"
+author: "E. Bernardi"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: hide
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.align = "center", dpi = 150)
+library(readxl); library(dplyr); library(tidyr); library(purrr); library(tibble)
+library(stringr); library(ggplot2); library(knitr); library(kableExtra); library(gt)
+theme_set(theme_minimal(base_size = 12))
+set.seed(20260826)
+```
+
+```{r config}
+desktop_path <- "~/Desktop/Ricerca/Lewy_R/SAA"
+results_path <- file.path(desktop_path, "Results")
+f_cat12      <- file.path(desktop_path, "CAT12_Hammers_DK_SPIN.xlsx")
+dir.create(results_path, recursive = TRUE, showWarnings = FALSE)
+
+MAX_MRI_GAP <- 730    # days between biofluid sampling and MRI
+IQR_MIN     <- 70     # CAT12 image-quality rating, % (below ~70 = grade D)
+MIN_N_MODEL <- 15     # minimum complete cases to fit a model
+```
+
+# Design
+
+With `r "the sample sizes reported below"`, a whole-atlas scan cannot be the
+primary analysis: the Hammers atlas gives ~80 bilateral grey-matter regions and
+as many white-matter regions, against a few dozen scans. The structure below
+follows the same logic as the cortical-thickness work on visual hallucinations —
+**a small, pre-specified family carries the inference; everything wider is
+explicitly exploratory** — with two additions the previous imaging section
+lacked: image-quality control, and an honest statement of what effect size this
+sample can actually detect.
+
+Four levels, from narrow to wide:
+
+1. **Primary — nigrostriatal family (5 GM regions).** Substantia nigra, putamen,
+   caudate, pallidum, accumbens. This is the a priori target for α-synuclein
+   seeding pathology. BH-FDR over 5.
+2. **Secondary — medial temporal family (3 GM regions).** Hippocampus, amygdala,
+   parahippocampal/ambient gyrus. Tests the classic DLB prediction of *relative
+   preservation* rather than atrophy. BH-FDR over 3.
+3. **Anatomical composites.** Lobar and system-level means. BH-FDR over the set.
+4. **Whole-atlas exploratory scan**, grey and white matter separately, BH-FDR
+   within each.
+
+Plus global tissue volumes (GM, WM, CSF, white-matter hyperintensities) and a
+left–right asymmetry analysis of the nigrostriatal family, since asymmetry is
+biologically meaningful in synucleinopathy and is invisible to the bilateral
+means used so far.
+
+Model throughout: `lm(volume_z ~ SAA + sex + age_at_sample + TIV)`. Volumes are
+z-scored within the analysis sample so that structures spanning two orders of
+magnitude (thalamus ~7 mL, substantia nigra ~0.5 mL) share a comparable β scale.
+
+# Data
+
+```{r load}
+## ---------------------------------------------------------------------------
+## The merged clinical/biofluid frame is produced by SAA_revised.Rmd, which
+## saves it to Results/analytic_df.rds. Run that first.
+## ---------------------------------------------------------------------------
+rds <- file.path(results_path, "analytic_df.rds")
+if (!file.exists(rds))
+  stop("Run SAA_revised.Rmd first — it writes Results/analytic_df.rds")
+bundle  <- readRDS(rds)
+df_both <- bundle$df_both
+
+num_safe <- function(x) {
+  if (is.numeric(x)) return(x)
+  v <- gsub("\\s", "", gsub("[<>=]", "", trimws(as.character(x))))
+  v <- ifelse(grepl(",", v) & !grepl("\\.", v), gsub(",", ".", v), gsub(",", "", v))
+  suppressWarnings(as.numeric(v))
+}
+norm_id <- function(x) {
+  x <- toupper(trimws(as.character(x)))
+  x[x %in% c("", "NA", "NULL", "-", "0")] <- NA
+  x <- gsub("[^0-9A-Z]", "", x)
+  num <- !is.na(x) & grepl("^[0-9]+$", x)
+  x[num] <- sub("^0+", "", x[num]); x[!is.na(x) & x == ""] <- NA
+  x
+}
+as_date_safe <- function(x) {
+  if (inherits(x, "Date")) return(x)
+  if (inherits(x, "POSIXt")) return(as.Date(x))
+  if (is.numeric(x)) {
+    o <- as.Date(rep(NA, length(x))); ok <- !is.na(x) & x > 10000 & x < 60000
+    o[ok] <- as.Date(x[ok], origin = "1899-12-30"); return(o)
+  }
+  x <- trimws(as.character(x)); x[x %in% c("", "NA", "NULL", "-")] <- NA
+  o <- as.Date(rep(NA, length(x)))
+  ser <- !is.na(x) & grepl("^[0-9]{5}(\\.[0-9]+)?$", x)
+  o[ser] <- as.Date(as.numeric(x[ser]), origin = "1899-12-30")
+  for (f in c("%Y-%m-%d","%d/%m/%Y","%d-%m-%Y","%Y/%m/%d","%d.%m.%Y","%Y%m%d")) {
+    todo <- !is.na(x) & is.na(o); if (!any(todo)) break
+    o[todo] <- as.Date(substr(x[todo], 1, 10), format = f)
+  }
+  o
+}
+
+cat12 <- read_excel(f_cat12, guess_max = Inf, .name_repair = "minimal")
+cat12 <- cat12[, names(cat12) != "" & !is.na(names(cat12)), drop = FALSE]
+cat12 <- cat12[, !duplicated(names(cat12)), drop = FALSE]
+cat12$NHC        <- norm_id(cat12$NHC)
+cat12$MRI_DATE_D <- as_date_safe(cat12$MRI_DATE)
+```
+
+```{r atlas-dictionary}
+## ---------------------------------------------------------------------------
+## Parse the Hammers column names into (tissue, region, hemisphere).
+##   MRI_hammers_Vgm_TL.hippocampus.L  ->  gm / TL.hippocampus / L
+##   MRI_hammers_Vgm_brainstem...      ->  gm / brainstem... / unpaired
+## ---------------------------------------------------------------------------
+parse_hammers <- function(nms) {
+  keep <- grep("^MRI_hammers_V(gm|wm)_", nms, value = TRUE)
+  tibble(column = keep) %>%
+    mutate(tissue = ifelse(grepl("_Vgm_", column), "GM", "WM"),
+           stem   = sub("^MRI_hammers_V(gm|wm)_", "", column),
+           hemi   = case_when(grepl("\\.L$", stem) ~ "L",
+                              grepl("\\.R$", stem) ~ "R",
+                              TRUE ~ "U"),
+           region = sub("\\.[LR]$", "", stem))
+}
+atlas <- parse_hammers(names(cat12))
+
+## Structures whose ROI label carries no meaningful tissue volume:
+## ventricles are CSF (their "Vgm" is partial-volume noise) and the corpus
+## callosum is white matter (its "Vgm" likewise).
+DROP_GM <- "ventricle|Third\\.ventricle|corpus\\.callosum"
+DROP_WM <- "ventricle|Third\\.ventricle"
+
+## Lobe / system assignment from the Hammers prefix codes.
+classify <- function(r) {
+  case_when(
+    grepl("^substantia\\.nigra", r)                        ~ "Brainstem/Nigra",
+    grepl("^brainstem", r)                                 ~ "Brainstem/Nigra",
+    grepl("^(caudate|putamen|pallidum|nucleus\\.accumbens)", r) ~ "Basal ganglia",
+    grepl("^thalamus", r)                                  ~ "Thalamus",
+    grepl("^cerebellum", r)                                ~ "Cerebellum",
+    grepl("^insula", r)                                    ~ "Insula",
+    grepl("^CG\\.", r)                                     ~ "Cingulate",
+    grepl("^TL\\.(hippocampus|amygdala|parahippocampal)", r) ~ "Medial temporal",
+    grepl("^TL\\.", r)                                     ~ "Temporal",
+    grepl("^FL\\.", r)                                     ~ "Frontal",
+    grepl("^PL\\.", r)                                     ~ "Parietal",
+    grepl("^OL\\.", r)                                     ~ "Occipital",
+    TRUE                                                   ~ "Other")
+}
+
+## Human-readable labels
+pretty_region <- function(r) {
+  r %>% gsub("^(TL|FL|PL|OL|CG)\\.", "", .) %>%
+    gsub("\\.", " ", .) %>%
+    gsub("\\bremainder\\b", "rem.", .) %>%
+    str_to_sentence()
+}
+
+region_dict <- atlas %>%
+  filter(hemi %in% c("L", "R", "U")) %>%
+  distinct(tissue, region) %>%
+  mutate(system = classify(region), label = pretty_region(region))
+
+kable(region_dict %>% filter(tissue == "GM") %>% count(system, name = "GM regions"),
+      caption = "Hammers regions available per system (grey matter).") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+```
+
+```{r build-bilateral}
+## Bilateral mean. na.rm = FALSE deliberately: a single available hemisphere is
+## NOT a bilateral mean, and silently substituting it biases the comparison.
+build_volumes <- function(dat, tissue_code, drop_pat) {
+  a <- atlas %>% filter(tissue == tissue_code, !grepl(drop_pat, region))
+  regs <- unique(a$region)
+  if (!length(regs)) return(tibble(.rows = nrow(dat)))
+  out <- map_dfc(regs, function(r) {
+    cc <- a$column[a$region == r]
+    v <- if (length(cc) == 2)
+      rowMeans(cbind(num_safe(dat[[cc[1]]]), num_safe(dat[[cc[2]]])), na.rm = FALSE)
+    else num_safe(dat[[cc[1]]])
+    tibble(!!paste0(tolower(tissue_code), "_", r) := v)
+  })
+  out
+}
+vol_gm <- build_volumes(cat12, "GM", DROP_GM)
+vol_wm <- build_volumes(cat12, "WM", DROP_WM)
+
+## left/right kept separately for the asymmetry analysis
+lr_cols <- atlas %>% filter(tissue == "GM", hemi %in% c("L","R"),
+                            !grepl(DROP_GM, region))
+vol_lr <- if (nrow(lr_cols))
+  map_dfc(seq_len(nrow(lr_cols)), function(i)
+    tibble(!!paste0("lr_", lr_cols$region[i], "_", lr_cols$hemi[i]) :=
+             num_safe(cat12[[lr_cols$column[i]]])))
+  else tibble(.rows = nrow(cat12))
+
+cat12_wide <- bind_cols(
+  cat12 %>% select(NHC, MRI_DATE_D, any_of(c("Session","MRI_Protocol")),
+                   MRI_TIV, MRI_GM_Tot, MRI_WM, MRI_CSF_Tot, MRI_WMH_Tot, MRI_IQR) %>%
+    mutate(across(starts_with("MRI_"), ~ if (is.character(.x)) num_safe(.x) else .x)),
+  vol_gm, vol_wm, vol_lr)
+```
+
+```{r merge-imaging}
+ja <- list(x = df_both %>% select(NHC, sample_d, saa_any_pos, SEX, age_at_sample),
+           y = cat12_wide, by = "NHC")
+if (utils::packageVersion("dplyr") >= "1.1.0") ja$relationship <- "many-to-many"
+
+img <- suppressWarnings(do.call(inner_join, ja)) %>%
+  mutate(mri_gap = abs(as.numeric(MRI_DATE_D - sample_d))) %>%
+  group_by(NHC) %>%
+  arrange(ifelse(is.na(mri_gap), Inf, mri_gap), .by_group = TRUE) %>%
+  slice(1) %>% ungroup()
+
+count_pos <- function(d) sum(d$saa_any_pos == "Positive", na.rm = TRUE)
+count_neg <- function(d) sum(d$saa_any_pos == "Negative", na.rm = TRUE)
+
+steps <- tibble(Step = "Subjects with SAA status and a CAT12 scan",
+                n = nrow(img), pos = count_pos(img), neg = count_neg(img))
+
+img <- img %>% filter(is.na(mri_gap) | mri_gap <= MAX_MRI_GAP)
+steps <- bind_rows(steps, tibble(
+  Step = sprintf("After MRI-sample interval <= %d days", MAX_MRI_GAP),
+  n = nrow(img), pos = count_pos(img), neg = count_neg(img)))
+
+img_all <- img                       # pre-QC set, kept for the quality histogram
+img <- img %>% filter(is.na(MRI_IQR) | MRI_IQR >= IQR_MIN)
+steps <- bind_rows(steps, tibble(
+  Step = sprintf("After CAT12 IQR >= %d%%", IQR_MIN),
+  n = nrow(img), pos = count_pos(img), neg = count_neg(img)))
+
+img$saa_any_pos <- factor(img$saa_any_pos, levels = c("Negative", "Positive"))
+```
+
+# Quality control
+
+```{r qc}
+kable(steps %>% rename(`SAA positive` = pos, `SAA negative` = neg),
+      caption = "Imaging sample construction") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+
+cat(sprintf("MRI–sample interval: median %s d [IQR %s–%s], max %s d.\nCAT12 IQR: median %.1f%% [range %.1f–%.1f].",
+  round(median(img$mri_gap, na.rm = TRUE)),
+  round(quantile(img$mri_gap, .25, na.rm = TRUE)),
+  round(quantile(img$mri_gap, .75, na.rm = TRUE)),
+  round(max(img$mri_gap, na.rm = TRUE)),
+  median(img$MRI_IQR, na.rm = TRUE), min(img$MRI_IQR, na.rm = TRUE),
+  max(img$MRI_IQR, na.rm = TRUE)))
+```
+
+```{r qc-plots, fig.width=9, fig.height=3.2}
+p1 <- ggplot(img, aes(mri_gap)) +
+  geom_histogram(bins = 25, fill = "#4C72B0", colour = "white") +
+  labs(x = "|MRI date − sample date| (days)", y = "Scans", title = "Temporal offset")
+p2 <- ggplot(img_all, aes(MRI_IQR, fill = MRI_IQR >= IQR_MIN)) +
+  geom_histogram(bins = 25, colour = "white") +
+  geom_vline(xintercept = IQR_MIN, linetype = "dashed") +
+  scale_fill_manual(values = c("FALSE" = "#D55E00", "TRUE" = "#4C72B0"), guide = "none") +
+  labs(x = "CAT12 image quality rating (%)", y = "Scans", title = "Scan quality")
+if (requireNamespace("patchwork", quietly = TRUE)) {
+  print(patchwork::wrap_plots(p1, p2, nrow = 1))
+} else { print(p1); print(p2) }
+```
+
+```{r power}
+n1 <- sum(img$saa_any_pos == "Positive"); n0 <- sum(img$saa_any_pos == "Negative")
+mde <- (qnorm(0.975) + qnorm(0.80)) * sqrt(1/n1 + 1/n0)
+mde_fdr <- (qnorm(1 - 0.05/2/20) + qnorm(0.80)) * sqrt(1/n1 + 1/n0)
+cat(sprintf(paste0(
+  "Detectable effect (80%% power, α = 0.05, two-sided): |β| ≥ %.2f SD with n = %d ",
+  "positive / %d negative.\nUnder a whole-atlas correction the bar rises to roughly ",
+  "|β| ≥ %.2f SD.\nEffects smaller than this cannot be ruled in or out by this sample."),
+  mde, n1, n0, mde_fdr))
+```
+
+# Global tissue volumes
+
+```{r global}
+GLOBALS <- c(MRI_TIV = "Total intracranial volume", MRI_GM_Tot = "Total grey matter",
+             MRI_WM = "Total white matter", MRI_CSF_Tot = "Total CSF",
+             MRI_WMH_Tot = "White-matter hyperintensities")
+
+fit_one <- function(outcome, data, covars = c("SEX", "age_at_sample", "MRI_TIV"),
+                    zscore = TRUE) {
+  need <- c(outcome, "saa_any_pos", covars)
+  need <- need[need %in% names(data)]
+  if (!outcome %in% need) return(NULL)
+  d <- data %>% select(all_of(unique(c(need, "saa_any_pos")))) %>% drop_na()
+  if (nrow(d) < MIN_N_MODEL || n_distinct(d$saa_any_pos) < 2) return(NULL)
+  if (zscore) d[[outcome]] <- as.numeric(scale(d[[outcome]]))
+  cv <- setdiff(need, c(outcome, "saa_any_pos"))
+  fml <- sprintf("`%s` ~ saa_any_pos%s", outcome,
+                 if (length(cv)) paste0(" + `", paste(cv, collapse = "` + `"), "`") else "")
+  m <- lm(as.formula(fml), data = d)
+  rn <- "saa_any_posPositive"
+  if (!rn %in% rownames(summary(m)$coefficients)) return(NULL)
+  s <- summary(m)$coefficients[rn, ]; ci <- confint(m)[rn, ]
+  tibble(n = nrow(d), n_pos = sum(d$saa_any_pos == "Positive"),
+         Beta = unname(s["Estimate"]), CI_l = ci[1], CI_u = ci[2],
+         P = unname(s["Pr(>|t|)"]))
+}
+
+glob_res <- map_dfr(names(GLOBALS), function(v) {
+  ## TIV is the covariate elsewhere; as an outcome it is modelled without itself
+  cv <- if (v == "MRI_TIV") c("SEX", "age_at_sample") else c("SEX", "age_at_sample", "MRI_TIV")
+  r <- fit_one(v, img, covars = cv)
+  if (is.null(r)) return(NULL)
+  bind_cols(tibble(Measure = unname(GLOBALS[v])), r)
+}) %>% mutate(Q = p.adjust(P, "BH"))
+
+if (nrow(glob_res)) {
+  glob_res %>% transmute(Measure, n, n_pos, Beta = round(Beta, 3),
+    `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
+    p = round(P, 4), `q (BH)` = round(Q, 3)) %>%
+    kable(caption = "Global tissue volumes by SAA status (z-scored; adjusted for sex, age, TIV).") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+}
+```
+
+# Primary analysis — nigrostriatal family
+
+```{r primary}
+NIGRO <- c("substantia.nigra", "putamen", "caudate.nucleus", "pallidum",
+           "nucleus.accumbens")
+MEDTEMP <- c("TL.hippocampus", "TL.amygdala", "TL.parahippocampal.and.ambient.gyrus")
+
+run_family <- function(regions, tissue = "gm", data = img, label = "") {
+  res <- map_dfr(regions, function(r) {
+    cc <- paste0(tissue, "_", r)
+    if (!cc %in% names(data)) return(NULL)
+    o <- fit_one(cc, data)
+    if (is.null(o)) return(NULL)
+    bind_cols(tibble(Region = pretty_region(r), token = r, Family = label), o)
+  })
+  if (!nrow(res)) return(res)
+  res %>% mutate(Q = p.adjust(P, "BH")) %>% arrange(P)
+}
+
+prim <- run_family(NIGRO, label = "Nigrostriatal")
+sec  <- run_family(MEDTEMP, label = "Medial temporal")
+
+show_family <- function(res, cap) {
+  if (!nrow(res)) return(cat("No region in this family could be modelled.\n"))
+  res %>% transmute(Region, n, n_pos, Beta = round(Beta, 3),
+      `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
+      Direction = ifelse(Beta > 0, "larger in SAA+", "smaller in SAA+"),
+      p = round(P, 4), q = round(Q, 3)) %>%
+    kable(caption = cap) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")) %>%
+    row_spec(1, bold = TRUE)
+}
+show_family(prim, "PRIMARY: nigrostriatal grey matter, SAA+ vs SAA− (BH-FDR over the family).")
+```
+
+```{r secondary}
+show_family(sec, "SECONDARY: medial temporal grey matter. A positive β = relative preservation in SAA+.")
+```
+
+```{r primary-forest, fig.width=7.5, fig.height=4, eval=nrow(prim)>0}
+sig_colour <- function(P, Q, Beta)
+  ifelse(!is.na(Q) & Q < .05, ifelse(Beta > 0, "#0072B2", "#D55E00"),
+         ifelse(!is.na(P) & P < .05, "#000000", "gray60"))
+fam <- bind_rows(prim, sec) %>%
+  mutate(col = sig_colour(P, Q, Beta),
+         Region = factor(Region, levels = rev(unique(Region))))
+ggplot(fam, aes(Beta, Region, colour = col)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+  geom_errorbarh(aes(xmin = CI_l, xmax = CI_u), height = .22, linewidth = 1.3) +
+  geom_point(size = 2.6) +
+  facet_grid(Family ~ ., scales = "free_y", space = "free_y") +
+  scale_colour_identity() +
+  labs(title = "A priori families — regional grey matter vs SAA status",
+       x = "β (SAA+ vs SAA−, SD units)", y = "",
+       caption = "Blue/orange = FDR q<0.05 within family; black = nominal p<0.05; grey = ns") +
+  theme(legend.position = "none")
+```
+
+# Anatomical composites
+
+```{r composites}
+## Mean of the z-scored member regions, so large structures do not dominate.
+gm_regions <- region_dict %>% filter(tissue == "GM", !grepl(DROP_GM, region))
+sys_list <- split(gm_regions$region, gm_regions$system)
+
+comp_dat <- img
+for (sn in names(sys_list)) {
+  cols <- paste0("gm_", sys_list[[sn]])
+  cols <- cols[cols %in% names(comp_dat)]
+  if (!length(cols)) next
+  z <- scale(as.matrix(comp_dat[, cols, drop = FALSE]))
+  comp_dat[[paste0("comp_", make.names(sn))]] <-
+    ifelse(rowSums(!is.na(z)) < ceiling(length(cols)/2), NA, rowMeans(z, na.rm = TRUE))
+}
+
+comp_res <- map_dfr(names(sys_list), function(sn) {
+  cc <- paste0("comp_", make.names(sn))
+  if (!cc %in% names(comp_dat)) return(NULL)
+  o <- fit_one(cc, comp_dat, zscore = FALSE)
+  if (is.null(o)) return(NULL)
+  bind_cols(tibble(System = sn, k_regions = length(sys_list[[sn]])), o)
+})
+if (nrow(comp_res)) {
+  comp_res <- comp_res %>% mutate(Q = p.adjust(P, "BH")) %>% arrange(P)
+  comp_res %>% transmute(System, `regions` = k_regions, n, n_pos,
+      Beta = round(Beta, 3), `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
+      p = round(P, 4), `q (BH)` = round(Q, 3)) %>%
+    kable(caption = "Anatomical composites (mean of z-scored member regions).") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+  write.csv(comp_res, file.path(results_path, "Imaging_composites.csv"), row.names = FALSE)
+}
+```
+
+# Whole-atlas exploratory scan
+
+```{r scan}
+scan_tissue <- function(tissue_code, drop_pat, label) {
+  regs <- region_dict %>% filter(tissue == tissue_code, !grepl(drop_pat, region))
+  pre <- tolower(tissue_code)
+  res <- map_dfr(regs$region, function(r) {
+    cc <- paste0(pre, "_", r)
+    if (!cc %in% names(img)) return(NULL)
+    o <- fit_one(cc, img)
+    if (is.null(o)) return(NULL)
+    bind_cols(tibble(Tissue = label, Region = pretty_region(r), token = r,
+                     System = classify(r)), o)
+  })
+  if (!nrow(res)) return(res)
+  res %>% mutate(Q = p.adjust(P, "BH")) %>% arrange(P)
+}
+
+scan_gm <- scan_tissue("GM", DROP_GM, "Grey matter")
+scan_wm <- scan_tissue("WM", DROP_WM, "White matter")
+scan_all <- bind_rows(scan_gm, scan_wm)
+write.csv(scan_all, file.path(results_path, "Imaging_whole_atlas_scan.csv"),
+          row.names = FALSE)
+
+cat(sprintf("Regions tested: %d grey matter, %d white matter. Surviving BH-FDR within tissue: %d GM, %d WM. Nominally p<0.05: %d GM, %d WM (expected by chance: %.1f and %.1f).",
+  nrow(scan_gm), nrow(scan_wm),
+  sum(scan_gm$Q < .05, na.rm = TRUE), sum(scan_wm$Q < .05, na.rm = TRUE),
+  sum(scan_gm$P < .05, na.rm = TRUE), sum(scan_wm$P < .05, na.rm = TRUE),
+  .05 * nrow(scan_gm), .05 * nrow(scan_wm)))
+```
+
+```{r scan-table}
+if (nrow(scan_all))
+  scan_all %>% arrange(P) %>% head(20) %>%
+    transmute(Tissue, Region, System, n, n_pos, Beta = round(Beta, 3),
+              `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
+              p = round(P, 4), `q (BH within tissue)` = round(Q, 3)) %>%
+    kable(caption = "Top 20 regions across the whole atlas — exploratory, ranked by raw p.") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
+                  font_size = 11)
+```
+
+```{r scan-volcano, fig.width=9, fig.height=4.5, eval=nrow(scan_all)>0}
+vp <- scan_all %>% mutate(sig = ifelse(Q < .05, "FDR q<0.05",
+                               ifelse(P < .05, "nominal p<0.05", "ns")))
+ggplot(vp, aes(Beta, -log10(P), colour = sig)) +
+  geom_hline(yintercept = -log10(.05), linetype = "dashed", colour = "grey60") +
+  geom_vline(xintercept = 0, linetype = "dotted", colour = "grey70") +
+  geom_point(alpha = .85, size = 2) +
+  facet_wrap(~ Tissue) +
+  scale_colour_manual(values = c("FDR q<0.05" = "#D55E00",
+                                 "nominal p<0.05" = "#000000", "ns" = "grey65")) +
+  labs(title = "Whole-atlas scan: regional volume vs SAA status",
+       subtitle = "Exploratory. Interpret against the detectable-effect bar reported above.",
+       x = "β (SAA+ vs SAA−, SD units)", y = expression(-log[10](p)), colour = NULL) +
+  theme(legend.position = "bottom")
+```
+
+```{r scan-by-system, fig.width=8, fig.height=4.5, eval=nrow(scan_gm)>0}
+## Is any anatomical system shifted as a whole? A one-sample test of the
+## regional betas within each system — coherence, not significance-counting.
+sys_shift <- scan_gm %>% group_by(System) %>%
+  filter(n() >= 3) %>%
+  summarise(k = n(), mean_beta = mean(Beta, na.rm = TRUE),
+            p_shift = tryCatch(t.test(Beta)$p.value, error = function(e) NA_real_),
+            .groups = "drop") %>%
+  mutate(q = p.adjust(p_shift, "BH")) %>% arrange(mean_beta)
+
+ggplot(sys_shift, aes(mean_beta, reorder(System, mean_beta),
+                      fill = q < .05)) +
+  geom_col(width = .65) +
+  geom_vline(xintercept = 0, colour = "grey40") +
+  scale_fill_manual(values = c("FALSE" = "grey70", "TRUE" = "#D55E00"), guide = "none") +
+  labs(title = "Mean regional effect by anatomical system (grey matter)",
+       subtitle = "Average β across the regions of each system; orange = system-level shift at q<0.05",
+       x = "Mean β (SAA+ vs SAA−, SD units)", y = "")
+kable(sys_shift %>% transmute(System, regions = k, mean_beta = round(mean_beta, 3),
+                              p = round(p_shift, 4), q = round(q, 3)),
+      caption = "System-level coherence of the regional effects.") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+```
+
+# Left–right asymmetry
+
+```{r asymmetry}
+## Asymmetry index = (L − R) / ((L + R)/2). Signed, so a group difference means
+## the pathology is lateralised differently, not just larger.
+asym_res <- map_dfr(NIGRO, function(r) {
+  l <- paste0("lr_", r, "_L"); rr <- paste0("lr_", r, "_R")
+  if (!all(c(l, rr) %in% names(img))) return(NULL)
+  ai <- (img[[l]] - img[[rr]]) / ((img[[l]] + img[[rr]]) / 2)
+  d <- img %>% mutate(AI = ai, absAI = abs(ai))
+  o1 <- fit_one("AI",    d, covars = c("SEX", "age_at_sample"), zscore = FALSE)
+  o2 <- fit_one("absAI", d, covars = c("SEX", "age_at_sample"), zscore = FALSE)
+  if (is.null(o1)) return(NULL)
+  tibble(Region = pretty_region(r), n = o1$n, n_pos = o1$n_pos,
+         Beta_signed = round(o1$Beta, 4), p_signed = round(o1$P, 4),
+         Beta_abs = if (is.null(o2)) NA else round(o2$Beta, 4),
+         p_abs    = if (is.null(o2)) NA else round(o2$P, 4))
+})
+if (nrow(asym_res)) {
+  asym_res <- asym_res %>% mutate(q_signed = round(p.adjust(p_signed, "BH"), 3))
+  kable(asym_res, caption = paste("Asymmetry of the nigrostriatal family.",
+    "Signed = direction of lateralisation; abs = degree of lateralisation regardless of side.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+  write.csv(asym_res, file.path(results_path, "Imaging_asymmetry.csv"), row.names = FALSE)
+} else cat("Left/right columns not available for the nigrostriatal family.")
+```
+
+# Sensitivity analyses
+
+```{r sensitivity}
+## (a) proportional normalisation instead of TIV as a covariate
+## (b) IQR added as a covariate
+## (c) restricted to scans within one year of sampling
+prop_dat <- img
+for (r in NIGRO) {
+  cc <- paste0("gm_", r)
+  if (cc %in% names(prop_dat) && "MRI_TIV" %in% names(prop_dat))
+    prop_dat[[paste0("prop_", r)]] <- prop_dat[[cc]] / prop_dat$MRI_TIV
+}
+iqr_dat  <- img
+near_dat <- img %>% filter(is.na(mri_gap) | mri_gap <= 365)
+
+sens <- map_dfr(NIGRO, function(r) {
+  base <- fit_one(paste0("gm_", r), img)
+  prop <- if (paste0("prop_", r) %in% names(prop_dat))
+    fit_one(paste0("prop_", r), prop_dat, covars = c("SEX", "age_at_sample")) else NULL
+  iqrm <- fit_one(paste0("gm_", r), iqr_dat,
+                  covars = c("SEX", "age_at_sample", "MRI_TIV", "MRI_IQR"))
+  near <- fit_one(paste0("gm_", r), near_dat)
+  if (is.null(base)) return(NULL)
+  tibble(Region = pretty_region(r),
+         `TIV covariate` = sprintf("%.2f (p=%.3f)", base$Beta, base$P),
+         `Proportional`  = if (is.null(prop)) "—" else sprintf("%.2f (p=%.3f)", prop$Beta, prop$P),
+         `+ IQR`         = if (is.null(iqrm)) "—" else sprintf("%.2f (p=%.3f)", iqrm$Beta, iqrm$P),
+         `MRI ≤1 y (n=%d)` = if (is.null(near)) "—" else sprintf("%.2f (p=%.3f)", near$Beta, near$P))
+})
+if (nrow(sens)) {
+  names(sens)[5] <- sprintf("MRI ≤1 y (n=%d)", nrow(near_dat))
+  kable(sens, caption = "Nigrostriatal family under four normalisation / inclusion choices. β in SD units except the proportional column.") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+}
+```
+
+# Interpretation notes
+
+```{r closing, results='asis'}
+top_gm <- if (nrow(scan_gm)) scan_gm[1, ] else NULL
+cat(sprintf("
+- **Sample.** %d scans enter the models (%d SAA-positive). At 80%% power this
+  detects |β| ≥ %.2f SD; anything subtler is simply beyond reach here, so a null
+  result is *uninformative*, not evidence of absence.
+- **Primary family.** %s
+- **Whole-atlas scan.** %d grey-matter and %d white-matter regions tested;
+  %d and %d survive BH-FDR. %s
+- **Reading the exploratory sections.** With ~%d nominal hits expected by chance
+  in the grey-matter scan alone, individual regions there are hypothesis
+  candidates, not findings. The system-level coherence plot is the more
+  trustworthy view: a genuine effect should shift a whole anatomical system, not
+  one isolated parcel.
+- **Ventricles and corpus callosum** are excluded from the grey-matter analysis
+  (their Hammers grey-matter volume is partial-volume noise) and the ventricles
+  from the white-matter analysis.
+- **Still CAT12-only.** Drop `Z_ASEG_MERGED.xlsx` into the SAA folder and the
+  cross-pipeline comparison in SAA_revised.Rmd becomes available on this same
+  subject set — the check the visual-hallucination work needed and did not have.
+",
+nrow(img), n1, mde,
+if (nrow(prim)) sprintf("Best region %s, β = %.2f [%.2f, %.2f], p = %.3f, q = %.3f.",
+  prim$Region[1], prim$Beta[1], prim$CI_l[1], prim$CI_u[1], prim$P[1], prim$Q[1])
+  else "Could not be fitted.",
+nrow(scan_gm), nrow(scan_wm),
+sum(scan_gm$Q < .05, na.rm = TRUE), sum(scan_wm$Q < .05, na.rm = TRUE),
+if (!is.null(top_gm)) sprintf("Strongest grey-matter signal: %s (β = %.2f, p = %.3f).",
+  top_gm$Region, top_gm$Beta, top_gm$P) else "",
+round(.05 * nrow(scan_gm))))
+```
+
+# Reproducibility
+
+```{r session}
+sessionInfo()
+```

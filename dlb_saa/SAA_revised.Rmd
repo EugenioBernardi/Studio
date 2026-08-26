@@ -463,6 +463,9 @@ df_saa2 <- analytic_df %>% filter(saa_local_pos %in% c("Negative","Positive")) %
 df_both <- analytic_df %>% filter(saa_any_pos %in% c("Negative","Positive")) %>%
   mutate(saa_any_pos = droplevels(saa_any_pos))
 
+saveRDS(list(analytic_df = analytic_df, df_saa2 = df_saa2, df_both = df_both),
+        file.path(results_path, "analytic_df.rds"))
+
 cat(sprintf("Sant Pau (SAA02): n = %d (%d+ / %d-).\nCombined (SAA01+SAA02): n = %d (%d+ / %d-).\nIndeterminate excluded: %d.",
   nrow(df_saa2), sum(df_saa2$saa_local_pos=="Positive"), sum(df_saa2$saa_local_pos=="Negative"),
   nrow(df_both), sum(df_both$saa_any_pos=="Positive"), sum(df_both$saa_any_pos=="Negative"),
