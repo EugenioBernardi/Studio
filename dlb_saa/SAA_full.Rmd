@@ -58,10 +58,12 @@ ct_ok       <- FALSE
 ## ---------------------------------------------------------------------------
 MAX_GAP_DAYS <- 365   # visit <-> sample; pairs beyond this are flagged
 MAX_MRI_GAP  <- 730   # sample <-> MRI
-IQR_MIN      <- 70    # minimum CAT12 image quality, as a PERCENTAGE (70% = grade C-)
-                      # CAT12 may store IQR either as a percentage (higher =
-                      # better) or as its native rating ~0.5-10.5 (LOWER =
-                      # better, 1 = A+). The scale is detected, not assumed.
+## Image-quality threshold, set in CAT12's native rating (LOWER is better,
+## 1 = A+). A rating of 3 is the accepted cut-off here. CAT12 may export this
+## either as the rating or as the percentage grade (higher better); the scale is
+## detected on load and this threshold is converted to match.
+IQR_MAX_RATING <- 3
+IQR_MIN        <- 105 - 10 * IQR_MAX_RATING   # = 75% on the percentage scale
 MIN_N_MODEL  <- 15    # minimum complete cases to fit an imaging model
 
 ## ---------------------------------------------------------------------------
@@ -1194,7 +1196,8 @@ iqr_scale_note <- sprintf(
 
 img <- img %>% filter(is.na(MRI_IQR_pct) | MRI_IQR_pct >= IQR_MIN)
 steps <- bind_rows(steps, tibble(
-  Step = sprintf("After CAT12 quality >= %d%%", IQR_MIN),
+  Step = sprintf("After CAT12 quality (rating <= %.1f, i.e. >= %d%%)",
+                 IQR_MAX_RATING, IQR_MIN),
   n = nrow(img), pos = count_pos(img), neg = count_neg(img)))
 
 img$saa_any_pos <- factor(img$saa_any_pos, levels = c("Negative", "Positive"))
