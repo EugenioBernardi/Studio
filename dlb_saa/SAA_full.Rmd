@@ -2047,6 +2047,76 @@ cat(sprintf("
 ", merge_note, n_indet, MIN_PER_GROUP))
 ```
 
+# References
+
+Found with Undermind and read against the results above. The note on each line
+is what it says about our finding, not a summary of the paper.
+
+**Clinical features**
+
+1. Coughlin DG, MacLeod KR, Middleton JS, et al. *Association of CSF
+   alpha-Synuclein Seeding Amplification Assay Results With Clinical Features of
+   Possible and Probable Dementia With Lewy Bodies.* Neurology 2024;103(3):e209656.
+   doi:10.1212/WNL.0000000000209656
+   — n = 191 DLB. RBD in 86% of SAA+ vs 62% of SAA- (p < 0.0001, OR 3.63):
+   our RBD result replicates with a smaller effect. Hallucinations 50% vs 47%
+   (p = 0.73): our null replicates theirs. MDS-UPDRS III 33.8 vs 25.6
+   (p = 0.001): **we do not replicate this** — our UPDRS III and parkinsonism
+   prevalence are flat. DaT-SPECT was not analysed against SAA status, so our
+   DaT result has no direct published comparator.
+
+**Glial markers and AD co-pathology**
+
+2. Morenas-Rodriguez E, Alcolea D, Suarez-Calvet M, et al. *Different pattern of
+   CSF glial markers between dementia with Lewy bodies and Alzheimer's disease.*
+   Sci Rep 2019;9:7803. doi:10.1038/s41598-019-44173-8
+   — YKL-40 elevation in DLB tracked tau, not synuclein, and was unrelated to
+   amyloid status. GFAP was not measured. Sets the prior that glial markers in
+   DLB follow AD co-pathology.
+
+3. Cousins KAQ, Shaw LM, Chen-Plotkin A, et al. *Plasma GFAP associates with
+   secondary Alzheimer's pathology in Lewy body disease.* Ann Clin Transl Neurol
+   2022;9(6):802-813. doi:10.1002/acn3.51768
+   — Plasma GFAP in Lewy body disease tracks concomitant amyloid. Our CSF GFAP
+   elevation in SAA+ is amyloid-independent in both strata, i.e. against this
+   account — but at n = 11 vs 11.
+
+4. Honig LS, Kang MS, Lamoureux J, Marder K. *Cerebrospinal fluid seed
+   aggregation assay and Alzheimer biomarkers in a Dementia with Lewy Body
+   cohort.* Alzheimers Dement 2025;21(Suppl 2):e107531. doi:10.1002/alz70856_107531
+   — No difference in amyloid or tau biomarker status between SAA+ and SAA-, and
+   no evidence of increased AD pathology in SAA-. Our null a-path replicates
+   this, which is why the mediation question resolves as "not amyloid-mediated".
+
+**Imaging**
+
+5. Tosun D, Landau SM, Weiner MW, Blauwendraat C; ADNI. *Neuroimaging features of
+   CSF alpha-synuclein seed amplification assay positivity in elderly individuals
+   in AD continuum.* Alzheimers Dement 2024;20(Suppl 2):e092637.
+   doi:10.1002/alz.092637
+   — Cortical atrophy differences by SAA status, but **no medial temporal or
+   hippocampal effect**, and no subcortical analysis. Supports treating our
+   medial-temporal volumetric signal as noise.
+
+6. Cohen JS, Phillips JS, Das SR, et al. *Posterior hippocampal sparing in Lewy
+   body disorders with Alzheimer's copathology: an in vivo MRI study.*
+   Neuroimage Clin 2024;43:103714. doi:10.1016/j.nicl.2024.103714
+   — Hippocampal involvement in Lewy body disease is driven by AD co-pathology.
+
+7. Burton EJ, Barber R, Mukaetova-Ladinska EB, et al. *Medial temporal lobe
+   atrophy on MRI differentiates Alzheimer's disease from dementia with Lewy
+   bodies and vascular cognitive impairment.* Brain 2009;132(1):195-203.
+   doi:10.1093/brain/awn298
+   — The classic MTA result, DLB vs AD rather than SAA-stratified. Our visual
+   MTA finding (higher in SAA-) sits in this tradition; our CAT12 composite
+   contradicts it.
+
+**Where this leaves us.** RBD and hallucinations replicate. Parkinsonism does
+not. DaT-SCAN against SAA status appears not to have been reported. The GFAP
+result runs against the prevailing AD-co-pathology account and needs replication
+before it is claimable. The imaging is an underpowered null and the published
+work agrees there is no medial temporal effect to find.
+
 # Reproducibility
 
 ```{r session}
