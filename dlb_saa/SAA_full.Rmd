@@ -318,6 +318,23 @@ recode_psg <- function(x) {                 # RBD present on PSG, yes/no
   factor(out, levels = c("No", "Yes"))
 }
 
+## A/T status. The previous anchored version silently matched nothing on this
+## export -- A_clean and AT_profile then vanished from every table because
+## keep_usable() drops all-missing variables without comment. Substring matching
+## is used instead, and the raw-to-recoded mapping is printed below so the
+## result can be checked rather than assumed.
+recode_status <- function(x, letter) {
+  v <- gsub("\\s+", "", tolower(trimws(as.character(x))))
+  v[v %in% c("", "na", "nan", "null", "nd", "unknown", "desconocido", "?")] <- NA
+  out <- rep(NA_character_, length(v))
+  lo <- tolower(letter)
+  neg <- !is.na(v) & (grepl("neg", v) | v %in% c("0", "false", "-", paste0(lo, "-")))
+  pos <- !is.na(v) & (grepl("pos", v) | v %in% c("1", "true", "+", paste0(lo, "+")))
+  out[neg] <- paste0(letter, "-")
+  out[pos] <- paste0(letter, "+")      # positive wins if both somehow match
+  factor(out, levels = paste0(letter, c("-", "+")))
+}
+
 clamp <- function(x, lo, hi, label) {
   v <- num_safe(x)
   v[v %in% SENTINELS] <- NA
@@ -360,14 +377,8 @@ analytic_df <- analytic_df %>%
                                   as.character(saa_munich_pos)),
                          levels = c("Negative", "Positive", "Indeterminate")),
 
-    A_clean = factor(case_when(
-      grepl("^(1|pos|positive|positivo|a\\+|\\+)$", tolower(trimws(ASTATUS))) ~ "A+",
-      grepl("^(0|neg|negative|negativo|a-|-)$",     tolower(trimws(ASTATUS))) ~ "A-"),
-      levels = c("A-", "A+")),
-    T_clean = factor(case_when(
-      grepl("^(1|pos|positive|positivo|t\\+|\\+)$", tolower(trimws(TSTATUS))) ~ "T+",
-      grepl("^(0|neg|negative|negativo|t-|-)$",     tolower(trimws(TSTATUS))) ~ "T-"),
-      levels = c("T-", "T+")),
+    A_clean = recode_status(ASTATUS, "A"),
+    T_clean = recode_status(TSTATUS, "T"),
     AT_profile = factor(if_else(is.na(A_clean) | is.na(T_clean), NA_character_,
                                 paste0(A_clean, " / ", T_clean)),
                         levels = c("A- / T-", "A- / T+", "A+ / T-", "A+ / T+")),
@@ -473,6 +484,19 @@ saa_raw_check <- bind_rows(
   filter(!is.na(Raw)) %>% count(Assay, Raw, sort = TRUE)
 kable(saa_raw_check, caption = "Raw SAA values before recoding — verify every level maps as intended.") %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+
+at_raw_check <- bind_rows(
+  if (has_col(merged_df, "ASTATUS"))
+    tibble(Field = "ASTATUS", Raw = as.character(merged_df$ASTATUS),
+           Recoded = as.character(recode_status(merged_df$ASTATUS, "A"))) else NULL,
+  if (has_col(merged_df, "TSTATUS"))
+    tibble(Field = "TSTATUS", Raw = as.character(merged_df$TSTATUS),
+           Recoded = as.character(recode_status(merged_df$TSTATUS, "T"))) else NULL) %>%
+  filter(!is.na(Raw)) %>% count(Field, Raw, Recoded, sort = TRUE)
+if (nrow(at_raw_check))
+  kable(at_raw_check, caption = paste("Amyloid / tau status: raw value to recoded",
+    "value. Any row with Recoded = NA is being lost.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
 ```
 
 ```{r cohorts}
@@ -763,9 +787,10 @@ if (nrow(panel_fdr)) {
     arrange(p)
   write.csv(panel_fdr, file.path(results_path, "Biomarker_panel_FDR.csv"),
             row.names = FALSE)
-  kable(panel_fdr, caption = sprintf(
-    "Combined cohort: FDR across all %d panel biomarkers with adequate coverage.",
-    nrow(panel_fdr))) %>%
+  kable(panel_fdr, caption = sprintf(paste(
+    "Combined cohort, %d panel biomarkers with adequate coverage. This panel is",
+    "exploratory and direction-led, so the raw p is the operative column;",
+    "q_BH is shown for reference, not as a gate."), nrow(panel_fdr))) %>%
     kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
 } else cat("No panel biomarker reaches the coverage threshold.")
 ```
@@ -788,6 +813,179 @@ if (has_col(df_both, "CSF_GFAP_S0120")) {
                               sum(gd$saa_any_pos == "Positive"))) +
       theme(legend.position = "none"))
 }
+```
+
+# Is the GFAP difference amyloid-mediated?
+
+CSF GFAP is higher in SAA-negative patients, which is consistent with the
+literature and with the higher MTA scores in that group. Both would follow if
+the SAA-negative group is enriched for Alzheimer pathology: amyloid drives
+astrocytic activation, and it drives medial temporal atrophy.
+
+Mediation requires three things, and the **first is the one that decides
+whether the question is answerable at all**: amyloid must itself differ by SAA
+status. If the two groups carry the same amyloid burden, amyloid cannot explain
+a GFAP difference between them, however plausible the mechanism. That path is
+reported first and explicitly.
+
+The estimator is the difference method — the SAA coefficient with and without
+the mediator in the model — with a nonparametric bootstrap for the indirect
+effect. At these sample sizes the intervals will be wide; the point is the
+direction and the degree of attenuation, not a p-value.
+
+```{r mediation}
+MED_BOOT <- 2000
+
+med_one <- function(dat, outcome, mediator, covars = c("age_at_sample", "SEX"),
+                    log_outcome = TRUE, R = MED_BOOT) {
+  need <- c(outcome, mediator, "saa_any_pos", covars)
+  need <- need[need %in% names(dat)]
+  if (!all(c(outcome, mediator, "saa_any_pos") %in% need)) return(NULL)
+
+  d <- dat %>% select(all_of(need)) %>%
+    mutate(.y = num_safe(.data[[outcome]]),
+           .x = factor(saa_any_pos, levels = c("Negative", "Positive")),
+           .m = if (is.factor(.data[[mediator]]) || is.character(.data[[mediator]]))
+                  as.numeric(factor(.data[[mediator]])) - 1
+                else num_safe(.data[[mediator]])) %>%
+    select(.y, .x, .m, all_of(intersect(covars, need))) %>%
+    drop_na() %>% droplevels()
+
+  if (log_outcome && all(d$.y > 0)) d$.y <- log(d$.y)
+  if (nrow(d) < 12 || n_distinct(d$.x) < 2 || n_distinct(d$.m) < 2) return(NULL)
+
+  cv <- intersect(covars, names(d))
+  cv <- cv[vapply(cv, function(cc) {
+    v <- d[[cc]]
+    if (is.factor(v) || is.character(v)) length(unique(v[!is.na(v)])) >= 2
+    else { vv <- suppressWarnings(stats::var(as.numeric(v), na.rm = TRUE))
+           is.finite(vv) && vv > 0 }
+  }, logical(1))]
+  cvs <- if (length(cv)) paste0(" + `", paste(cv, collapse = "` + `"), "`") else ""
+
+  est <- function(dd) {
+    mt <- lm(as.formula(paste0(".y ~ .x", cvs)), data = dd)
+    md <- lm(as.formula(paste0(".y ~ .x + .m", cvs)), data = dd)
+    ma <- lm(as.formula(paste0(".m ~ .x", cvs)), data = dd)
+    cf <- function(m, nm) { k <- coef(m); if (nm %in% names(k)) unname(k[nm]) else NA_real_ }
+    tot <- cf(mt, ".xPositive"); dir <- cf(md, ".xPositive")
+    c(total = tot, direct = dir, indirect = tot - dir,
+      a = cf(ma, ".xPositive"), b = cf(md, ".m"),
+      prop = if (is.na(tot) || abs(tot) < 1e-8) NA_real_ else (tot - dir) / tot)
+  }
+  obs <- est(d)
+  bs <- replicate(R, {
+    o <- try(est(d[sample(nrow(d), replace = TRUE), ]), silent = TRUE)
+    if (inherits(o, "try-error")) rep(NA_real_, 6) else o
+  })
+  ci <- function(k) {
+    v <- bs[k, ]; v <- v[is.finite(v)]
+    if (length(v) < 50) c(NA_real_, NA_real_) else unname(quantile(v, c(.025, .975)))
+  }
+  ai <- ci("a"); ii <- ci("indirect")
+
+  ## p for the a-path, from the same model
+  pa <- tryCatch({
+    ma <- lm(as.formula(paste0(".m ~ .x", cvs)), data = d)
+    summary(ma)$coefficients[".xPositive", "Pr(>|t|)"] }, error = function(e) NA_real_)
+  pt <- tryCatch({
+    mt <- lm(as.formula(paste0(".y ~ .x", cvs)), data = d)
+    summary(mt)$coefficients[".xPositive", "Pr(>|t|)"] }, error = function(e) NA_real_)
+
+  tibble(Outcome = outcome, Mediator = mediator, n = nrow(d),
+         n_pos = sum(d$.x == "Positive"),
+         a_path = obs["a"], a_p = pa,
+         a_CI = sprintf("[%.2f, %.2f]", ai[1], ai[2]),
+         total = obs["total"], total_p = pt,
+         direct = obs["direct"], indirect = obs["indirect"],
+         indirect_CI = sprintf("[%.2f, %.2f]", ii[1], ii[2]),
+         prop_mediated = obs["prop"],
+         logged = log_outcome && all(dat[[outcome]] > 0, na.rm = TRUE))
+}
+
+MED_OUTCOMES <- c(CSF_GFAP_S0120 = TRUE, PLASMA_GFAP_S0120 = TRUE, mta = FALSE)
+MED_MEDIATORS <- c("A_clean", "CSF_ABRATIO", "CSF_PTAU181_E0100")
+
+med_res <- map_dfr(names(MED_OUTCOMES), function(o)
+  map_dfr(MED_MEDIATORS, function(m)
+    med_one(df_both, o, m, log_outcome = unname(MED_OUTCOMES[o]))))
+
+if (!nrow(med_res)) {
+  cat("No outcome/mediator pair had enough complete data to model.")
+} else {
+  write.csv(med_res, file.path(results_path, "Mediation_amyloid_GFAP.csv"),
+            row.names = FALSE)
+  med_res %>%
+    transmute(Outcome, Mediator, n,
+              `a: mediator ~ SAA` = sprintf("%.2f (p=%.3f)", a_path, a_p),
+              `c: total` = sprintf("%.2f (p=%.3f)", total, total_p),
+              `c-prime: direct` = sprintf("%.2f", direct),
+              `indirect (95% CI)` = sprintf("%.2f %s", indirect, indirect_CI),
+              `% mediated` = ifelse(is.na(prop_mediated), "—",
+                                    sprintf("%.0f%%", 100 * prop_mediated))) %>%
+    kable(caption = paste("Amyloid as a mediator of the SAA-GFAP and SAA-MTA",
+      "associations. Coefficients are for SAA-positive vs negative, so a",
+      "negative total means higher in SAA-negative. If the a-path is null the",
+      "indirect effect cannot be interpreted, whatever it estimates.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
+                  font_size = 11)
+}
+```
+
+```{r mediation-strata}
+## The same question asked without a mediation model: does the GFAP difference
+## exist inside each amyloid stratum? If it lives only in A+, it is amyloid
+## dependent; if it is present in both, it is not.
+strat <- map_dfr(c("CSF_GFAP_S0120", "PLASMA_GFAP_S0120", "mta"), function(o) {
+  if (!has_col(df_both, o) || !has_col(df_both, "A_clean")) return(NULL)
+  map_dfr(levels(df_both$A_clean), function(lv) {
+    d <- df_both %>% filter(A_clean == lv) %>%
+      mutate(v = num_safe(.data[[o]])) %>% filter(!is.na(v), !is.na(saa_any_pos))
+    n1 <- sum(d$saa_any_pos == "Positive"); n0 <- sum(d$saa_any_pos == "Negative")
+    if (n1 < 3 || n0 < 3) return(tibble(Outcome = o, Amyloid = lv,
+      n_pos = n1, n_neg = n0, median_pos = NA_real_, median_neg = NA_real_,
+      SMD = NA_real_, p = NA_real_))
+    a <- d$v[d$saa_any_pos == "Positive"]; b <- d$v[d$saa_any_pos == "Negative"]
+    tibble(Outcome = o, Amyloid = lv, n_pos = n1, n_neg = n0,
+           median_pos = signif(median(a), 4), median_neg = signif(median(b), 4),
+           SMD = round(smd_value(d$v, d$saa_any_pos), 2),
+           p = signif(suppressWarnings(wilcox.test(a, b, exact = FALSE))$p.value, 3))
+  })
+})
+if (nrow(strat)) {
+  write.csv(strat, file.path(results_path, "Mediation_stratified_by_amyloid.csv"),
+            row.names = FALSE)
+  kable(strat, caption = paste("SAA+ vs SAA- within each amyloid stratum.",
+    "A difference confined to A+ supports amyloid dependence; one present in",
+    "both argues against it.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+} else cat("Amyloid status is unavailable — check the A/T recoding table in section 2.")
+```
+
+```{r mediation-interaction}
+## Formal test of whether the SAA effect on GFAP depends on amyloid status.
+int_res <- map_dfr(c("CSF_GFAP_S0120", "PLASMA_GFAP_S0120", "mta"), function(o) {
+  if (!has_col(df_both, o) || !has_col(df_both, "A_clean")) return(NULL)
+  d <- df_both %>%
+    mutate(v = num_safe(.data[[o]])) %>%
+    select(v, saa_any_pos, A_clean, age_at_sample, SEX) %>% drop_na() %>% droplevels()
+  if (nrow(d) < 16 || n_distinct(d$A_clean) < 2 || n_distinct(d$saa_any_pos) < 2)
+    return(NULL)
+  if (all(d$v > 0) && o != "mta") d$v <- log(d$v)
+  m <- try(lm(v ~ saa_any_pos * A_clean + age_at_sample + SEX, data = d), silent = TRUE)
+  if (inherits(m, "try-error")) return(NULL)
+  sm <- summary(m)$coefficients
+  rn <- grep(":", rownames(sm), value = TRUE)[1]
+  if (is.na(rn)) return(NULL)
+  tibble(Outcome = o, n = nrow(d),
+         `SAA x amyloid` = round(unname(sm[rn, "Estimate"]), 3),
+         p = signif(unname(sm[rn, "Pr(>|t|)"]), 3))
+})
+if (nrow(int_res))
+  kable(int_res, caption = paste("Interaction between SAA status and amyloid.",
+    "A significant term means the SAA effect differs by amyloid status;",
+    "a null term at this sample size is uninformative, not reassuring.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
 ```
 
 # AD co-pathology within SAA-positive subjects
@@ -1734,19 +1932,21 @@ sys_shift <- scan_gm %>% group_by(System) %>%
   summarise(k = n(), mean_beta = mean(Beta, na.rm = TRUE),
             p_shift = tryCatch(t.test(Beta)$p.value, error = function(e) NA_real_),
             .groups = "drop") %>%
-  mutate(q = p.adjust(p_shift, "BH")) %>% arrange(mean_beta)
+  arrange(mean_beta)
 
 ggplot(sys_shift, aes(mean_beta, reorder(System, mean_beta),
-                      fill = q < .05)) +
+                      fill = p_shift < .05)) +
   geom_col(width = .65) +
   geom_vline(xintercept = 0, colour = "grey40") +
   scale_fill_manual(values = c("FALSE" = "grey70", "TRUE" = "#D55E00"), guide = "none") +
   labs(title = "Mean regional effect by anatomical system (grey matter)",
-       subtitle = "Average β across the regions of each system; orange = system-level shift at q<0.05",
+       subtitle = "Average beta across the regions of each system; orange = p<0.05",
        x = "Mean β (SAA+ vs SAA−, SD units)", y = "")
 kable(sys_shift %>% transmute(System, regions = k, mean_beta = round(mean_beta, 3),
-                              p = round(p_shift, 4), q = round(q, 3)),
-      caption = "System-level coherence of the regional effects.") %>%
+                              p = round(p_shift, 4)),
+      caption = paste("System-level coherence of the regional effects. These are",
+        "eight pre-defined anatomical systems, not a scan, so raw p is reported",
+        "without multiplicity adjustment.")) %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
 ```
 
@@ -1824,28 +2024,20 @@ if (nrow(sens)) {
 ```
 
 
-## FreeSurfer normative Z-scores (aparc + aseg)
+```{r fs-section-header, results='asis'}
+if (!have_aseg && !have_aparc) {
+  cat("## FreeSurfer normative Z-scores\n\n",
+      "*Skipped: `Z_ASEG_MERGED.xlsx` and `Z_APARC_MERGED.xlsx` are not in the ",
+      "SAA folder. Copy them across from the visual-hallucination project to ",
+      "enable the subcortical, cortical-thickness and SAA-vs-VH analyses.*\n",
+      sep = "")
+} else {
+  cat("## FreeSurfer normative Z-scores (aparc + aseg)\n\n")
+  cat("Two further files carry **normative Z-scores** from FreeSurfer: `Z_ASEG_MERGED`\n(7 bilateral subcortical structures) and `Z_APARC_MERGED` (34 bilateral\nDesikan–Killiany cortical thickness regions) — the same atlas and pipeline as\nthe cortical-thickness work on visual hallucinations, so the two projects become\ndirectly comparable.\n\nThree things differ from the CAT12 analysis above and change how the models are\nspecified:\n\n- **The values are already normative**, standardised against a multi-site\n  reference. Adjusting again for age and sex is a deliberate double adjustment,\n  kept for consistency with the earlier work; it is conservative, not neutral.\n- **Thickness is not volume.** TIV is not a covariate for cortical thickness,\n  and these files do not carry TIV anyway.\n- **`SITE`, `Vendor` and `FreeSurfer_Version` are batch variables**, and a\n  normative Z computed against a pooled reference does not by itself remove\n  residual site or version effects. They are harmonised on the same terms as the\n  CAT12 protocols.\n")
+}
+```
 
-Two further files carry **normative Z-scores** from FreeSurfer: `Z_ASEG_MERGED`
-(7 bilateral subcortical structures) and `Z_APARC_MERGED` (34 bilateral
-Desikan–Killiany cortical thickness regions) — the same atlas and pipeline as
-the cortical-thickness work on visual hallucinations, so the two projects become
-directly comparable.
-
-Three things differ from the CAT12 analysis above and change how the models are
-specified:
-
-- **The values are already normative**, standardised against a multi-site
-  reference. Adjusting again for age and sex is a deliberate double adjustment,
-  kept for consistency with the earlier work; it is conservative, not neutral.
-- **Thickness is not volume.** TIV is not a covariate for cortical thickness,
-  and these files do not carry TIV anyway.
-- **`SITE`, `Vendor` and `FreeSurfer_Version` are batch variables**, and a
-  normative Z computed against a pooled reference does not by itself remove
-  residual site or version effects. They are harmonised on the same terms as the
-  CAT12 protocols.
-
-```{r fs-load, eval=imaging_ok}
+```{r fs-load, eval=imaging_ok && (have_aseg || have_aparc)}
 ## SubjectID encodes NHC and the scan date, e.g. 1234567_2021-05-14
 parse_fs <- function(path) {
   d <- read_x(path) %>% tidy_names()
@@ -1892,7 +2084,7 @@ if (!is.null(fs_aparc)) {
 }
 ```
 
-```{r fs-merge, eval=imaging_ok}
+```{r fs-merge, eval=imaging_ok && (have_aseg || have_aparc)}
 ## Attach a FreeSurfer table to the cohort, keeping the scan nearest the sample.
 attach_fs <- function(fs, prefix) {
   if (is.null(fs)) return(NULL)
@@ -1937,7 +2129,7 @@ cat(sprintf("Subcortical (aseg): %s. Cortical thickness (aparc): %s.\n",
 fs_batch_report(sub_fs, "aseg"); fs_batch_report(ct_fs, "aparc")
 ```
 
-```{r fs-harmonise, eval=imaging_ok}
+```{r fs-harmonise, eval=imaging_ok && (have_aseg || have_aparc)}
 ## Same decision rule as the CAT12 protocols, applied to SITE (falling back to
 ## Vendor). Z-scores being normative does not make them site-free.
 harmonise_fs <- function(d, prefix) {
@@ -1992,7 +2184,9 @@ cat("aseg  harmonisation: ", h_sub$note, "\n", sep = "")
 cat("aparc harmonisation: ", h_ct$note,  "\n", sep = "")
 ```
 
-### Subcortical volume (FreeSurfer aseg)
+```{r fs-sub-header, results='asis'}
+if (sub_ok) cat("### Subcortical volume (FreeSurfer aseg)\n")
+```
 
 ```{r fs-subcortical, eval=imaging_ok && sub_ok}
 ## Striatal structures are the a priori family for alpha-synuclein seeding;
@@ -2021,7 +2215,9 @@ if (nrow(fs_sub_res)) {
 }
 ```
 
-### Cortical thickness (FreeSurfer aparc, Desikan–Killiany)
+```{r fs-ct-header, results='asis'}
+if (ct_ok) cat("### Cortical thickness (FreeSurfer aparc, Desikan-Killiany)\n")
+```
 
 ```{r fs-cortical, eval=imaging_ok && ct_ok}
 ## A priori for DLB: posterior / occipito-parietal thinning, tested as its own
@@ -2094,7 +2290,9 @@ ggplot(ct_plot, aes(Beta, Region, colour = col)) +
   theme(axis.text.y = element_text(size = 9), legend.position = "none")
 ```
 
-### Is the SAA signature the same as the visual-hallucination signature?
+```{r fs-vh-header, results='asis'}
+if (ct_ok) cat("### Is the SAA signature the same as the visual-hallucination signature?\n")
+```
 
 ```{r saa-vs-vh, eval=imaging_ok && ct_ok && nrow(ct_all)>0}
 ## Both contrasts fitted on the SAME subjects and the same regions, then the two
