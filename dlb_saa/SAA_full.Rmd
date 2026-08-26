@@ -1131,10 +1131,17 @@ vol_lr <- if (nrow(lr_cols)) {
   tibble(.rows = nrow(cat12))
 }
 
+## Coerce only the numeric globals. MRI_Protocol is the scanner/sequence batch
+## label and must stay a character/factor -- an earlier version swept it up in a
+## starts_with("MRI_") coercion and turned it into all-NA.
+NUM_GLOBALS <- c("MRI_TIV", "MRI_GM_Tot", "MRI_WM", "MRI_CSF_Tot",
+                 "MRI_WMH_Tot", "MRI_IQR")
 cat12_wide <- bind_cols(
-  cat12 %>% select(NHC, MRI_DATE_D, any_of(c("Session","MRI_Protocol")),
-                   MRI_TIV, MRI_GM_Tot, MRI_WM, MRI_CSF_Tot, MRI_WMH_Tot, MRI_IQR) %>%
-    mutate(across(starts_with("MRI_"), ~ if (is.character(.x)) num_safe(.x) else .x)),
+  cat12 %>% select(NHC, MRI_DATE_D, any_of(c("Session", "MRI_Protocol")),
+                   any_of(NUM_GLOBALS)) %>%
+    mutate(across(any_of(NUM_GLOBALS), num_safe),
+           batch = if ("MRI_Protocol" %in% names(.))
+                     as.character(MRI_Protocol) else NA_character_),
   vol_gm, vol_wm, vol_lr)
 ```
 
@@ -1233,6 +1240,131 @@ if (requireNamespace("patchwork", quietly = TRUE)) {
 } else { print(p1); print(p2) }
 ```
 
+## Scanner / protocol harmonisation (ComBat)
+
+Regional volumes from different scanners or sequences carry site-specific
+location and scale shifts that are pure measurement artefact. ComBat removes
+them with an empirical-Bayes model fitted across all regions at once, **while
+preserving the covariates you name** — so the SAA contrast, age, sex and TIV
+must be passed as the protected design, otherwise harmonisation quietly removes
+the very effect being tested.
+
+ComBat needs enough scans per batch to estimate that batch's location and scale.
+Below `COMBAT_MIN_BATCH` the estimates are noisier than the artefact they
+correct, so the fallback is to carry protocol as a model covariate instead.
+Complete confounding (a protocol containing only one SAA group) cannot be fixed
+by either route and is reported rather than silently absorbed.
+
+```{r combat-setup, eval=imaging_ok}
+COMBAT_MIN_BATCH <- 8     # minimum scans per protocol for ComBat
+COMBAT_MAX_LEVELS <- 4    # above this, protocol-as-covariate costs too much df
+
+img$batch <- if ("batch" %in% names(img)) {
+  b <- trimws(as.character(img$batch)); b[b %in% c("", "NA")] <- NA; b
+} else NA_character_
+
+batch_tab <- if (all(is.na(img$batch))) NULL else
+  table(Protocol = img$batch, SAA = img$saa_any_pos, useNA = "no")
+
+n_batch     <- if (is.null(batch_tab)) 0 else nrow(batch_tab)
+min_batch_n <- if (n_batch == 0) 0 else min(rowSums(batch_tab))
+confounded  <- n_batch > 0 && any(apply(batch_tab, 1, function(r) any(r == 0)))
+
+combat_pkg <- if (requireNamespace("neuroCombat", quietly = TRUE)) "neuroCombat" else
+              if (requireNamespace("sva", quietly = TRUE))        "sva" else NA_character_
+
+combat_ok  <- n_batch >= 2 && min_batch_n >= COMBAT_MIN_BATCH && !is.na(combat_pkg)
+covar_ok   <- !combat_ok && n_batch >= 2 && n_batch <= COMBAT_MAX_LEVELS && min_batch_n >= 3
+
+if (!is.null(batch_tab)) {
+  print(kable(as.data.frame.matrix(batch_tab) %>%
+                tibble::rownames_to_column("Protocol"),
+        caption = "Scans per protocol by SAA status") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")))
+}
+```
+
+```{r combat-decide, results='asis', eval=imaging_ok}
+cat(if (n_batch <= 1) {
+  "**One protocol only — no harmonisation needed.**\n"
+} else if (combat_ok) {
+  sprintf("**ComBat applied** via `%s` across %d protocols (smallest n = %d), protecting SAA status, sex, age and TIV.\n",
+          combat_pkg, n_batch, min_batch_n)
+} else if (covar_ok) {
+  sprintf("**ComBat not applied** — %s. Protocol is carried as a model covariate instead.\n",
+          if (is.na(combat_pkg))
+            "neither neuroCombat nor sva is installed (install one to enable it)"
+          else sprintf("the smallest protocol has %d scans, below the %d needed",
+                       min_batch_n, COMBAT_MIN_BATCH))
+} else {
+  sprintf("**Neither ComBat nor protocol adjustment is usable** (%d protocols, smallest n = %d). Scanner effects remain in the estimates and must be stated as a limitation.\n",
+          n_batch, min_batch_n)
+})
+if (confounded)
+  cat("\n> **Warning: at least one protocol contains only one SAA group.** ",
+      "Protocol and SAA status are partly confounded; no harmonisation can ",
+      "separate them, and the affected estimates should be treated as unsafe.\n")
+```
+
+```{r combat-apply, eval=imaging_ok}
+img_raw <- img          # pre-harmonisation, kept for the sensitivity comparison
+
+feature_cols <- grep("^(gm|wm)_", names(img), value = TRUE)
+
+if (combat_ok && length(feature_cols)) {
+  ok_rows <- !is.na(img$batch)
+  ## ComBat cannot take missing values; harmonise only complete features.
+  complete_feat <- feature_cols[vapply(feature_cols,
+    function(cc) all(is.finite(img[[cc]][ok_rows])), logical(1))]
+  dropped_feat <- setdiff(feature_cols, complete_feat)
+
+  ## Protected design: everything we do NOT want removed.
+  prot <- c("saa_any_pos", "SEX", "age_at_sample", "MRI_TIV")
+  prot <- prot[prot %in% names(img)]
+  mod_df <- droplevels(as.data.frame(img[ok_rows, prot, drop = FALSE]))
+  ## keep only terms that actually vary, or model.matrix hits the same
+  ## contrasts error that constant covariates cause in lm()
+  varies <- vapply(prot, function(cc) {
+    x <- mod_df[[cc]]
+    if (is.factor(x) || is.character(x)) length(unique(x[!is.na(x)])) >= 2
+    else { v <- suppressWarnings(stats::var(as.numeric(x), na.rm = TRUE))
+           is.finite(v) && v > 0 }
+  }, logical(1))
+  prot <- prot[varies]
+  stopifnot("saa_any_pos" %in% prot)   # never harmonise away the contrast
+  mod <- model.matrix(as.formula(paste("~", paste(prot, collapse = " + "))),
+                      data = mod_df)
+
+  dat <- t(as.matrix(img[ok_rows, complete_feat, drop = FALSE]))   # features x samples
+  bt  <- factor(img$batch[ok_rows])
+
+  harmonised <- try({
+    if (combat_pkg == "neuroCombat")
+      neuroCombat::neuroCombat(dat = dat, batch = bt, mod = mod)$dat.combat
+    else
+      sva::ComBat(dat = dat, batch = bt, mod = mod, par.prior = TRUE, prior.plots = FALSE)
+  }, silent = TRUE)
+
+  if (inherits(harmonised, "try-error")) {
+    combat_ok <- FALSE
+    message("ComBat failed: ", conditionMessage(attr(harmonised, "condition")))
+  } else {
+    hm <- t(harmonised)
+    for (k in seq_along(complete_feat))
+      img[[complete_feat[k]]][ok_rows] <- hm[, k]
+    cat(sprintf("ComBat harmonised %d of %d regional features across %d protocols (%d features skipped for missing values).",
+                length(complete_feat), length(feature_cols), nlevels(bt),
+                length(dropped_feat)))
+  }
+}
+
+## Fallback: protocol as a covariate in every model.
+EXTRA_COVARS <- if (!combat_ok && covar_ok) "batch" else character(0)
+if (length(EXTRA_COVARS)) img$batch <- factor(img$batch)
+
+BASE_COVARS <- c("SEX", "age_at_sample", "MRI_TIV", EXTRA_COVARS)
+```
+
 ```{r power, eval=imaging_ok}
 n1 <- sum(img$saa_any_pos == "Positive"); n0 <- sum(img$saa_any_pos == "Negative")
 mde <- (qnorm(0.975) + qnorm(0.80)) * sqrt(1/n1 + 1/n0)
@@ -1259,7 +1391,8 @@ add_fdr <- function(res, pcol = "P") {
   res
 }
 
-fit_one <- function(outcome, data, covars = c("SEX", "age_at_sample", "MRI_TIV"),
+fit_one <- function(outcome, data, covars = if (exists("BASE_COVARS"))
+                      BASE_COVARS else c("SEX", "age_at_sample", "MRI_TIV"),
                     zscore = TRUE, verbose = TRUE) {
   need <- c(outcome, "saa_any_pos", covars)
   need <- need[need %in% names(data)]
@@ -1312,7 +1445,7 @@ fit_one <- function(outcome, data, covars = c("SEX", "age_at_sample", "MRI_TIV")
 
 glob_res <- map_dfr(names(GLOBALS), function(v) {
   ## TIV is the covariate elsewhere; as an outcome it is modelled without itself
-  cv <- if (v == "MRI_TIV") c("SEX", "age_at_sample") else c("SEX", "age_at_sample", "MRI_TIV")
+  cv <- if (v == "MRI_TIV") setdiff(BASE_COVARS, "MRI_TIV") else BASE_COVARS
   r <- fit_one(v, img, covars = cv)
   if (is.null(r)) return(NULL)
   bind_cols(tibble(Measure = unname(GLOBALS[v])), r)
@@ -1515,8 +1648,8 @@ asym_res <- map_dfr(NIGRO, function(r) {
   if (!all(c(l, rr) %in% names(img))) return(NULL)
   ai <- (img[[l]] - img[[rr]]) / ((img[[l]] + img[[rr]]) / 2)
   d <- img %>% mutate(AI = ai, absAI = abs(ai))
-  o1 <- fit_one("AI",    d, covars = c("SEX", "age_at_sample"), zscore = FALSE)
-  o2 <- fit_one("absAI", d, covars = c("SEX", "age_at_sample"), zscore = FALSE)
+  o1 <- fit_one("AI",    d, covars = setdiff(BASE_COVARS, "MRI_TIV"), zscore = FALSE)
+  o2 <- fit_one("absAI", d, covars = setdiff(BASE_COVARS, "MRI_TIV"), zscore = FALSE)
   if (is.null(o1)) return(NULL)
   tibble(Region = pretty_region(r), n = o1$n, n_pos = o1$n_pos,
          Beta_signed = round(o1$Beta, 4), p_signed = round(o1$P, 4),
@@ -1549,21 +1682,28 @@ near_dat <- img %>% filter(is.na(mri_gap) | mri_gap <= 365)
 
 sens <- map_dfr(NIGRO, function(r) {
   base <- fit_one(paste0("gm_", r), img)
+  pre  <- if (exists("img_raw") && isTRUE(combat_ok))
+            fit_one(paste0("gm_", r), img_raw) else NULL
   prop <- if (paste0("prop_", r) %in% names(prop_dat))
-    fit_one(paste0("prop_", r), prop_dat, covars = c("SEX", "age_at_sample")) else NULL
+    fit_one(paste0("prop_", r), prop_dat,
+            covars = setdiff(BASE_COVARS, "MRI_TIV")) else NULL
   iqrm <- fit_one(paste0("gm_", r), iqr_dat,
-                  covars = c("SEX", "age_at_sample", "MRI_TIV", "MRI_IQR_pct"))
+                  covars = c(BASE_COVARS, "MRI_IQR_pct"))
   near <- fit_one(paste0("gm_", r), near_dat)
   if (is.null(base)) return(NULL)
   tibble(Region = pretty_region(r),
+         `Pre-ComBat` = if (is.null(pre)) "—" else sprintf("%.2f (p=%.3f)", pre$Beta, pre$P),
          `TIV covariate` = sprintf("%.2f (p=%.3f)", base$Beta, base$P),
          `Proportional`  = if (is.null(prop)) "—" else sprintf("%.2f (p=%.3f)", prop$Beta, prop$P),
          `+ IQR`         = if (is.null(iqrm)) "—" else sprintf("%.2f (p=%.3f)", iqrm$Beta, iqrm$P),
          `MRI ≤1 y (n=%d)` = if (is.null(near)) "—" else sprintf("%.2f (p=%.3f)", near$Beta, near$P))
 })
 if (nrow(sens)) {
-  names(sens)[5] <- sprintf("MRI ≤1 y (n=%d)", nrow(near_dat))
-  kable(sens, caption = "Nigrostriatal family under four normalisation / inclusion choices. β in SD units except the proportional column.") %>%
+  names(sens)[ncol(sens)] <- sprintf("MRI <=1 y (n=%d)", nrow(near_dat))
+  kable(sens, caption = paste("Nigrostriatal family across harmonisation,",
+        "normalisation and inclusion choices. Beta in SD units except the",
+        "proportional column. A large Pre-ComBat vs TIV-covariate gap means",
+        "scanner effects were doing real work.")) %>%
     kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
 }
 ```
@@ -1656,6 +1796,7 @@ cat(sprintf("
 - **Sample.** %d scans enter the models (%d SAA-positive). At 80%% power this
   detects |β| ≥ %.2f SD; anything subtler is simply beyond reach here, so a null
   result is *uninformative*, not evidence of absence.
+- **Harmonisation.** %s
 - **Primary family.** %s
 - **Whole-atlas scan.** %d grey-matter and %d white-matter regions tested;
   %d and %d survive BH-FDR. %s
@@ -1672,6 +1813,10 @@ cat(sprintf("
   subject set — the check the visual-hallucination work needed and did not have.
 ",
 nrow(img), n1, mde,
+if (n_batch <= 1) "Single protocol; no scanner harmonisation required."
+  else if (isTRUE(combat_ok)) sprintf("ComBat applied across %d protocols, protecting the SAA contrast, sex, age and TIV.", n_batch)
+  else if (isTRUE(covar_ok)) sprintf("ComBat not applicable (smallest protocol n = %d); protocol carried as a model covariate.", min_batch_n)
+  else "Scanner effects NOT harmonised — state this as a limitation.",
 if (nrow(prim)) sprintf("Best region %s, β = %.2f [%.2f, %.2f], p = %.3f, q = %.3f.",
   prim$Region[1], prim$Beta[1], prim$CI_l[1], prim$CI_u[1], prim$P[1], prim$Q[1])
   else "Could not be fitted.",
