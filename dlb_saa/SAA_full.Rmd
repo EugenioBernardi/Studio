@@ -1145,13 +1145,28 @@ vol_lr <- if (nrow(lr_cols)) {
 ## starts_with("MRI_") coercion and turned it into all-NA.
 NUM_GLOBALS <- c("MRI_TIV", "MRI_GM_Tot", "MRI_WM", "MRI_CSF_Tot",
                  "MRI_WMH_Tot", "MRI_IQR")
+## Asymmetry index per region, built here where the L/R pairing is explicit.
+vol_ai <- {
+  regs <- unique(lr_cols$region)
+  if (!length(regs)) tibble(.rows = nrow(cat12)) else
+    map_dfc(regs, function(r) {
+      cl <- lr_cols$column[lr_cols$region == r & lr_cols$hemi == "L"]
+      cr <- lr_cols$column[lr_cols$region == r & lr_cols$hemi == "R"]
+      v <- if (length(cl) == 1 && length(cr) == 1) {
+        L <- num_safe(cat12[[cl]]); R <- num_safe(cat12[[cr]])
+        (L - R) / ((L + R) / 2)
+      } else rep(NA_real_, nrow(cat12))
+      tibble(!!paste0("ai_", r) := v)
+    })
+}
+
 cat12_wide <- bind_cols(
   cat12 %>% select(NHC, MRI_DATE_D, any_of(c("Session", "MRI_Protocol")),
                    any_of(NUM_GLOBALS)) %>%
     mutate(across(any_of(NUM_GLOBALS), num_safe),
            batch = if ("MRI_Protocol" %in% names(.))
                      as.character(MRI_Protocol) else NA_character_),
-  vol_gm, vol_wm, vol_lr)
+  vol_gm, vol_wm, vol_lr, vol_ai)
 ```
 
 ```{r merge-imaging, eval=have_cat12}
@@ -1625,6 +1640,33 @@ scan_tissue <- function(tissue_code, drop_pat, label) {
 scan_gm <- scan_tissue("GM", DROP_GM, "Grey matter")
 scan_wm <- scan_tissue("WM", DROP_WM, "White matter")
 scan_all <- bind_rows(scan_gm, scan_wm)
+
+## A regional effect adjusted only for TIV inherits any shift in the whole
+## tissue compartment: if total white matter differs between groups, every
+## white-matter ROI will appear to differ too. Refitting each region with its
+## own global volume as an extra covariate asks the sharper question -- does
+## THIS region depart from the global pattern?
+scan_vs_global <- function(tissue_code, drop_pat, global_col, label) {
+  if (!global_col %in% names(img)) return(NULL)
+  regs <- region_dict %>% filter(tissue == tissue_code, !grepl(drop_pat, region))
+  pre <- tolower(tissue_code)
+  res <- map_dfr(regs$region, function(r) {
+    cc <- paste0(pre, "_", r)
+    if (!cc %in% names(img)) return(NULL)
+    o <- fit_one(cc, img, covars = c(BASE_COVARS, global_col))
+    if (is.null(o)) return(NULL)
+    bind_cols(tibble(Tissue = label, Region = pretty_region(r), token = r), o)
+  })
+  if (!nrow(res)) return(res)
+  res %>% add_fdr() %>% arrange(P)
+}
+scan_gm_g <- scan_vs_global("GM", DROP_GM, "MRI_GM_Tot", "Grey matter")
+scan_wm_g <- scan_vs_global("WM", DROP_WM, "MRI_WM",     "White matter")
+scan_global_adj <- bind_rows(scan_gm_g, scan_wm_g)
+if (nrow(scan_global_adj))
+  write.csv(scan_global_adj,
+            file.path(results_path, "Imaging_scan_global_adjusted.csv"),
+            row.names = FALSE)
 write.csv(scan_all, file.path(results_path, "Imaging_whole_atlas_scan.csv"),
           row.names = FALSE)
 
@@ -1644,6 +1686,28 @@ if (nrow(scan_all))
     kable(caption = "Top 20 regions across the whole atlas — exploratory, ranked by raw p.") %>%
     kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
                   font_size = 11)
+```
+
+```{r scan-global-adj, eval=imaging_ok && nrow(scan_all)>0}
+if (nrow(scan_global_adj)) {
+  cmp_glob <- inner_join(
+    scan_all        %>% select(Tissue, token, Region, B_tiv = Beta, P_tiv = P),
+    scan_global_adj %>% select(Tissue, token, B_glob = Beta, P_glob = P),
+    by = c("Tissue", "token")) %>% arrange(P_tiv)
+  cat(sprintf("Nominal hits before vs after adjusting for the tissue total: %d -> %d.\n",
+              sum(cmp_glob$P_tiv < .05), sum(cmp_glob$P_glob < .05)))
+  cmp_glob %>% head(12) %>%
+    transmute(Tissue, Region,
+              `TIV only` = sprintf("%.2f (p=%.3f)", B_tiv, P_tiv),
+              `+ tissue total` = sprintf("%.2f (p=%.3f)", B_glob, P_glob),
+              Verdict = ifelse(P_tiv < .05 & P_glob >= .05, "global shift",
+                        ifelse(P_glob < .05, "regional", "ns"))) %>%
+    kable(caption = paste("Regional effects before and after adjusting for the",
+      "tissue compartment total. 'Global shift' means the region only looked",
+      "different because the whole compartment did.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
+                  font_size = 11)
+}
 ```
 
 ```{r scan-volcano, fig.width=9, fig.height=4.5, eval=imaging_ok && nrow(scan_all)>0}
@@ -1691,26 +1755,29 @@ kable(sys_shift %>% transmute(System, regions = k, mean_beta = round(mean_beta, 
 ```{r asymmetry, eval=imaging_ok}
 ## Asymmetry index = (L − R) / ((L + R)/2). Signed, so a group difference means
 ## the pathology is lateralised differently, not just larger.
+cat(sprintf("Asymmetry columns available in the imaging sample: %d of %d nigrostriatal regions.\n",
+            sum(paste0("ai_", NIGRO) %in% names(img)), length(NIGRO)))
+
 asym_res <- map_dfr(NIGRO, function(r) {
-  l <- paste0("lr_", r, "_L"); rr <- paste0("lr_", r, "_R")
-  if (!all(c(l, rr) %in% names(img))) return(NULL)
-  ai <- (img[[l]] - img[[rr]]) / ((img[[l]] + img[[rr]]) / 2)
-  d <- img %>% mutate(AI = ai, absAI = abs(ai))
+  cc <- paste0("ai_", r)
+  if (!cc %in% names(img)) return(NULL)
+  d <- img %>% mutate(AI = .data[[cc]], absAI = abs(.data[[cc]]))
   o1 <- fit_one("AI",    d, covars = setdiff(BASE_COVARS, "MRI_TIV"), zscore = FALSE)
   o2 <- fit_one("absAI", d, covars = setdiff(BASE_COVARS, "MRI_TIV"), zscore = FALSE)
   if (is.null(o1)) return(NULL)
   tibble(Region = pretty_region(r), n = o1$n, n_pos = o1$n_pos,
          Beta_signed = round(o1$Beta, 4), p_signed = round(o1$P, 4),
-         Beta_abs = if (is.null(o2)) NA else round(o2$Beta, 4),
-         p_abs    = if (is.null(o2)) NA else round(o2$P, 4))
+         Beta_abs = if (is.null(o2)) NA_real_ else round(o2$Beta, 4),
+         p_abs    = if (is.null(o2)) NA_real_ else round(o2$P, 4))
 })
 if (nrow(asym_res)) {
   asym_res <- asym_res %>% mutate(q_signed = round(p.adjust(p_signed, "BH"), 3))
   kable(asym_res, caption = paste("Asymmetry of the nigrostriatal family.",
-    "Signed = direction of lateralisation; abs = degree of lateralisation regardless of side.")) %>%
+    "Signed = direction of lateralisation (L-R); abs = degree of lateralisation",
+    "regardless of side.")) %>%
     kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
   write.csv(asym_res, file.path(results_path, "Imaging_asymmetry.csv"), row.names = FALSE)
-} else cat("Left/right columns not available for the nigrostriatal family.")
+} else cat("No nigrostriatal asymmetry index could be modelled.")
 ```
 
 ## Sensitivity analyses
