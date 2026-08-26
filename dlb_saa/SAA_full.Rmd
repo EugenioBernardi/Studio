@@ -1260,23 +1260,54 @@ add_fdr <- function(res, pcol = "P") {
 }
 
 fit_one <- function(outcome, data, covars = c("SEX", "age_at_sample", "MRI_TIV"),
-                    zscore = TRUE) {
+                    zscore = TRUE, verbose = TRUE) {
   need <- c(outcome, "saa_any_pos", covars)
   need <- need[need %in% names(data)]
   if (!outcome %in% need) return(NULL)
-  d <- data %>% select(all_of(unique(c(need, "saa_any_pos")))) %>% drop_na()
+
+  d <- data %>% select(all_of(unique(c(need, "saa_any_pos")))) %>%
+    drop_na() %>% droplevels()
   if (nrow(d) < MIN_N_MODEL || n_distinct(d$saa_any_pos) < 2) return(NULL)
+
+  ## Outcome must vary.
+  ov <- suppressWarnings(stats::var(as.numeric(d[[outcome]]), na.rm = TRUE))
+  if (!is.finite(ov) || ov == 0) return(NULL)
   if (zscore) d[[outcome]] <- as.numeric(scale(d[[outcome]]))
+
+  ## Every outcome has its own complete-case subset. A covariate that is
+  ## constant within that subset (e.g. only one sex has a WMH measurement)
+  ## carries no information and makes lm() fail on the contrast, so it is
+  ## dropped from this model rather than aborting the document.
   cv <- setdiff(need, c(outcome, "saa_any_pos"))
+  keep <- vapply(cv, function(cc) {
+    x <- d[[cc]]
+    if (is.factor(x) || is.character(x) || is.logical(x))
+      length(unique(x[!is.na(x)])) >= 2
+    else {
+      v <- suppressWarnings(stats::var(as.numeric(x), na.rm = TRUE))
+      is.finite(v) && v > 0
+    }
+  }, logical(1))
+  if (verbose && any(!keep))
+    message(sprintf("fit_one(%s): dropped constant covariate(s) %s",
+                    outcome, paste(cv[!keep], collapse = ", ")))
+  cv <- cv[keep]
+
   fml <- sprintf("`%s` ~ saa_any_pos%s", outcome,
                  if (length(cv)) paste0(" + `", paste(cv, collapse = "` + `"), "`") else "")
-  m <- lm(as.formula(fml), data = d)
+  m <- try(lm(as.formula(fml), data = d), silent = TRUE)
+  if (inherits(m, "try-error")) return(NULL)
+
   rn <- "saa_any_posPositive"
-  if (!rn %in% rownames(summary(m)$coefficients)) return(NULL)
-  s <- summary(m)$coefficients[rn, ]; ci <- confint(m)[rn, ]
+  sm <- summary(m)$coefficients
+  if (!rn %in% rownames(sm) || is.na(sm[rn, "Estimate"])) return(NULL)
+  ci <- try(confint(m)[rn, ], silent = TRUE)
+  if (inherits(ci, "try-error")) ci <- c(NA_real_, NA_real_)
+
   tibble(n = nrow(d), n_pos = sum(d$saa_any_pos == "Positive"),
-         Beta = unname(s["Estimate"]), CI_l = ci[1], CI_u = ci[2],
-         P = unname(s["Pr(>|t|)"]))
+         Model = if (length(cv)) paste(cv, collapse = " + ") else "unadjusted",
+         Beta = unname(sm[rn, "Estimate"]), CI_l = ci[1], CI_u = ci[2],
+         P = unname(sm[rn, "Pr(>|t|)"]))
 }
 
 glob_res <- map_dfr(names(GLOBALS), function(v) {
@@ -1288,7 +1319,8 @@ glob_res <- map_dfr(names(GLOBALS), function(v) {
 }) %>% add_fdr()
 
 if (nrow(glob_res) && "Q" %in% names(glob_res)) {
-  glob_res %>% transmute(Measure, n, n_pos, Beta = round(Beta, 3),
+  glob_res %>% transmute(Measure, n, n_pos, `Adjusted for` = Model,
+    Beta = round(Beta, 3),
     `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
     p = round(P, 4), `q (BH)` = round(Q, 3)) %>%
     kable(caption = "Global tissue volumes by SAA status (z-scored; adjusted for sex, age, TIV).") %>%
