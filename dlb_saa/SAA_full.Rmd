@@ -807,53 +807,29 @@ gtsave(gt_demo_saa2, file.path(results_path, "Clinical_SantPau.html"))
 gt_demo_saa2
 ```
 
-# Which combination discriminates best?
+# Combining criteria
 
-Two separate questions, so two separate screens:
+Following Inigo's suggestion, two constructions rather than an exhaustive
+screen:
 
-- **Clinical features alone** — fluctuations, hallucinations, clinical RBD,
-  parkinsonism, hyposmia. Can the bedside picture identify SAA positivity?
-- **Objective tests alone** — DaT-SCAN, polysomnography, MIBG. Do the
-  instrumental biomarkers do better?
+- **Graded counts** — how many core clinical criteria, and how many criteria
+  plus biomarkers, a patient has. Tested at every threshold, so the question
+  "does having at least N criteria identify SAA positivity" gets a direct
+  answer.
+- **A clinical feature paired with its objective test** — RBD with PSG,
+  parkinsonism with DaT-SCAN, dysautonomia with MIBG. Kept as four categories
+  (neither, clinical only, test only, both) rather than collapsed to an AND,
+  because which of the two is positive is itself informative.
 
-Each family is screened over its single features and over **AND combinations of
-any size**, not just pairs. OR rules are not screened: with incomplete data they
-are asymmetric, since one observed positive makes the rule positive while a
-negative requires every component to have been assessed.
+Counts require every component to have been assessed. Treating a test that was
+never done as a negative result would make the count partly a measure of how
+much workup a patient received.
 
-No multiplicity adjustment: this is exploratory and the two families are
-distinct hypotheses, not one scan. Rules are ranked by Youden index.
+```{r combo-helpers}
+MIN_RULE_N  <- 15
+MIN_PER_ARM <- 5
 
-The n column moves between rows because a combination is only evaluable in
-patients who had **every** component assessed. Requiring three tests at once
-usually leaves too few patients to report, which is why the deeper combinations
-mostly disappear rather than showing a result.
-
-```{r rule-screen}
-feat_all <- tibble(
-  saa = df_saa2$saa_local_pos,
-  `Fluctuations`   = df_saa2$fluctuations   == "Yes",
-  `Hallucinations` = df_saa2$hallucinations == "Yes",
-  `RBD clinical`   = df_saa2$rbdclinical    == "Yes",
-  `Parkinsonism`   = df_saa2$parkinsonism   == "Yes",
-  `Hyposmia`       = df_saa2$hyposmia       == "Yes",
-  `DaT abnormal`   = df_saa2$datscan_bin    == "Abnormal",
-  `PSG RBD`        = df_saa2$psg_rbd        == "Yes",
-  `MIBG abnormal`  = df_saa2$mibg           == "Yes")
-
-CLINICAL_F  <- c("Fluctuations", "Hallucinations", "RBD clinical",
-                 "Parkinsonism", "Hyposmia")
-OBJECTIVE_F <- c("DaT abnormal", "PSG RBD", "MIBG abnormal")
-
-## Minimum evaluable sample for a rule to be reported at all.
-MIN_RULE_N   <- 15
-MIN_PER_ARM  <- 5
-
-usable <- function(f) f %in% names(feat_all) &&
-  sum(!is.na(feat_all[[f]])) >= MIN_RULE_N &&
-  length(unique(na.omit(feat_all[[f]]))) > 1
-
-rule_metrics <- function(rule, saa, label, kind) {
+rule_metrics <- function(rule, saa, label) {
   ok <- !is.na(rule) & !is.na(saa)
   if (sum(ok) < MIN_RULE_N) return(NULL)
   r <- rule[ok]; g <- droplevels(saa[ok])
@@ -864,104 +840,57 @@ rule_metrics <- function(rule, saa, label, kind) {
   sens <- tp / (tp + fn); spec <- tn / (tn + fp)
   or <- ((tp + .5) * (tn + .5)) / ((fp + .5) * (fn + .5))
   se <- sqrt(1/(tp+.5) + 1/(fp+.5) + 1/(fn+.5) + 1/(tn+.5))
-  tibble(Rule = label, Type = kind, n = sum(ok), `n SAA+` = sum(pos),
+  tibble(Rule = label, n = sum(ok), `n SAA+` = sum(pos),
          Sens = round(100 * sens), Spec = round(100 * spec),
          PPV = round(100 * tp / max(1, tp + fp)),
          NPV = round(100 * tn / max(1, tn + fn)),
          Youden = round(sens + spec - 1, 2),
-         ## for a binary rule the area under the ROC is balanced accuracy
          AUC = round((sens + spec) / 2, 3),
          OR = round(or, 2),
          OR_CI = sprintf("%.2f-%.2f", exp(log(or) - 1.96*se), exp(log(or) + 1.96*se)),
          p = tryCatch(fisher.test(matrix(c(tp, fn, fp, tn), 2))$p.value,
                       error = function(e) NA_real_))
 }
+```
 
-## Single features and AND combinations of any size. OR rules are not screened:
-## with missing data they are asymmetric -- one observed positive makes the rule
-## positive, while a negative requires every component to have been assessed.
-screen_family <- function(fs, family) {
-  fs <- fs[vapply(fs, usable, logical(1))]
-  if (!length(fs)) return(tibble())
-  out <- list()
-  for (k in seq_along(fs)) {
-    combos <- utils::combn(fs, k, simplify = FALSE)
-    for (cb in combos) {
-      rule <- Reduce(`&`, lapply(cb, function(f) feat_all[[f]]))
-      lab  <- paste(cb, collapse = " AND ")
-      kind <- if (k == 1) "single" else paste0("AND x", k)
-      out[[length(out) + 1]] <- rule_metrics(rule, feat_all$saa, lab, kind)
-    }
-  }
-  res <- bind_rows(out)
-  if (nrow(res)) res$Family <- family
-  res
-}
+## Graded counts, at every threshold
 
-## number of rules a family can form: every non-empty subset of its usable
-## features, i.e. 2^k - 1
-n_formed <- function(fs) {
-  fs <- fs[vapply(fs, usable, logical(1))]
-  if (!length(fs)) 0L else as.integer(2^length(fs) - 1)
-}
+```{r count-thresholds}
+COUNTS <- c(n_core = "Core clinical criteria (0-4)",
+            n_indicative = "Indicative biomarkers (0-3)",
+            n_core_plus = "Core + biomarkers (0-7)")
 
-screen_clin <- screen_family(CLINICAL_F,  "Clinical")
-screen_obj  <- screen_family(OBJECTIVE_F, "Objective tests")
-screen <- bind_rows(screen_clin, screen_obj)
+thr_tab <- map_dfr(names(COUNTS), function(v) {
+  if (!has_col(df_saa2, v)) return(NULL)
+  x <- num_safe(df_saa2[[v]])
+  ks <- sort(unique(x[!is.na(x)]))
+  ks <- ks[ks > min(ks)]                     # ">= the minimum" is everyone
+  map_dfr(ks, function(k) {
+    m <- rule_metrics(x >= k, df_saa2$saa_local_pos,
+                      sprintf("%s >= %g", unname(COUNTS[v]), k))
+    if (is.null(m)) return(NULL)
+    bind_cols(tibble(Score = unname(COUNTS[v]), Threshold = k), m %>% select(-Rule))
+  })
+})
 
-cat(sprintf(paste("Clinical: %d rules formed, %d evaluable. Objective: %d formed,",
-  "%d evaluable.\nA rule is dropped when fewer than %d patients had every",
-  "component assessed, or an arm falls below %d.\n"),
-  n_formed(CLINICAL_F), nrow(screen_clin),
-  n_formed(OBJECTIVE_F), nrow(screen_obj),
-  MIN_RULE_N, MIN_PER_ARM))
-
-show_screen <- function(res, cap) {
-  if (!nrow(res)) return(cat("No rule in this family had enough evaluable patients.\n"))
-  res %>% arrange(desc(Youden)) %>%
-    transmute(Rule, Type, n, `n SAA+`, Sens, Spec, PPV, NPV, Youden, AUC,
+if (nrow(thr_tab)) {
+  write.csv(thr_tab, file.path(results_path, "Count_thresholds.csv"), row.names = FALSE)
+  thr_tab %>%
+    transmute(Score, `Cut-off` = paste0(">= ", Threshold), n, `n SAA+`,
+              Sens, Spec, PPV, NPV, Youden,
               OR = sprintf("%.2f (%s)", OR, OR_CI), p = signif(p, 3)) %>%
-    kable(caption = cap) %>%
+    kable(caption = paste("Every usable cut-off of each count. A cut-off is",
+      "skipped when fewer than", MIN_RULE_N, "patients have the full count or an",
+      "arm falls below", MIN_PER_ARM, "patients.")) %>%
     kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
                   font_size = 11)
-}
-show_screen(screen_clin, paste("CLINICAL features: single features and AND",
-  "combinations of any size, ranked by Youden index. Sens/Spec/PPV/NPV are",
-  "percentages for predicting SAA positivity."))
+} else cat("No count had enough complete cases to test at any threshold.")
 ```
 
-```{r rule-screen-obj}
-show_screen(screen_obj, paste("OBJECTIVE tests: single tests and AND",
-  "combinations of any size, ranked by Youden index. n falls sharply as",
-  "components are added, because few patients had every test."))
-```
-
-```{r rule-screen-save}
-if (nrow(screen)) {
-  write.csv(screen, file.path(results_path, "Rule_screen.csv"), row.names = FALSE)
-  sig <- screen %>% filter(!is.na(p), p < 0.05) %>% arrange(desc(Youden))
-  cat(sprintf("Clinical: %d evaluable rules, %d with p < 0.05. Objective: %d evaluable, %d with p < 0.05.\n",
-      nrow(screen_clin), sum(screen_clin$p < .05, na.rm = TRUE),
-      nrow(screen_obj),  sum(screen_obj$p  < .05, na.rm = TRUE)))
-} else sig <- tibble()
-```
-
-## ROC of the significant rules
-
-For a binary rule the ROC is a single point and its area equals balanced
-accuracy, `(sensitivity + specificity) / 2`. The graded counts are continuous
-enough to trace a real curve, so both are shown together: curves for the counts,
-points for the rules that reached p < 0.05.
-
-```{r roc-significant, fig.width=7.5, fig.height=6}
-roc_curves <- NULL
+```{r count-roc, fig.width=7, fig.height=5.5}
 if (requireNamespace("pROC", quietly = TRUE)) {
-  score_defs <- list(`Core clinical count (0-4)` = "n_core",
-                     `Indicative biomarkers (0-3)` = "n_indicative",
-                     `Core + biomarkers (0-7)` = "n_core_plus")
   roc_list <- list(); auc_rows <- list()
-  for (nm in names(score_defs)) {
-    v <- score_defs[[nm]]
+  for (v in names(COUNTS)) {
     if (!has_col(df_saa2, v)) next
     d <- df_saa2 %>% mutate(x = num_safe(.data[[v]])) %>%
       filter(!is.na(x), !is.na(saa_local_pos))
@@ -969,45 +898,94 @@ if (requireNamespace("pROC", quietly = TRUE)) {
     r <- pROC::roc(d$saa_local_pos, d$x, levels = c("Negative", "Positive"),
                    direction = "<", quiet = TRUE)
     ci <- as.numeric(pROC::ci.auc(r))
-    roc_list[[nm]] <- tibble(score = nm, spec = rev(r$specificities),
-                             sens = rev(r$sensitivities))
-    auc_rows[[nm]] <- tibble(Score = nm, n = nrow(d),
+    roc_list[[v]] <- tibble(score = unname(COUNTS[v]),
+                            spec = rev(r$specificities), sens = rev(r$sensitivities))
+    auc_rows[[v]] <- tibble(Score = unname(COUNTS[v]), n = nrow(d),
       `n SAA+` = sum(d$saa_local_pos == "Positive"),
       AUC = round(as.numeric(pROC::auc(r)), 3),
       `95% CI` = sprintf("%.2f-%.2f", ci[1], ci[3]))
   }
-  roc_curves <- bind_rows(roc_list)
   if (length(auc_rows))
-    print(kable(bind_rows(auc_rows), caption = paste("Graded counts as continuous",
-      "predictors of SAA status. AUC 0.5 = no information.")) %>%
+    print(kable(bind_rows(auc_rows), caption =
+      "Discrimination of each count. AUC 0.5 means the count carries no information.") %>%
       kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")))
-}
-
-g <- ggplot() +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey65") +
-  coord_equal(xlim = c(0, 100), ylim = c(0, 100)) +
-  labs(x = "100 - specificity (%)", y = "Sensitivity (%)",
-       title = "ROC space: significant rules and graded counts",
-       colour = NULL, shape = NULL)
-if (!is.null(roc_curves) && nrow(roc_curves))
-  g <- g + geom_line(data = roc_curves,
-                     aes(100 * (1 - spec), 100 * sens, colour = score), linewidth = .9)
-if (nrow(sig))
-  g <- g + geom_point(data = sig, aes(100 - Spec, Sens, shape = Family),
-                      size = 3.2, colour = "#D55E00") +
-           geom_text(data = sig, aes(100 - Spec, Sens, label = Rule),
-                     size = 2.8, vjust = -1.1, colour = "grey25")
-g + theme(legend.position = "bottom")
+  rc <- bind_rows(roc_list)
+  if (nrow(rc))
+    print(ggplot(rc, aes(100 * (1 - spec), 100 * sens, colour = score)) +
+      geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey65") +
+      geom_line(linewidth = .9) + coord_equal(xlim = c(0, 100), ylim = c(0, 100)) +
+      labs(x = "100 - specificity (%)", y = "Sensitivity (%)", colour = NULL,
+           title = "Counts of criteria as predictors of SAA positivity") +
+      theme(legend.position = "bottom"))
+} else cat("pROC is not installed; install.packages('pROC') for the AUCs and curves.")
 ```
 
-```{r roc-significant-table}
-if (nrow(sig)) {
-  sig %>% transmute(Family, Rule, n, `n SAA+`, Sens, Spec, AUC,
-                    OR = sprintf("%.2f (%s)", OR, OR_CI), p = signif(p, 3)) %>%
-    kable(caption = paste("Rules reaching p < 0.05. AUC here is balanced accuracy,",
-      "the area under the single-point ROC of a binary rule.")) %>%
+## Clinical feature paired with its objective test
+
+```{r domain-pairs}
+## Four categories, not an AND: which of the pair is positive matters. NA unless
+## both were assessed, so every patient in the table contributed both.
+pair_factor <- function(cl, te, cl_lab, te_lab) {
+  ok <- !is.na(cl) & !is.na(te)
+  out <- rep(NA_character_, length(cl))
+  out[ok] <- ifelse(cl[ok] & te[ok], "Both",
+             ifelse(cl[ok] & !te[ok], paste(cl_lab, "only"),
+             ifelse(!cl[ok] & te[ok], paste(te_lab, "only"), "Neither")))
+  factor(out, levels = c("Neither", paste(cl_lab, "only"), paste(te_lab, "only"), "Both"))
+}
+
+df_saa2 <- df_saa2 %>% mutate(
+  pair_rbd  = pair_factor(rbdclinical == "Yes",  psg_rbd == "Yes",     "Clinical", "PSG"),
+  pair_park = pair_factor(parkinsonism == "Yes", datscan_bin == "Abnormal",
+                          "Parkinsonism", "DaT"),
+  pair_auto = pair_factor(dysautonomia == "Yes", mibg == "Yes",        "Dysautonomia", "MIBG"))
+
+PAIRS <- c(pair_rbd = "RBD: clinical vs PSG",
+           pair_park = "Parkinsonism vs DaT-SCAN",
+           pair_auto = "Dysautonomia vs MIBG")
+
+pair_cross <- map_dfr(names(PAIRS), function(v) {
+  d <- df_saa2 %>% filter(!is.na(.data[[v]]), !is.na(saa_local_pos))
+  if (!nrow(d)) return(NULL)
+  tb <- table(droplevels(d[[v]]), droplevels(d$saa_local_pos))
+  ## both SAA groups must be present or the percentage column is undefined
+  if (nrow(tb) < 2 || ncol(tb) < 2) return(NULL)
+  p <- tryCatch(fisher.test(tb, simulate.p.value = TRUE)$p.value,
+                error = function(e) NA_real_)
+  as.data.frame.matrix(tb) %>% tibble::rownames_to_column("Category") %>%
+    mutate(Pair = unname(PAIRS[v]), n = sum(tb), p = signif(p, 3),
+           `% SAA+ in category` = round(100 * Positive / (Positive + Negative)))
+})
+
+if (nrow(pair_cross)) {
+  write.csv(pair_cross, file.path(results_path, "Domain_pairs.csv"), row.names = FALSE)
+  pair_cross %>% select(Pair, Category, Negative, Positive,
+                        `% SAA+ in category`, n, p) %>%
+    kable(caption = paste("Each clinical feature against its objective test.",
+      "Only patients with both assessed. p is a Fisher test across the four",
+      "categories within each pair.")) %>%
     kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-} else cat("No rule reached p < 0.05.")
+} else cat("No pair had both components assessed in enough patients.")
+```
+
+```{r domain-binaries}
+## The same pairs collapsed two ways: both positive, and at least one positive.
+pair_rules <- bind_rows(
+  rule_metrics(df_saa2$rbdclinical == "Yes" & df_saa2$psg_rbd == "Yes",
+               df_saa2$saa_local_pos, "RBD clinical AND PSG"),
+  rule_metrics(df_saa2$parkinsonism == "Yes" & df_saa2$datscan_bin == "Abnormal",
+               df_saa2$saa_local_pos, "Parkinsonism AND DaT"),
+  rule_metrics(df_saa2$dysautonomia == "Yes" & df_saa2$mibg == "Yes",
+               df_saa2$saa_local_pos, "Dysautonomia AND MIBG"))
+
+if (nrow(pair_rules)) {
+  pair_rules %>%
+    transmute(Rule, n, `n SAA+`, Sens, Spec, PPV, NPV, Youden, AUC,
+              OR = sprintf("%.2f (%s)", OR, OR_CI), p = signif(p, 3)) %>%
+    kable(caption = paste("Both components positive. n is the number of patients",
+      "who had both assessed, which is why it is much smaller than the cohort.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+} else cat("No pair reached the minimum evaluable sample.")
 ```
 
 # Cognitive progression (MMSE and MoCA)
