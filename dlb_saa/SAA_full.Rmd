@@ -896,7 +896,8 @@ if (requireNamespace("pROC", quietly = TRUE)) {
                    direction = "<", quiet = TRUE)
     ci <- as.numeric(pROC::ci.auc(r))
     roc_list[[v]] <- tibble(score = unname(COUNTS[v]),
-                            spec = rev(r$specificities), sens = rev(r$sensitivities))
+                            spec = rev(r$specificities), sens = rev(r$sensitivities),
+                            thr  = rev(r$thresholds))
     auc_rows[[v]] <- tibble(Score = unname(COUNTS[v]), n = nrow(d),
       `n SAA+` = sum(d$saa_local_pos == "Positive"),
       AUC = round(as.numeric(pROC::auc(r)), 3),
@@ -907,13 +908,30 @@ if (requireNamespace("pROC", quietly = TRUE)) {
       "Discrimination of each count. AUC 0.5 means the count carries no information.") %>%
       kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")))
   rc <- bind_rows(roc_list)
-  if (nrow(rc))
-    print(ggplot(rc, aes(100 * (1 - spec), 100 * sens, colour = score)) +
+  if (nrow(rc)) {
+    ## Label the operating points with their cut-off. ggrepel when available,
+    ## otherwise alternate the offset so labels do not sit on top of each other.
+    pts <- rc %>% filter(is.finite(thr)) %>% group_by(score) %>%
+      arrange(thr, .by_group = TRUE) %>%
+      mutate(nudge = ifelse(dplyr::row_number() %% 2 == 0, 5, -5)) %>% ungroup()
+    g <- ggplot(rc, aes(100 * (1 - spec), 100 * sens, colour = score)) +
       geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey65") +
-      geom_line(linewidth = .9) + coord_equal(xlim = c(0, 100), ylim = c(0, 100)) +
+      geom_line(linewidth = .9) +
+      geom_point(data = pts, size = 1.8) +
+      coord_equal(xlim = c(-5, 105), ylim = c(-5, 105)) +
       labs(x = "100 - specificity (%)", y = "Sensitivity (%)", colour = NULL,
-           title = "Counts of criteria as predictors of SAA positivity") +
-      theme(legend.position = "bottom"))
+           title = "Counts of criteria as predictors of SAA positivity",
+           caption = "Points mark each cut-off; labels give the minimum number of criteria.") +
+      theme(legend.position = "bottom")
+    g <- if (requireNamespace("ggrepel", quietly = TRUE))
+      g + ggrepel::geom_text_repel(data = pts, aes(label = paste0(">=", ceiling(thr))),
+            size = 3, show.legend = FALSE, min.segment.length = 0,
+            box.padding = .5, max.overlaps = Inf, seed = 1)
+    else
+      g + geom_text(data = pts, aes(label = paste0(">=", ceiling(thr))), size = 3,
+            nudge_y = pts$nudge, show.legend = FALSE)
+    print(g)
+  }
 } else cat("pROC is not installed; install.packages('pROC') for the AUCs and curves.")
 ```
 
@@ -1129,17 +1147,30 @@ if (!requireNamespace("lme4", quietly = TRUE)) {
 }
 ```
 
-```{r progression-plot, fig.width=9, fig.height=4}
+```{r progression-plot, fig.width=9.5, fig.height=4.2}
 pd <- long %>% filter(n_obs >= 2)
 if (nrow(pd) >= 10) {
-  ggplot(pd, aes(t_years, score, group = NHC, colour = saa_local_pos)) +
-    geom_line(alpha = .45) + geom_point(size = 1.2, alpha = .7) +
-    geom_smooth(aes(group = saa_local_pos), method = "lm", formula = y ~ x,
-                se = TRUE, linewidth = 1.2) +
+  ## free_y let each panel autoscale to whatever few points it had, so MoCA and
+  ## MMSE - both 0-30 - came out on different axes and looked incomparable.
+  ## Each test is pinned to its own real range instead.
+  RANGES <- tibble(test = c("MoCA", "MMSE", "MDS-UPDRS III"),
+                   lo = c(0, 0, 0), hi = c(30, 30, 132)) %>%
+    filter(test %in% unique(pd$test))
+  frame <- bind_rows(
+    RANGES %>% transmute(test, t_years = 0, score = lo),
+    RANGES %>% transmute(test, t_years = 0, score = hi))
+
+  ggplot(pd, aes(t_years, score)) +
+    geom_blank(data = frame, aes(t_years, score), inherit.aes = FALSE) +
+    geom_line(aes(group = NHC, colour = saa_local_pos), alpha = .45) +
+    geom_point(aes(colour = saa_local_pos), size = 1.3, alpha = .75) +
+    geom_smooth(aes(group = saa_local_pos, colour = saa_local_pos),
+                method = "lm", formula = y ~ x, se = TRUE, linewidth = 1.1) +
     facet_wrap(~ test, scales = "free_y") +
     scale_colour_manual(values = c(Negative = "#E69F00", Positive = "#56B4E9")) +
     labs(x = "Years from first assessment", y = "Score", colour = "SAA",
-         title = "Cognitive trajectories by SAA status") +
+         title = "Trajectories by SAA status",
+         caption = "Axes span each instrument's full range: MoCA and MMSE 0-30, MDS-UPDRS III 0-132.") +
     theme(legend.position = "bottom")
 } else cat("Too few repeated assessments to plot.")
 ```
