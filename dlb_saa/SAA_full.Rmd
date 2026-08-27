@@ -36,9 +36,6 @@ dir.create(results_path, recursive = TRUE, showWarnings = FALSE)
 
 f_clin  <- file.path(desktop_path, "datafreeze_lewy.xlsx")
 f_bio   <- file.path(desktop_path, "BIOFLUIDS_CLINICAL.xlsx")
-## Optional: FreeSurfer normative Z from the visual-hallucination pipeline.
-## If present, the imaging section adds a cross-pipeline check on the same
-## subjects; if absent, that subsection is skipped and everything else runs.
 
 
 ## ---------------------------------------------------------------------------
@@ -969,7 +966,7 @@ if (nrow(pair_cross)) {
 ```
 
 ```{r domain-binaries}
-## The same pairs collapsed two ways: both positive, and at least one positive.
+## The same pairs collapsed to a single rule: both components positive.
 pair_rules <- bind_rows(
   rule_metrics(df_saa2$rbdclinical == "Yes" & df_saa2$psg_rbd == "Yes",
                df_saa2$saa_local_pos, "RBD clinical AND PSG"),
