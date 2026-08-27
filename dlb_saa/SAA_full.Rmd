@@ -500,12 +500,18 @@ analytic_df <- analytic_df %>%
     park_dat_both = factor(ifelse(!is.na(parkinsonism) & !is.na(datscan_bin),
                  ifelse(yes(parkinsonism) & abn(datscan_bin), "Yes", "No"), NA),
                  levels = c("No", "Yes")),
-    ## indicative biomarkers present (DaT, PSG, MIBG), 0-3
-    n_indicative = ifelse(seen(datscan_bin, psg_rbd, mibg),
-      rowSums(cbind(abn(datscan_bin), yes(psg_rbd), yes(mibg)), na.rm = TRUE), NA_real_),
-    ## core clinical + indicative biomarkers, 0-7
-    n_core_plus = ifelse(is.na(n_core) & is.na(n_indicative), NA_real_,
-      rowSums(cbind(n_core, n_indicative), na.rm = TRUE)))
+    ## Indicative biomarkers present (DaT, PSG, MIBG), 0-3.
+    ## COMPLETE CASES ONLY. Counting a test that was never done as "negative"
+    ## makes the count partly a measure of how much workup a patient received,
+    ## and workup intensity is not independent of the group.
+    n_indicative = ifelse(!is.na(datscan_bin) & !is.na(psg_rbd) & !is.na(mibg),
+      rowSums(cbind(abn(datscan_bin), yes(psg_rbd), yes(mibg))), NA_real_),
+    ## same rule for the number of tests actually performed, which is worth
+    ## checking on its own: if it differs by group, every count below inherits it
+    n_tests_done = rowSums(cbind(!is.na(datscan_bin), !is.na(psg_rbd), !is.na(mibg))),
+    ## core clinical + indicative biomarkers, 0-7, complete cases only
+    n_core_plus = ifelse(is.na(n_core) | is.na(n_indicative), NA_real_,
+      n_core + n_indicative))
 
 cat(sprintf("Diagnostic certainty recoded for %d of %d subjects. GDS available in %d. MIBG in %d.\n",
   sum(!is.na(analytic_df$dlb_certainty)), nrow(analytic_df),
@@ -671,12 +677,13 @@ fn_md <- function(data, variable, by, ...) {
 ## A tbl_summary module: n, median [IQR] or n(%), non-parametric p, difference, SMD.
 ## Continuous tests are rank-based; the previous script used Welch t-tests on
 ## ordinal (MTA, Fazekas) and heavily skewed (GFAP, NfL) variables.
-mod_cont <- function(data, vars, labels, group_var) {
+mod_cont <- function(data, vars, labels, group_var,
+                     stat = "{median} [{p25}, {p75}]") {
   data %>% select(all_of(vars), all_of(group_var)) %>%
     tbl_summary(by = all_of(group_var), missing = "no",
                 type = list(everything() ~ "continuous"),
                 label = labels,
-                statistic = list(everything() ~ "{median} [{p25}, {p75}]"),
+                statistic = list(everything() ~ stat),
                 digits = list(everything() ~ 1)) %>%
     add_n() %>%
     add_p(test = everything() ~ "wilcox.test",
@@ -736,7 +743,9 @@ LAB <- c(
   dlb_certainty="Diagnosis", gds_fast="GDS-FAST stage", mibg="MIBG abnormal",
   rbd_any="RBD (clinical or PSG)", rbd_both="RBD (clinical and PSG)",
   park_dat_any="Parkinsonism or abnormal DaT", park_dat_both="Parkinsonism and abnormal DaT",
-  n_indicative="Indicative biomarkers (0-3)", n_core_plus="Core + biomarkers (0-7)")
+  n_indicative="Indicative biomarkers positive (0-3)",
+  n_tests_done="Indicative tests performed (0-3)",
+  n_core_plus="Core + biomarkers (0-7)")
 
 lab_list <- function(v) setNames(as.list(unname(LAB[v])), v) %>%
   { imap(., function(l, n) as.formula(paste0("`", n, "` ~ '", l, "'"))) } %>% unname()
@@ -763,15 +772,20 @@ build_clinical <- function(data, group_var) {
     list(t="cat",  v=c("datscan_bin","psg_rbd","mibg","A_clean","AT_profile"), h="Biomarkers & imaging"),
     list(t="cat",  v=c("rbd_any","rbd_both","park_dat_any","park_dat_both"),
                                                                      h="Combined categories"),
-    list(t="cont", v=c("n_indicative","n_core_plus"),                h="Combined counts"),
+    list(t="cont", v=c("n_indicative","n_tests_done","n_core_plus"),
+                                                                     h="Combined counts"),
     list(t="cont", v=c("mta","fazekas"),                             h="Biomarkers & imaging"))
 
   built <- list(); heads <- character()
   for (b in blocks) {
     vv <- keep_usable(data, b$v)
     if (!length(vv)) next
-    tb <- if (b$t == "cont") mod_cont(data, vv, lab_list(vv), group_var)
-          else               mod_cat (data, vv, lab_list(vv), group_var)
+    tb <- if (b$t == "cont")
+            mod_cont(data, vv, lab_list(vv), group_var,
+                     stat = if (identical(b$h, "Combined counts"))
+                       "{mean} ({sd}) / {median} [{p25}, {p75}]"
+                     else "{median} [{p25}, {p75}]")
+          else mod_cat (data, vv, lab_list(vv), group_var)
     built <- c(built, list(tb)); heads <- c(heads, b$h)
   }
   tbl_stack(built, group_header = heads) %>%
@@ -787,6 +801,138 @@ gt_demo_saa2 <- build_clinical(df_saa2, "saa_local_pos") %>%
   tab_source_note("Continuous: median [IQR], Wilcoxon rank-sum. Categorical: n (%), Fisher exact. Difference = Negative − Positive (Welch). SMD = standardized mean difference. N = subjects with the variable.")
 gtsave(gt_demo_saa2, file.path(results_path, "Clinical_SantPau.html"))
 gt_demo_saa2
+```
+
+# Which combination discriminates best?
+
+The combined rows in the table above answer "does this differ between groups".
+The question Inigo is asking is different: **which rule best separates SAA+ from
+SAA-**. That is a discrimination problem, so it is reported with sensitivity,
+specificity and odds ratios rather than a p value alone.
+
+Two things to keep in mind while reading it. Every AND rule is evaluated only in
+patients who have **both** tests, so a stricter rule is also a smaller and
+differently selected sample: RBD clinical-and-PSG drops from 71 patients to 23,
+which is why it loses significance despite a larger effect. And these rules are
+screened, not pre-specified, so the ranking is a hypothesis generator.
+
+```{r rule-screen}
+## Binary features, NA preserved. A feature that was never assessed must stay
+## missing rather than becoming a negative.
+feat <- tibble(
+  saa = df_saa2$saa_local_pos,
+  `Fluctuations`   = df_saa2$fluctuations   == "Yes",
+  `Hallucinations` = df_saa2$hallucinations == "Yes",
+  `RBD clinical`   = df_saa2$rbdclinical    == "Yes",
+  `Parkinsonism`   = df_saa2$parkinsonism   == "Yes",
+  `DaT abnormal`   = df_saa2$datscan_bin    == "Abnormal",
+  `PSG RBD`        = df_saa2$psg_rbd        == "Yes",
+  `MIBG abnormal`  = df_saa2$mibg           == "Yes",
+  `Hyposmia`       = df_saa2$hyposmia       == "Yes")
+fnames <- setdiff(names(feat), "saa")
+fnames <- fnames[vapply(fnames, function(f) sum(!is.na(feat[[f]])) >= 15 &&
+                          length(unique(na.omit(feat[[f]]))) > 1, logical(1))]
+
+## Metrics for one rule, on the patients where the rule is evaluable.
+rule_metrics <- function(rule, saa, label, kind, n_used) {
+  ok <- !is.na(rule) & !is.na(saa)
+  if (sum(ok) < 15) return(NULL)
+  r <- rule[ok]; g <- droplevels(saa[ok])
+  if (nlevels(g) != 2) return(NULL)
+  pos <- g == "Positive"
+  tp <- sum(r & pos); fp <- sum(r & !pos)
+  fn <- sum(!r & pos); tn <- sum(!r & !pos)
+  if ((tp + fn) < 5 || (tn + fp) < 5) return(NULL)
+  sens <- tp / (tp + fn); spec <- tn / (tn + fp)
+  ## Haldane-Anscombe correction so a zero cell does not give an infinite OR
+  or <- ((tp + .5) * (tn + .5)) / ((fp + .5) * (fn + .5))
+  se <- sqrt(1/(tp+.5) + 1/(fp+.5) + 1/(fn+.5) + 1/(tn+.5))
+  p <- tryCatch(fisher.test(matrix(c(tp, fn, fp, tn), 2))$p.value,
+                error = function(e) NA_real_)
+  tibble(Rule = label, Type = kind, Features = n_used, n = sum(ok),
+         `n SAA+` = sum(pos),
+         Sens = round(100 * sens), Spec = round(100 * spec),
+         PPV = round(100 * tp / max(1, tp + fp)),
+         NPV = round(100 * tn / max(1, tn + fn)),
+         Youden = round(sens + spec - 1, 2),
+         OR = round(or, 2),
+         OR_CI = sprintf("%.2f-%.2f", exp(log(or) - 1.96*se), exp(log(or) + 1.96*se)),
+         p = p)
+}
+
+rules <- list()
+for (f in fnames)
+  rules[[length(rules) + 1]] <- rule_metrics(feat[[f]], feat$saa, f, "single", 1)
+for (i in seq_along(fnames)) for (j in seq_along(fnames)) if (i < j) {
+  a <- fnames[i]; b <- fnames[j]
+  rules[[length(rules) + 1]] <- rule_metrics(feat[[a]] & feat[[b]], feat$saa,
+    paste(a, "AND", b), "AND", 2)
+  rules[[length(rules) + 1]] <- rule_metrics(feat[[a]] | feat[[b]], feat$saa,
+    paste(a, "OR", b), "OR", 2)
+}
+screen <- bind_rows(rules)
+
+if (!nrow(screen)) {
+  cat("No rule had enough evaluable patients.")
+} else {
+  screen <- screen %>% mutate(q_BH = p.adjust(p, "BH")) %>% arrange(desc(Youden))
+  write.csv(screen, file.path(results_path, "Rule_screen.csv"), row.names = FALSE)
+  cat(sprintf("%d rules screened over %d features. %d reach p < 0.05, %d survive BH-FDR.\n",
+      nrow(screen), length(fnames), sum(screen$p < .05, na.rm = TRUE),
+      sum(screen$q_BH < .05, na.rm = TRUE)))
+  screen %>% head(15) %>%
+    transmute(Rule, Type, n, `n SAA+`, Sens, Spec, PPV, NPV, Youden,
+              OR = sprintf("%.2f (%s)", OR, OR_CI),
+              p = signif(p, 3), q = signif(q_BH, 3)) %>%
+    kable(caption = paste("Top 15 rules by Youden index. Sens/Spec/PPV/NPV are",
+      "percentages for predicting SAA positivity. n changes between rules",
+      "because each is evaluated only where its components were assessed.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
+                  font_size = 11)
+}
+```
+
+```{r rule-screen-plot, fig.width=7.5, fig.height=5}
+if (exists("screen") && nrow(screen) >= 5) {
+  ggplot(screen, aes(100 - Spec, Sens, colour = Type, size = n)) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey65") +
+    geom_point(alpha = .75) +
+    {if (requireNamespace("ggrepel", quietly = TRUE))
+       ggrepel::geom_text_repel(data = head(screen[order(-screen$Youden), ], 6),
+         aes(label = Rule), size = 3, colour = "grey25", max.overlaps = 20)
+     else geom_text(data = head(screen[order(-screen$Youden), ], 6),
+         aes(label = Rule), size = 3, colour = "grey25", vjust = -1)} +
+    scale_size_continuous(range = c(1.5, 6)) +
+    coord_equal(xlim = c(0, 100), ylim = c(0, 100)) +
+    labs(x = "100 - specificity (%)", y = "Sensitivity (%)",
+         title = "Every screened rule, as a point in ROC space",
+         subtitle = "Distance above the diagonal is the Youden index; size is the number of evaluable patients",
+         colour = NULL, size = "n") +
+    theme(legend.position = "right")
+}
+```
+
+```{r rule-screen-counts}
+## The graded counts, as ROC curves rather than as a group difference: does
+## "how many features are present" order patients by SAA status at all?
+if (requireNamespace("pROC", quietly = TRUE)) {
+  auc_tab <- map_dfr(c("n_core", "n_indicative", "n_core_plus"), function(v) {
+    if (!has_col(df_saa2, v)) return(NULL)
+    d <- df_saa2 %>% mutate(x = num_safe(.data[[v]])) %>%
+      filter(!is.na(x), !is.na(saa_local_pos))
+    if (nrow(d) < 20 || n_distinct(d$saa_local_pos) < 2) return(NULL)
+    r <- pROC::roc(response = d$saa_local_pos, predictor = d$x,
+                   levels = c("Negative", "Positive"), direction = "<", quiet = TRUE)
+    ci <- as.numeric(pROC::ci.auc(r))
+    tibble(Score = v, n = nrow(d), `n SAA+` = sum(d$saa_local_pos == "Positive"),
+           AUC = round(as.numeric(pROC::auc(r)), 3),
+           `95% CI` = sprintf("%.2f-%.2f", ci[1], ci[3]))
+  })
+  if (nrow(auc_tab))
+    kable(auc_tab, caption = paste("Discrimination of the graded counts.",
+      "AUC 0.5 means the count carries no information about SAA status.")) %>%
+      kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+} else cat("pROC is not installed; install.packages('pROC') to get the AUCs.")
 ```
 
 # Cognitive progression (MMSE and MoCA)
@@ -816,8 +962,32 @@ moca_long  <- score_history(clin, "puntuaciones",
                             "MoCA", 0, 30)
 updrs_long <- score_history(clin, "updrs3_total_score",
                             c("fechaupdrs", "visit_date"), "MDS-UPDRS III", 0, 132)
-mmse_long  <- score_history(bio, "MMSE",
-                            c("FUPDATE", "DATA_CAPTURE", "SAMPLEDATE"), "MMSE", 0, 30)
+## MMSE dating: FUPDATE may be a subject-level "last follow-up" rather than a
+## per-assessment date, which would collapse every MMSE of a patient onto one
+## date. Pick the field that actually varies within subject, and show the
+## comparison rather than assuming.
+mmse_date_check <- map_dfr(c("FUPDATE", "DATA_CAPTURE", "SAMPLEDATE"), function(f) {
+  if (!has_col(bio, f) || !has_col(bio, "MMSE")) return(NULL)
+  d <- tibble(NHC = bio$NHC, date = as_date_safe(bio[[f]]),
+              score = num_safe(bio$MMSE)) %>%
+    filter(!is.na(NHC), !is.na(date), !is.na(score))
+  if (!nrow(d)) return(NULL)
+  per <- d %>% group_by(NHC) %>%
+    summarise(dates = n_distinct(date), pairs = n_distinct(paste(date, score)),
+              .groups = "drop")
+  tibble(field = f, rows = nrow(d), subjects = nrow(per),
+         `subjects with >=2 dates` = sum(per$dates >= 2),
+         `subjects with >=2 date-score pairs` = sum(per$pairs >= 2))
+})
+if (nrow(mmse_date_check))
+  print(kable(mmse_date_check, caption = paste("MMSE date fields compared.",
+    "A field that gives few subjects with two distinct dates is a subject-level",
+    "date, not a per-assessment one.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")))
+
+best_mmse_date <- if (nrow(mmse_date_check))
+  mmse_date_check$field[which.max(mmse_date_check$`subjects with >=2 dates`)] else "SAMPLEDATE"
+mmse_long  <- score_history(bio, "MMSE", best_mmse_date, "MMSE", 0, 30)
 
 ## What each source contributed, before any modelling.
 src <- bind_rows(
