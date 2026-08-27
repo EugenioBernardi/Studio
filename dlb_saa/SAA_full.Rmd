@@ -182,13 +182,33 @@ clin <- clin_raw %>%
   mutate(NHC = norm_id(.data[[nhc_col]])) %>%
   filter(!is.na(NHC))
 
-## Per-visit date. THE ORIGINAL SCRIPT USED visit_date_base_lewy, which is the
-## baseline date (constant per subject) -- the "closest visit" rule was
-## therefore never applied. visit_date is the per-instance column.
+## ---------------------------------------------------------------------------
+## Per-visit date.
+## visit_date is filled on only a minority of rows, so dating visits by it alone
+## discards most assessments. Each instrument in this export carries its own
+## date (fecha_moca, fechaupdrs, fecha_sppb ...), and those are used as
+## fallbacks, with the baseline date last.
+##
+## NOT date fields, despite the names: `fecha`, `mes`, `any`, `dia_semana`,
+## `lugar`, `localidad` are MoCA orientation ITEMS scored 0/1.
+## ---------------------------------------------------------------------------
+VISIT_DATE_FIELDS <- c("visit_date", "fecha_moca", "fechaupdrs", "fecha_updrs_ia",
+                       "fecha_sppb", "fecha_eq5d", "fechahad", "fecha_zarit",
+                       "fecha_seguimiento", "fecha_um", "visit_date_base_lewy")
+
+date_coverage <- tibble(
+  field = VISIT_DATE_FIELDS,
+  present = VISIT_DATE_FIELDS %in% names(clin),
+  n_dated = vapply(VISIT_DATE_FIELDS, function(f)
+    if (f %in% names(clin)) sum(!is.na(as_date_safe(clin[[f]]))) else 0L, integer(1)))
+
+clin$visit_any <- {
+  out <- as.Date(rep(NA, nrow(clin)))
+  for (f in VISIT_DATE_FIELDS)
+    if (f %in% names(clin)) out <- coalesce(out, as_date_safe(clin[[f]]))
+  out
+}
 clin$visit_d <- as_date_safe(if (has_col(clin, "visit_date")) clin$visit_date else NA)
-clin$visit_fallback <- as_date_safe(
-  if (has_col(clin, "visit_date_base_lewy")) clin$visit_date_base_lewy else NA)
-clin$visit_any <- coalesce(clin$visit_d, clin$visit_fallback)
 
 ## Columns that belong to a VISIT (never carried across rows)
 visit_pat <- paste0("^(visit_date|redcap_event_instance|neurologist|visitdiagnosis|",
@@ -251,6 +271,18 @@ merge_note <- sprintf(
   round(100 * mean(merged_df$date_diff <= 90, na.rm = TRUE)),
   sum(merged_df$gap_over_limit, na.rm = TRUE), MAX_GAP_DAYS)
 cat(merge_note)
+```
+
+```{r date-coverage}
+kable(date_coverage %>%
+        mutate(`% of rows` = round(100 * n_dated / nrow(clin), 1)),
+      caption = paste("Which date fields are actually populated in the clinical",
+        "export. visit_date alone would date only a fraction of the rows;",
+        "visit_any coalesces down this list in order.")) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+cat(sprintf("Rows with any usable date: %d of %d (%.0f%%).",
+            sum(!is.na(clin$visit_any)), nrow(clin),
+            100 * mean(!is.na(clin$visit_any))))
 ```
 
 ```{r gap-plot, fig.width=6.5, fig.height=3}
@@ -764,32 +796,38 @@ subject the rest of the report is built on. MoCA comes from the REDCap visits,
 MMSE from the biofluids follow-ups.
 
 ```{r progression-build}
-## Rebuild long-format score histories for the Sant Pau SAA cohort.
+## Each instrument is dated by ITS OWN date field. Dating MoCA by visit_date
+## discarded most assessments, which is why the first run found only 8 subjects
+## with two MoCAs.
 saa_lookup <- df_saa2 %>% select(NHC, saa_local_pos, SEX, age_at_sample)
 
-## MoCA: one row per dated clinical visit
-moca_long <- if (!has_col(clin, "puntuaciones")) {
-  tibble(NHC = character(), date = as.Date(character()),
-         score = numeric(), test = character())
-} else {
-  clin %>%
-    transmute(NHC, date = visit_any, score = num_safe(puntuaciones), test = "MoCA") %>%
-    filter(!is.na(NHC), !is.na(date), !is.na(score), score >= 0, score <= 30)
+score_history <- function(df, score_col, date_cols, label, lo, hi) {
+  if (!has_col(df, score_col))
+    return(tibble(NHC = character(), date = as.Date(character()),
+                  score = numeric(), test = character()))
+  d <- as.Date(rep(NA, nrow(df)))
+  for (f in date_cols) if (f %in% names(df)) d <- coalesce(d, as_date_safe(df[[f]]))
+  tibble(NHC = df$NHC, date = d, score = num_safe(df[[score_col]]), test = label) %>%
+    filter(!is.na(NHC), !is.na(date), !is.na(score), score >= lo, score <= hi)
 }
 
-## MMSE: from the biofluids follow-ups; FUPDATE where present, else sample date
-mmse_long <- if (!has_col(bio, "MMSE")) {
-  tibble(NHC = character(), date = as.Date(character()),
-         score = numeric(), test = character())
-} else bio %>%
-  transmute(NHC,
-            date = coalesce(as_date_safe(if ("FUPDATE" %in% names(bio)) FUPDATE else NA),
-                            sample_d),
-            score = num_safe(if ("MMSE" %in% names(bio)) MMSE else NA),
-            test = "MMSE") %>%
-  filter(!is.na(NHC), !is.na(date), !is.na(score), score >= 0, score <= 30)
+moca_long  <- score_history(clin, "puntuaciones",
+                            c("fecha_moca", "visit_date", "visit_date_base_lewy"),
+                            "MoCA", 0, 30)
+updrs_long <- score_history(clin, "updrs3_total_score",
+                            c("fechaupdrs", "visit_date"), "MDS-UPDRS III", 0, 132)
+mmse_long  <- score_history(bio, "MMSE",
+                            c("FUPDATE", "DATA_CAPTURE", "SAMPLEDATE"), "MMSE", 0, 30)
 
-long <- bind_rows(moca_long, mmse_long) %>%
+## What each source contributed, before any modelling.
+src <- bind_rows(
+  tibble(test = "MoCA",          rows = nrow(moca_long),  subjects = n_distinct(moca_long$NHC)),
+  tibble(test = "MDS-UPDRS III", rows = nrow(updrs_long), subjects = n_distinct(updrs_long$NHC)),
+  tibble(test = "MMSE",          rows = nrow(mmse_long),  subjects = n_distinct(mmse_long$NHC)))
+kable(src, caption = "Dated assessments found in the whole export, before restricting to the SAA cohort.") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+
+long <- bind_rows(moca_long, updrs_long, mmse_long) %>%
   distinct(NHC, test, date, .keep_all = TRUE) %>%
   inner_join(saa_lookup, by = "NHC") %>%
   group_by(NHC, test) %>%
