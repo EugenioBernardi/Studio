@@ -36,29 +36,15 @@ dir.create(results_path, recursive = TRUE, showWarnings = FALSE)
 
 f_clin  <- file.path(desktop_path, "datafreeze_lewy.xlsx")
 f_bio   <- file.path(desktop_path, "BIOFLUIDS_CLINICAL.xlsx")
-f_cat12 <- file.path(desktop_path, "CAT12_Hammers_DK_SPIN.xlsx")
 ## Optional: FreeSurfer normative Z from the visual-hallucination pipeline.
 ## If present, the imaging section adds a cross-pipeline check on the same
 ## subjects; if absent, that subsection is skipped and everything else runs.
 
-have_cat12 <- file.exists(f_cat12)
-## Default so that chunk-level eval conditions resolve even when the imaging
-## file is absent and the chunk that sets this never runs.
-imaging_ok  <- FALSE
-restrict_ok <- FALSE
 
 ## ---------------------------------------------------------------------------
 ## MERGE OPTIONS
 ## ---------------------------------------------------------------------------
 MAX_GAP_DAYS <- 365   # visit <-> sample; pairs beyond this are flagged
-MAX_MRI_GAP  <- 730   # sample <-> MRI
-## Image-quality threshold, set in CAT12's native rating (LOWER is better,
-## 1 = A+). A rating of 3 is the accepted cut-off here. CAT12 may export this
-## either as the rating or as the percentage grade (higher better); the scale is
-## detected on load and this threshold is converted to match.
-IQR_MAX_RATING <- 3
-IQR_MIN        <- 105 - 10 * IQR_MAX_RATING   # = 75% on the percentage scale
-MIN_N_MODEL  <- 15    # minimum complete cases to fit an imaging model
 
 ## ---------------------------------------------------------------------------
 ## DATA-QUALITY GUARDS
@@ -99,14 +85,6 @@ PLAUSIBLE <- tribble(
   "gds_visit",                1,   7
 )
 
-## ---------------------------------------------------------------------------
-## ANALYTE PANEL — only assays with real coverage are tabulated.
-## The previous run printed "NA (NA)" rows for sTREM2, SNAP-25, NPTX2, TDP-43
-## and two plasma H0010 assays (n <= 1). MIN_PER_GROUP removes them.
-## ---------------------------------------------------------------------------
-MIN_PER_GROUP <- 8
-## assays reported on a log scale (right-skewed concentrations)
-LOG_SCALE <- "NFL|NFLIGHT|GFAP|YKL40|STREM2|TREM2|TAU|TDP43|SNAP25|NPTX2|ABETA|AB4|AB1"
 ```
 
 # Data loading and merge
@@ -418,6 +396,83 @@ analytic_df <- analytic_df %>%
   )
 ```
 
+```{r dlb-and-combinations}
+## ---------------------------------------------------------------------------
+## Added on Inigo's feedback: DLB diagnostic certainty, GDS, and combined
+## criteria counts.
+## ---------------------------------------------------------------------------
+
+## Diagnostic certainty. Raw levels are printed below -- check them before
+## trusting the recode, the wording varies between fields.
+dx_raw <- coalesce(
+  as.character(grab(analytic_df, c("dxlewy_last"))),
+  as.character(grab(analytic_df, c("dx_estudio_last_visit"))),
+  as.character(grab(analytic_df, c("diagnostico_visita"))),
+  as.character(grab(analytic_df, c("visitdiagnosis"))),
+  as.character(grab(analytic_df, c("dxbaselinelewy"))))
+
+analytic_df$dlb_certainty <- {
+  v <- tolower(trimws(dx_raw))
+  out <- rep(NA_character_, length(v))
+  out[grepl("probab", v)]              <- "Probable DLB"
+  out[grepl("posib|possib", v)]        <- "Possible DLB"
+  out[grepl("mci|dcl|prodrom", v)]     <- "MCI-LB / prodromal"
+  factor(out, levels = c("MCI-LB / prodromal", "Possible DLB", "Probable DLB"))
+}
+analytic_df$dx_raw <- dx_raw
+
+## GDS-FAST
+analytic_df$gds_fast <- {
+  g <- coalesce(num_safe(grab(analytic_df, c("gds_visit"))),
+                num_safe(grab(analytic_df, c("GDS"))),
+                num_safe(grab(analytic_df, c("gds_fast_last_visit"))))
+  g[!is.na(g) & (g < 1 | g > 7)] <- NA
+  g
+}
+
+## MIBG, needed for the biomarker count
+analytic_df$mibg <- recode_yesno(grab(analytic_df, c("mibg")))
+
+## ---- combined categories --------------------------------------------------
+yes <- function(x) !is.na(x) & x == "Yes"
+abn <- function(x) !is.na(x) & x == "Abnormal"
+seen <- function(...) rowSums(!is.na(cbind(...))) > 0
+
+analytic_df <- analytic_df %>%
+  mutate(
+    ## RBD: clinical, PSG-confirmed, either, both
+    rbd_any  = factor(ifelse(seen(rbdclinical, psg_rbd),
+                 ifelse(yes(rbdclinical) | yes(psg_rbd), "Yes", "No"), NA),
+                 levels = c("No", "Yes")),
+    rbd_both = factor(ifelse(!is.na(rbdclinical) & !is.na(psg_rbd),
+                 ifelse(yes(rbdclinical) & yes(psg_rbd), "Yes", "No"), NA),
+                 levels = c("No", "Yes")),
+    ## parkinsonism with dopaminergic imaging
+    park_dat_any = factor(ifelse(seen(parkinsonism, datscan_bin),
+                 ifelse(yes(parkinsonism) | abn(datscan_bin), "Yes", "No"), NA),
+                 levels = c("No", "Yes")),
+    park_dat_both = factor(ifelse(!is.na(parkinsonism) & !is.na(datscan_bin),
+                 ifelse(yes(parkinsonism) & abn(datscan_bin), "Yes", "No"), NA),
+                 levels = c("No", "Yes")),
+    ## indicative biomarkers present (DaT, PSG, MIBG), 0-3
+    n_indicative = ifelse(seen(datscan_bin, psg_rbd, mibg),
+      rowSums(cbind(abn(datscan_bin), yes(psg_rbd), yes(mibg)), na.rm = TRUE), NA_real_),
+    ## core clinical + indicative biomarkers, 0-7
+    n_core_plus = ifelse(is.na(n_core) & is.na(n_indicative), NA_real_,
+      rowSums(cbind(n_core, n_indicative), na.rm = TRUE)))
+
+cat(sprintf("Diagnostic certainty recoded for %d of %d subjects. GDS available in %d. MIBG in %d.\n",
+  sum(!is.na(analytic_df$dlb_certainty)), nrow(analytic_df),
+  sum(!is.na(analytic_df$gds_fast)), sum(!is.na(analytic_df$mibg))))
+
+dx_check <- tibble(Raw = dx_raw,
+                   Recoded = as.character(analytic_df$dlb_certainty)) %>%
+  filter(!is.na(Raw)) %>% count(Raw, Recoded, sort = TRUE) %>% head(25)
+kable(dx_check, caption = paste("Diagnosis field: raw value to recoded certainty.",
+  "Rows with Recoded = NA are not counted as possible or probable DLB.")) %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+```
+
 ```{r pd-phenotype}
 ## ---------------------------------------------------------------------------
 ## Motor phenotype (Jankovic): mean tremor / mean akinetic-rigid, from the
@@ -499,16 +554,15 @@ n_indet <- sum(analytic_df$saa_any_pos == "Indeterminate", na.rm = TRUE)
 
 df_saa2 <- analytic_df %>% filter(saa_local_pos %in% c("Negative","Positive")) %>%
   mutate(saa_local_pos = droplevels(saa_local_pos))
-df_both <- analytic_df %>% filter(saa_any_pos %in% c("Negative","Positive")) %>%
-  mutate(saa_any_pos = droplevels(saa_any_pos))
+## Iñigo: Sant Pau only. saa_any_pos is kept so the SAA1/SAA2 concordance
+## section can still use it, but no analysis is grouped by it.
 
-saveRDS(list(analytic_df = analytic_df, df_saa2 = df_saa2, df_both = df_both),
+saveRDS(list(analytic_df = analytic_df, df_saa2 = df_saa2),
         file.path(results_path, "analytic_df.rds"))
 
-cat(sprintf("Sant Pau (SAA02): n = %d (%d+ / %d-).\nCombined (SAA01+SAA02): n = %d (%d+ / %d-).\nIndeterminate excluded: %d.",
-  nrow(df_saa2), sum(df_saa2$saa_local_pos=="Positive"), sum(df_saa2$saa_local_pos=="Negative"),
-  nrow(df_both), sum(df_both$saa_any_pos=="Positive"), sum(df_both$saa_any_pos=="Negative"),
-  n_indet))
+cat(sprintf("Sant Pau (SAA02): n = %d (%d SAA+ / %d SAA-). Indeterminate excluded: %d.",
+  nrow(df_saa2), sum(df_saa2$saa_local_pos == "Positive"),
+  sum(df_saa2$saa_local_pos == "Negative"), n_indet))
 ```
 
 # Clinical demographics
@@ -632,7 +686,11 @@ LAB <- c(
   hypersomnia="Hypersomnia", neurolepticsens="Neuroleptic sensitivity",
   mayo_total_score="Mayo Fluctuations Scale", sppb_total_score="SPPB total",
   datscan_bin="DaT-SCAN abnormal", psg_rbd="PSG-confirmed RBD",
-  A_clean="Amyloid status", AT_profile="A/T profile", mta="MTA score", fazekas="Fazekas score")
+  A_clean="Amyloid status", AT_profile="A/T profile", mta="MTA score", fazekas="Fazekas score",
+  dlb_certainty="Diagnosis", gds_fast="GDS-FAST stage", mibg="MIBG abnormal",
+  rbd_any="RBD (clinical or PSG)", rbd_both="RBD (clinical and PSG)",
+  park_dat_any="Parkinsonism or abnormal DaT", park_dat_both="Parkinsonism and abnormal DaT",
+  n_indicative="Indicative biomarkers (0-3)", n_core_plus="Core + biomarkers (0-7)")
 
 lab_list <- function(v) setNames(as.list(unname(LAB[v])), v) %>%
   { imap(., function(l, n) as.formula(paste0("`", n, "` ~ '", l, "'"))) } %>% unname()
@@ -641,6 +699,8 @@ build_clinical <- function(data, group_var) {
   blocks <- list(
     list(t="cat",  v=c("SEX","apoe4_carrier"),                      h="Demographics"),
     list(t="cont", v=c("age_at_sample","EDUC"),                      h="Demographics"),
+    list(t="cat",  v="dlb_certainty",                                h="Diagnosis"),
+    list(t="cont", v="gds_fast",                                     h="Diagnosis"),
     list(t="cont", v=c("puntuaciones","visuoespacialp","identificacionp","atencionp",
                        "lenguajep","abstraccionp","orientacionp","mis"),
                                                                      h="Cognition (MoCA)"),
@@ -654,7 +714,10 @@ build_clinical <- function(data, group_var) {
     list(t="cat",  v=c("hyposmia","dysautonomia","repeatedfalls","hypersomnia",
                        "neurolepticsens"),                           h="Supportive features"),
     list(t="cont", v=c("mayo_total_score","sppb_total_score"),        h="Scales"),
-    list(t="cat",  v=c("datscan_bin","psg_rbd","A_clean","AT_profile"), h="Biomarkers & imaging"),
+    list(t="cat",  v=c("datscan_bin","psg_rbd","mibg","A_clean","AT_profile"), h="Biomarkers & imaging"),
+    list(t="cat",  v=c("rbd_any","rbd_both","park_dat_any","park_dat_both"),
+                                                                     h="Combined categories"),
+    list(t="cont", v=c("n_indicative","n_core_plus"),                h="Combined counts"),
     list(t="cont", v=c("mta","fazekas"),                             h="Biomarkers & imaging"))
 
   built <- list(); heads <- character()
@@ -680,340 +743,125 @@ gtsave(gt_demo_saa2, file.path(results_path, "Clinical_SantPau.html"))
 gt_demo_saa2
 ```
 
-## Combined cohort (SAA01 + SAA02)
+# Cognitive progression (MMSE and MoCA)
 
-```{r tbl-both}
-gt_demo_both <- build_clinical(df_both, "saa_any_pos") %>%
-  format_gt_table() %>%
-  tab_source_note("Own-site (SAA02) result used where available, Munich (SAA01) otherwise. This cohort CONTAINS the Sant Pau cohort — the two tables are not independent.")
-gtsave(gt_demo_both, file.path(results_path, "Clinical_Combined.html"))
-gt_demo_both
+Longitudinal scores, so this uses **all** visits rather than the single row per
+subject the rest of the report is built on. MoCA comes from the REDCap visits,
+MMSE from the biofluids follow-ups.
+
+```{r progression-build}
+## Rebuild long-format score histories for the Sant Pau SAA cohort.
+saa_lookup <- df_saa2 %>% select(NHC, saa_local_pos, SEX, age_at_sample)
+
+## MoCA: one row per dated clinical visit
+moca_long <- clin %>%
+  transmute(NHC, date = visit_any, score = num_safe(puntuaciones), test = "MoCA") %>%
+  filter(!is.na(NHC), !is.na(date), !is.na(score), score >= 0, score <= 30)
+
+## MMSE: from the biofluids follow-ups; FUPDATE where present, else sample date
+mmse_long <- bio %>%
+  transmute(NHC,
+            date = coalesce(as_date_safe(if ("FUPDATE" %in% names(bio)) FUPDATE else NA),
+                            sample_d),
+            score = num_safe(if ("MMSE" %in% names(bio)) MMSE else NA),
+            test = "MMSE") %>%
+  filter(!is.na(NHC), !is.na(date), !is.na(score), score >= 0, score <= 30)
+
+long <- bind_rows(moca_long, mmse_long) %>%
+  distinct(NHC, test, date, .keep_all = TRUE) %>%
+  inner_join(saa_lookup, by = "NHC") %>%
+  group_by(NHC, test) %>%
+  arrange(date, .by_group = TRUE) %>%
+  mutate(t_years = as.numeric(date - min(date)) / 365.25,
+         n_obs = dplyr::n(),
+         span = max(t_years)) %>%
+  ungroup()
+
+avail <- long %>% group_by(test) %>%
+  summarise(subjects = n_distinct(NHC),
+            `with >=2 visits` = n_distinct(NHC[n_obs >= 2]),
+            `SAA+ with >=2` = n_distinct(NHC[n_obs >= 2 & saa_local_pos == "Positive"]),
+            `SAA- with >=2` = n_distinct(NHC[n_obs >= 2 & saa_local_pos == "Negative"]),
+            `median visits` = median(n_obs),
+            `median follow-up (y)` = round(median(span[n_obs >= 2]), 2),
+            .groups = "drop")
+kable(avail, caption = "Longitudinal data available in the Sant Pau SAA cohort.") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
 ```
 
-# Biofluid biomarkers
+```{r progression-model}
+## Two estimates, because neither alone is convincing at this size:
+## a per-subject slope (simple, robust, uses only subjects with >=2 visits) and
+## a mixed model (uses everyone, borrows strength, needs lme4).
+prog_slopes <- long %>% filter(n_obs >= 2) %>%
+  group_by(NHC, test, saa_local_pos) %>%
+  summarise(slope = tryCatch(unname(coef(lm(score ~ t_years))[2]),
+                             error = function(e) NA_real_),
+            .groups = "drop") %>%
+  filter(is.finite(slope))
 
-```{r analyte-panel}
-PANEL <- list(
-  `CSF core AD` = c(CSF_ABRATIO="Aβ42/40 ratio", CSF_ABETA42_E0100="Aβ42",
-                    CSF_ABETA40_E0350="Aβ40", CSF_PTAU181_E0100="p-tau181",
-                    CSF_TTAU_A0010="t-tau"),
-  `CSF glial / synaptic` = c(CSF_NFL_E0600="NfL", CSF_GFAP_S0120="GFAP",
-                    CSF_YKL40_E0500="YKL-40", CSF_STREM2_E2100="sTREM2",
-                    CSF_SNAP25_S0500="SNAP-25", CSF_NPTX2_E0050="NPTX2",
-                    CSF_TOTALTDP43_E0710="Total TDP-43"),
-  `Plasma` = c(PLASMA_AB42_AB40_RATIO_H0010="Aβ42/40 ratio",
-                    PLASMA_PTAU217_S0217="p-tau217 (S0217)",
-                    PLASMA_PTAU217_H0010="p-tau217 (H0010)",
-                    PLASMA_GFAP_S0120="GFAP", PLASMA_NFLIGHT_S0100="NfL"))
-
-## Coverage gate: drop assays without MIN_PER_GROUP observations in BOTH groups.
-coverage_ok <- function(data, v, group_var) {
-  if (!has_col(data, v)) return(FALSE)
-  x <- num_safe(data[[v]]); g <- data[[group_var]]
-  all(tapply(!is.na(x), g, sum, default = 0) >= MIN_PER_GROUP)
-}
-
-build_analytes <- function(data, group_var) {
-  built <- list(); heads <- character()
-  for (pn in names(PANEL)) {
-    vs <- names(PANEL[[pn]])
-    vs <- vs[vapply(vs, coverage_ok, logical(1), data = data, group_var = group_var)]
-    if (!length(vs)) next
-    dd <- data %>% mutate(across(all_of(vs), num_safe))
-    labs <- setNames(as.list(unname(PANEL[[pn]][vs])), vs) %>%
-      imap(function(l, n) as.formula(paste0("`", n, "` ~ '", l, "'"))) %>% unname()
-    tb <- dd %>% select(all_of(vs), all_of(group_var)) %>%
-      tbl_summary(by = all_of(group_var), missing = "no",
-                  type = list(everything() ~ "continuous"),
-                  label = labs,
-                  statistic = list(everything() ~ "{median} [{p25}, {p75}]")) %>%
-      add_n() %>%
-      add_p(test = everything() ~ "wilcox.test",
-            pvalue_fun = ~ style_pvalue(.x, digits = 3)) %>%
-      add_stat(fns = everything() ~ fn_smd) %>%
-      modify_header(add_stat_1 = "**SMD**")
-    built <- c(built, list(tb)); heads <- c(heads, pn)
-  }
-  if (!length(built)) return(NULL)
-  tbl_stack(built, group_header = heads) %>%
-    bold_p(t = 0.05) %>%
-    modify_header(label ~ "**Biomarker**") %>% bold_labels()
-}
-```
-
-```{r analyte-tables}
-gt_analy_saa2 <- build_analytes(df_saa2, "saa_local_pos")
-if (!is.null(gt_analy_saa2)) {
-  gt_analy_saa2 <- gt_analy_saa2 %>% format_gt_table() %>%
-    tab_source_note(sprintf("Assays with <%d observations per group are omitted. q = Benjamini-Hochberg across the whole panel.", MIN_PER_GROUP))
-  gtsave(gt_analy_saa2, file.path(results_path, "Analytical_SantPau.html"))
-}
-gt_analy_saa2
-```
-
-```{r analyte-tables-both}
-gt_analy_both <- build_analytes(df_both, "saa_any_pos")
-if (!is.null(gt_analy_both)) {
-  gt_analy_both <- gt_analy_both %>% format_gt_table()
-  gtsave(gt_analy_both, file.path(results_path, "Analytical_Combined.html"))
-}
-gt_analy_both
-```
-
-```{r panel-fdr}
-## FDR across the whole biomarker panel, computed independently of gtsummary
-## (add_q is not available on stacked tables in every version).
-panel_vars <- unlist(lapply(PANEL, names), use.names = FALSE)
-panel_fdr <- map_dfr(panel_vars, function(v) {
-  if (!has_col(df_both, v)) return(NULL)
-  x <- num_safe(df_both[[v]]); g <- df_both$saa_any_pos
-  ok <- !is.na(x) & !is.na(g)
-  n1 <- sum(ok & g == "Positive"); n0 <- sum(ok & g == "Negative")
-  if (n1 < MIN_PER_GROUP || n0 < MIN_PER_GROUP) return(NULL)
-  w <- suppressWarnings(wilcox.test(x[g == "Positive"], x[g == "Negative"],
-                                    exact = FALSE))
-  tibble(Biomarker = v, n_pos = n1, n_neg = n0,
-         SMD = round(smd_value(x, g), 3), p = w$p.value)
-})
-if (nrow(panel_fdr)) {
-  panel_fdr <- panel_fdr %>% mutate(q_BH = p.adjust(p, "BH"),
-                                    p = signif(p, 3), q_BH = signif(q_BH, 3)) %>%
-    arrange(p)
-  write.csv(panel_fdr, file.path(results_path, "Biomarker_panel_FDR.csv"),
-            row.names = FALSE)
-  kable(panel_fdr, caption = sprintf(paste(
-    "Combined cohort, %d panel biomarkers with adequate coverage. This panel is",
-    "exploratory and direction-led, so the raw p is the operative column;",
-    "q_BH is shown for reference, not as a gate."), nrow(panel_fdr))) %>%
+if (nrow(prog_slopes)) {
+  slope_tab <- prog_slopes %>% group_by(test, saa_local_pos) %>%
+    summarise(n = dplyr::n(),
+              `median slope (pts/y)` = round(median(slope), 2),
+              IQR = sprintf("[%.2f, %.2f]", quantile(slope, .25), quantile(slope, .75)),
+              .groups = "drop")
+  slope_p <- prog_slopes %>% group_by(test) %>%
+    summarise(p = tryCatch(signif(wilcox.test(slope ~ saa_local_pos,
+                                              exact = FALSE)$p.value, 3),
+                           error = function(e) NA_real_),
+              SMD = round(smd_value(slope, saa_local_pos), 2), .groups = "drop")
+  kable(left_join(slope_tab, slope_p, by = "test"),
+        caption = paste("Per-subject annual change. Negative = decline.",
+                        "Only subjects with at least two timepoints.")) %>%
     kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-} else cat("No panel biomarker reaches the coverage threshold.")
+  write.csv(prog_slopes, file.path(results_path, "Progression_slopes.csv"),
+            row.names = FALSE)
+} else cat("No subject has two or more timepoints for either test.")
 ```
 
-```{r gfap-plot, fig.width=6.5, fig.height=4}
-## GFAP was the strongest signal in the previous run; shown on a log axis with
-## the individual points, because a mean (SD) hides how few subjects drive it.
-if (has_col(df_both, "CSF_GFAP_S0120")) {
-  gd <- df_both %>% mutate(v = num_safe(CSF_GFAP_S0120)) %>% filter(!is.na(v))
-  if (nrow(gd) >= 6)
-    print(ggplot(gd, aes(saa_any_pos, v, fill = saa_any_pos)) +
-      geom_boxplot(width = .45, outlier.shape = NA, alpha = .6) +
-      geom_jitter(width = .12, size = 1.8, alpha = .75) +
-      scale_y_log10() +
-      scale_fill_manual(values = c(Negative = "#E69F00", Positive = "#56B4E9")) +
-      labs(title = "CSF GFAP by SAA status", x = NULL,
-           y = "CSF GFAP (log scale)",
-           subtitle = sprintf("n = %d (%d negative, %d positive)", nrow(gd),
-                              sum(gd$saa_any_pos == "Negative"),
-                              sum(gd$saa_any_pos == "Positive"))) +
-      theme(legend.position = "none"))
-}
-```
-
-# Is the GFAP difference amyloid-mediated?
-
-**Direction check first.** In this cohort CSF GFAP is *higher in SAA-positive*
-(19,367 vs 10,824 pg/mL, p = 0.047), not in SAA-negative. MTA runs the other
-way (2.0 in SAA-negative vs 1.0 in SAA-positive). The two therefore do not
-share an AD-driven explanation — they point in opposite directions.
-
-Mediation still needs amyloid to differ by SAA status. It does not (A+ 47% vs
-54%, p = 0.56), so the indirect effect has nothing to work with. The tables
-below report the mediator path first for that reason.
-
-```{r mediation}
-MED_BOOT <- 2000
-
-med_one <- function(dat, outcome, mediator, covars = c("age_at_sample", "SEX"),
-                    log_outcome = TRUE, R = MED_BOOT) {
-  need <- c(outcome, mediator, "saa_any_pos", covars)
-  need <- need[need %in% names(dat)]
-  if (!all(c(outcome, mediator, "saa_any_pos") %in% need)) return(NULL)
-
-  d <- dat %>% select(all_of(need)) %>%
-    mutate(.y = num_safe(.data[[outcome]]),
-           .x = factor(saa_any_pos, levels = c("Negative", "Positive")),
-           .m = if (is.factor(.data[[mediator]]) || is.character(.data[[mediator]]))
-                  as.numeric(factor(.data[[mediator]])) - 1
-                else num_safe(.data[[mediator]])) %>%
-    select(.y, .x, .m, all_of(intersect(covars, need))) %>%
-    drop_na() %>% droplevels()
-
-  if (log_outcome && all(d$.y > 0)) d$.y <- log(d$.y)
-  if (nrow(d) < 12 || n_distinct(d$.x) < 2 || n_distinct(d$.m) < 2) return(NULL)
-
-  cv <- intersect(covars, names(d))
-  cv <- cv[vapply(cv, function(cc) {
-    v <- d[[cc]]
-    if (is.factor(v) || is.character(v)) length(unique(v[!is.na(v)])) >= 2
-    else { vv <- suppressWarnings(stats::var(as.numeric(v), na.rm = TRUE))
-           is.finite(vv) && vv > 0 }
-  }, logical(1))]
-  cvs <- if (length(cv)) paste0(" + `", paste(cv, collapse = "` + `"), "`") else ""
-
-  est <- function(dd) {
-    mt <- lm(as.formula(paste0(".y ~ .x", cvs)), data = dd)
-    md <- lm(as.formula(paste0(".y ~ .x + .m", cvs)), data = dd)
-    ma <- lm(as.formula(paste0(".m ~ .x", cvs)), data = dd)
-    cf <- function(m, nm) { k <- coef(m); if (nm %in% names(k)) unname(k[nm]) else NA_real_ }
-    tot <- cf(mt, ".xPositive"); dir <- cf(md, ".xPositive")
-    c(total = tot, direct = dir, indirect = tot - dir,
-      a = cf(ma, ".xPositive"), b = cf(md, ".m"),
-      prop = if (is.na(tot) || abs(tot) < 1e-8) NA_real_ else (tot - dir) / tot)
-  }
-  obs <- est(d)
-  bs <- replicate(R, {
-    o <- try(est(d[sample(nrow(d), replace = TRUE), ]), silent = TRUE)
-    if (inherits(o, "try-error")) rep(NA_real_, 6) else o
-  })
-  ci <- function(k) {
-    v <- bs[k, ]; v <- v[is.finite(v)]
-    if (length(v) < 50) c(NA_real_, NA_real_) else unname(quantile(v, c(.025, .975)))
-  }
-  ai <- ci("a"); ii <- ci("indirect")
-
-  ## p for the a-path, from the same model
-  pa <- tryCatch({
-    ma <- lm(as.formula(paste0(".m ~ .x", cvs)), data = d)
-    summary(ma)$coefficients[".xPositive", "Pr(>|t|)"] }, error = function(e) NA_real_)
-  pt <- tryCatch({
-    mt <- lm(as.formula(paste0(".y ~ .x", cvs)), data = d)
-    summary(mt)$coefficients[".xPositive", "Pr(>|t|)"] }, error = function(e) NA_real_)
-
-  tibble(Outcome = outcome, Mediator = mediator, n = nrow(d),
-         n_pos = sum(d$.x == "Positive"),
-         a_path = obs["a"], a_p = pa,
-         a_CI = sprintf("[%.2f, %.2f]", ai[1], ai[2]),
-         total = obs["total"], total_p = pt,
-         direct = obs["direct"], indirect = obs["indirect"],
-         indirect_CI = sprintf("[%.2f, %.2f]", ii[1], ii[2]),
-         prop_mediated = obs["prop"],
-         logged = log_outcome && all(dat[[outcome]] > 0, na.rm = TRUE))
-}
-
-MED_OUTCOMES <- c(CSF_GFAP_S0120 = TRUE, PLASMA_GFAP_S0120 = TRUE, mta = FALSE)
-MED_MEDIATORS <- c("A_clean", "CSF_ABRATIO", "CSF_PTAU181_E0100")
-
-med_res <- map_dfr(names(MED_OUTCOMES), function(o)
-  map_dfr(MED_MEDIATORS, function(m)
-    med_one(df_both, o, m, log_outcome = unname(MED_OUTCOMES[o]))))
-
-if (!nrow(med_res)) {
-  cat("No outcome/mediator pair had enough complete data to model.")
+```{r progression-lmm}
+if (!requireNamespace("lme4", quietly = TRUE)) {
+  cat("lme4 is not installed, so the mixed model is skipped.",
+      "install.packages('lme4') to enable it.")
 } else {
-  write.csv(med_res, file.path(results_path, "Mediation_amyloid_GFAP.csv"),
-            row.names = FALSE)
-  med_res %>%
-    transmute(Outcome, Mediator, n,
-              `a: mediator ~ SAA` = sprintf("%.2f (p=%.3f)", a_path, a_p),
-              `c: total` = sprintf("%.2f (p=%.3f)", total, total_p),
-              `c-prime: direct` = sprintf("%.2f", direct),
-              `indirect (95% CI)` = sprintf("%.2f %s", indirect, indirect_CI),
-              `% mediated` = ifelse(is.na(prop_mediated), "—",
-                                    sprintf("%.0f%%", 100 * prop_mediated))) %>%
-    kable(caption = paste("Amyloid as a mediator of the SAA-GFAP and SAA-MTA",
-      "associations. Coefficients are for SAA-positive vs negative, so a",
-      "negative total means higher in SAA-negative. If the a-path is null the",
-      "indirect effect cannot be interpreted, whatever it estimates.")) %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
-                  font_size = 11)
-}
-```
-
-```{r mediation-strata}
-## The same question asked without a mediation model: does the GFAP difference
-## exist inside each amyloid stratum? If it lives only in A+, it is amyloid
-## dependent; if it is present in both, it is not.
-strat <- map_dfr(c("CSF_GFAP_S0120", "PLASMA_GFAP_S0120", "mta"), function(o) {
-  if (!has_col(df_both, o) || !has_col(df_both, "A_clean")) return(NULL)
-  map_dfr(levels(df_both$A_clean), function(lv) {
-    d <- df_both %>% filter(A_clean == lv) %>%
-      mutate(v = num_safe(.data[[o]])) %>% filter(!is.na(v), !is.na(saa_any_pos))
-    n1 <- sum(d$saa_any_pos == "Positive"); n0 <- sum(d$saa_any_pos == "Negative")
-    if (n1 < 3 || n0 < 3) return(tibble(Outcome = o, Amyloid = lv,
-      n_pos = n1, n_neg = n0, median_pos = NA_real_, median_neg = NA_real_,
-      SMD = NA_real_, p = NA_real_))
-    a <- d$v[d$saa_any_pos == "Positive"]; b <- d$v[d$saa_any_pos == "Negative"]
-    tibble(Outcome = o, Amyloid = lv, n_pos = n1, n_neg = n0,
-           median_pos = signif(median(a), 4), median_neg = signif(median(b), 4),
-           SMD = round(smd_value(d$v, d$saa_any_pos), 2),
-           p = signif(suppressWarnings(wilcox.test(a, b, exact = FALSE))$p.value, 3))
+  lmm_res <- map_dfr(unique(long$test), function(tt) {
+    d <- long %>% filter(test == tt) %>% drop_na(score, t_years, saa_local_pos,
+                                                 SEX, age_at_sample)
+    if (n_distinct(d$NHC) < 10 || sum(d$n_obs >= 2) < 6) return(NULL)
+    m <- try(lme4::lmer(score ~ t_years * saa_local_pos + age_at_sample + SEX +
+                          (1 | NHC), data = d, REML = TRUE), silent = TRUE)
+    if (inherits(m, "try-error")) return(NULL)
+    sm <- summary(m)$coefficients
+    rn <- grep("^t_years:saa_local_pos", rownames(sm), value = TRUE)[1]
+    if (is.na(rn)) return(NULL)
+    tibble(Test = tt, subjects = n_distinct(d$NHC), observations = nrow(d),
+           `slope difference (pts/y)` = round(unname(sm[rn, "Estimate"]), 3),
+           SE = round(unname(sm[rn, "Std. Error"]), 3),
+           t = round(unname(sm[rn, "t value"]), 2))
   })
-})
-if (nrow(strat)) {
-  write.csv(strat, file.path(results_path, "Mediation_stratified_by_amyloid.csv"),
-            row.names = FALSE)
-  kable(strat, caption = paste("SAA+ vs SAA- within each amyloid stratum.",
-    "A difference confined to A+ supports amyloid dependence; one present in",
-    "both argues against it.")) %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-} else cat("Amyloid status is unavailable — check the A/T recoding table in section 2.")
-```
-
-```{r mediation-interaction}
-## Formal test of whether the SAA effect on GFAP depends on amyloid status.
-int_res <- map_dfr(c("CSF_GFAP_S0120", "PLASMA_GFAP_S0120", "mta"), function(o) {
-  if (!has_col(df_both, o) || !has_col(df_both, "A_clean")) return(NULL)
-  d <- df_both %>%
-    mutate(v = num_safe(.data[[o]])) %>%
-    select(v, saa_any_pos, A_clean, age_at_sample, SEX) %>% drop_na() %>% droplevels()
-  if (nrow(d) < 16 || n_distinct(d$A_clean) < 2 || n_distinct(d$saa_any_pos) < 2)
-    return(NULL)
-  if (all(d$v > 0) && o != "mta") d$v <- log(d$v)
-  m <- try(lm(v ~ saa_any_pos * A_clean + age_at_sample + SEX, data = d), silent = TRUE)
-  if (inherits(m, "try-error")) return(NULL)
-  sm <- summary(m)$coefficients
-  rn <- grep(":", rownames(sm), value = TRUE)[1]
-  if (is.na(rn)) return(NULL)
-  tibble(Outcome = o, n = nrow(d),
-         `SAA x amyloid` = round(unname(sm[rn, "Estimate"]), 3),
-         p = signif(unname(sm[rn, "Pr(>|t|)"]), 3))
-})
-if (nrow(int_res))
-  kable(int_res, caption = paste("Interaction between SAA status and amyloid.",
-    "A significant term means the SAA effect differs by amyloid status;",
-    "a null term at this sample size is uninformative, not reassuring.")) %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-```
-
-# AD co-pathology within SAA-positive subjects
-
-```{r synergy}
-## The original stratified SAA+ subjects by median plasma p-tau217 and then
-## tested plasma p-tau217 as an outcome -- circular by construction. It is kept
-## here only as a labelled manipulation check, and every cell reports n.
-saa_pos <- analytic_df %>%
-  filter(saa_any_pos == "Positive", !is.na(num_safe(PLASMA_PTAU217_S0217))) %>%
-  mutate(p217 = num_safe(PLASMA_PTAU217_S0217),
-         ad_copath_group = factor(ifelse(p217 > median(p217, na.rm = TRUE),
-                                         "High p-tau217", "Low p-tau217"),
-                                  levels = c("Low p-tau217", "High p-tau217")))
-
-if (nrow(saa_pos) >= 2 * MIN_PER_GROUP) {
-  syn_vars <- keep_usable(saa_pos %>% mutate(across(any_of(
-      c("CSF_GFAP_S0120","PLASMA_GFAP_S0120","CSF_NFL_E0600",
-        "PLASMA_NFLIGHT_S0100")), num_safe)),
-      c("CSF_GFAP_S0120","PLASMA_GFAP_S0120","CSF_NFL_E0600","PLASMA_NFLIGHT_S0100",
-        "puntuaciones","total_updrs","age_at_sample"), min_n = 2 * MIN_PER_GROUP)
-  if (length(syn_vars)) {
-    gt_synergy <- saa_pos %>%
-      mutate(across(any_of(syn_vars), num_safe)) %>%
-      select(all_of(syn_vars), ad_copath_group) %>%
-      tbl_summary(by = ad_copath_group, missing = "no",
-                  type = list(everything() ~ "continuous"),
-                  statistic = list(everything() ~ "{median} [{p25}, {p75}]")) %>%
-      add_n() %>% add_p(test = everything() ~ "wilcox.test") %>%
-      add_q(method = "BH") %>% bold_p(t = 0.05) %>%
-      modify_header(label ~ "**Metric**") %>% bold_labels() %>%
-      as_gt() %>%
-      tab_header(title = md("**SAA-positive subjects stratified by plasma p-tau217**"),
-                 subtitle = sprintf("Median split, n = %d. Exploratory.", nrow(saa_pos)))
-    gtsave(gt_synergy, file.path(results_path, "Synergy_SAA_Positive.html"))
-    gt_synergy
-  } else cat("No variable reaches the minimum n for this stratification.")
-} else {
-  cat(sprintf("Only %d SAA-positive subjects have plasma p-tau217 — too few to stratify (need %d).",
-              nrow(saa_pos), 2 * MIN_PER_GROUP))
+  if (nrow(lmm_res))
+    kable(lmm_res, caption = paste("Mixed model, score ~ time x SAA + age + sex",
+      "+ (1|subject). The term shown is the difference in slope, SAA+ minus",
+      "SAA-. |t| > 2 is roughly p < 0.05.")) %>%
+      kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+  else cat("Not enough longitudinal data to fit the mixed model.")
 }
+```
+
+```{r progression-plot, fig.width=9, fig.height=4}
+pd <- long %>% filter(n_obs >= 2)
+if (nrow(pd) >= 10) {
+  ggplot(pd, aes(t_years, score, group = NHC, colour = saa_local_pos)) +
+    geom_line(alpha = .45) + geom_point(size = 1.2, alpha = .7) +
+    geom_smooth(aes(group = saa_local_pos), method = "lm", formula = y ~ x,
+                se = TRUE, linewidth = 1.2) +
+    facet_wrap(~ test, scales = "free_y") +
+    scale_colour_manual(values = c(Negative = "#E69F00", Positive = "#56B4E9")) +
+    labs(x = "Years from first assessment", y = "Score", colour = "SAA",
+         title = "Cognitive trajectories by SAA status") +
+    theme(legend.position = "bottom")
+} else cat("Too few repeated assessments to plot.")
 ```
 
 # UPDRS III and physical performance (SPPB)
@@ -1031,9 +879,9 @@ cor_one <- function(dat, lab) {
          p = signif(sp$p.value, 3), Pearson_r = round(unname(pe$estimate), 3))
 }
 cor_res <- bind_rows(
-  cor_one(df_both %>% filter(saa_any_pos == "Positive"), "SAA positive"),
-  cor_one(df_both %>% filter(saa_any_pos == "Negative"), "SAA negative"),
-  cor_one(df_both, "All (combined)"),
+  cor_one(df_saa2 %>% filter(saa_local_pos == "Positive"), "SAA positive"),
+  cor_one(df_saa2 %>% filter(saa_local_pos == "Negative"), "SAA negative"),
+  cor_one(df_saa2, "All (combined)"),
   cor_one(df_saa2, "All (Sant Pau)"))
 
 a <- cor_res[1,]; b <- cor_res[2,]
@@ -1048,11 +896,11 @@ write.csv(cor_res, file.path(results_path, "Correlation_UPDRS_SPPB.csv"), row.na
 ```
 
 ```{r updrs-sppb-plot, fig.width=7.5, fig.height=5}
-pd <- df_both %>%
+pd <- df_saa2 %>%
   mutate(u = num_safe(updrs3_total_score), s = num_safe(sppb_total_score)) %>%
   filter(!is.na(u), !is.na(s))
 if (nrow(pd) >= 5) {
-  ggplot(pd, aes(u, s, colour = saa_any_pos)) +
+  ggplot(pd, aes(u, s, colour = saa_local_pos)) +
     geom_point(alpha = .75, size = 2.6) +
     geom_smooth(method = "lm", se = TRUE, formula = y ~ x) +
     scale_colour_manual(values = c(Negative = "#E69F00", Positive = "#56B4E9")) +
@@ -1077,10 +925,10 @@ mri_avail <- analytic_df %>%
             `With MTA score`  = sum(!is.na(num_safe(mta))),
             `With Fazekas`    = sum(!is.na(num_safe(fazekas))))
 
-mri_by_grp <- df_both %>%
+mri_by_grp <- df_saa2 %>%
   mutate(has_mri = ifelse(!is.na(as_date_safe(mridate)) | !is.na(num_safe(mta)) |
                           !is.na(num_safe(fazekas)), "MRI available", "No MRI")) %>%
-  count(saa_any_pos, has_mri) %>%
+  count(saa_local_pos, has_mri) %>%
   pivot_wider(names_from = has_mri, values_from = n, values_fill = 0)
 
 kable(t(mri_avail), col.names = "n", caption = "MRI availability, all merged subjects") %>%
@@ -1138,913 +986,29 @@ if (nrow(disc)) {
 } else cat("No discordant pairs.")
 ```
 
-# Exploratory analyte screen
-
-```{r analyte-screen}
-## Hypothesis-generating scan across every CSF/plasma/serum assay with adequate
-## coverage, rather than a hand-picked panel.
-cand <- grep("^(CSF_|PLASMA_|SERUM_)", names(analytic_df), value = TRUE)
-cand <- cand[!grepl("ALPHASYN|SAA[0-9]|PROTEOMICS|METABOLOMICS|SAMPLECODE|STOCK|VOLUME|PROTOCOL|SAMPLETIME|CHRONOLOGY", cand)]
-
-screen_one <- function(cc, dat, gv) {
-  v <- num_safe(dat[[cc]]); g <- dat[[gv]]
-  ok <- !is.na(v) & !is.na(g); v <- v[ok]; g <- droplevels(factor(g[ok]))
-  if (nlevels(g) != 2) return(NULL)
-  n1 <- sum(g == "Positive"); n0 <- sum(g == "Negative")
-  if (n1 < MIN_PER_GROUP || n0 < MIN_PER_GROUP) return(NULL)
-  a <- v[g == "Positive"]; b <- v[g == "Negative"]
-  w <- suppressWarnings(wilcox.test(a, b, exact = FALSE))
-  U <- unname(w$statistic); auc <- U / (n1 * n0)
-  tibble(Analyte = cc, n_pos = n1, n_neg = n0,
-         median_pos = signif(median(a), 4), median_neg = signif(median(b), 4),
-         fold_change = if (median(b) != 0) signif(median(a)/median(b), 3) else NA,
-         rank_biserial = round(2*U/(n1*n0) - 1, 3),
-         AUC = round(max(auc, 1-auc), 3),
-         Direction = ifelse(auc >= .5, "higher in SAA+", "higher in SAA−"),
-         p = w$p.value)
-}
-
-screen <- map_dfr(cand, screen_one, dat = df_both, gv = "saa_any_pos")
-if (nrow(screen)) {
-  screen <- screen %>% mutate(q_BH = p.adjust(p, "BH"),
-                              p = signif(p, 4), q_BH = signif(q_BH, 4)) %>%
-    arrange(p)
-  write.csv(screen, file.path(results_path, "Analyte_screen.csv"), row.names = FALSE)
-  kable(head(screen, 20),
-        caption = sprintf("Top 20 of %d analytes tested (≥%d per group). Exploratory: no adjustment for age, sex, APOE or batch.",
-                          nrow(screen), MIN_PER_GROUP)) %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
-                  font_size = 11)
-} else cat(sprintf("No analyte reaches %d observations per group.", MIN_PER_GROUP))
-```
-
-
-# Imaging
-
-## Design
-
-
-~80 bilateral grey-matter regions and as many white-matter regions against a few
-dozen scans: a whole-atlas scan cannot carry the inference. A small pre-specified
-family does; everything wider is exploratory. Image quality is screened and the
-detectable effect size is stated up front.
-
-Four levels, narrow to wide:
-
-1. **Primary — nigrostriatal family (5 GM regions).** Substantia nigra, putamen,
-   caudate, pallidum, accumbens. This is the a priori target for α-synuclein
-   seeding pathology. BH-FDR over 5.
-2. **Secondary — medial temporal family (3 GM regions).** Hippocampus, amygdala,
-   parahippocampal/ambient gyrus. Tests the classic DLB prediction of *relative
-   preservation* rather than atrophy. BH-FDR over 3.
-3. **Anatomical composites.** Lobar and system-level means. BH-FDR over the set.
-4. **Whole-atlas exploratory scan**, grey and white matter separately, BH-FDR
-   within each.
-
-Plus global tissue volumes and a left-right asymmetry analysis of the
-nigrostriatal family, which bilateral means cannot show.
-
-Model: `lm(volume_z ~ SAA + sex + age + TIV)`, volumes z-scored within the sample
-so thalamus (~7 mL) and substantia nigra (~0.5 mL) share a comparable beta.
-
-
-## Atlas and scan data
-
-```{r cat12-check, results='asis'}
-if (!have_cat12)
-  cat("> **CAT12_Hammers_DK_SPIN.xlsx was not found in the SAA folder — ",
-      "the whole imaging section is skipped.**\n")
-```
-
-```{r cat12-load, eval=have_cat12}
-## The Hammers atlas file. Helpers (num_safe, norm_id, as_date_safe, read_x,
-## tidy_names) are the ones defined in section 1 -- no duplicates.
-cat12 <- read_x(f_cat12) %>% tidy_names()
-cat12$NHC        <- norm_id(cat12$NHC)
-cat12$MRI_DATE_D <- as_date_safe(cat12$MRI_DATE)
-```
-
-```{r atlas-dictionary, eval=have_cat12}
-## ---------------------------------------------------------------------------
-## Parse the Hammers column names into (tissue, region, hemisphere).
-##   MRI_hammers_Vgm_TL.hippocampus.L  ->  gm / TL.hippocampus / L
-##   MRI_hammers_Vgm_brainstem...      ->  gm / brainstem... / unpaired
-## ---------------------------------------------------------------------------
-parse_hammers <- function(nms) {
-  keep <- grep("^MRI_hammers_V(gm|wm)_", nms, value = TRUE)
-  tibble(column = keep) %>%
-    mutate(tissue = ifelse(grepl("_Vgm_", column), "GM", "WM"),
-           stem   = sub("^MRI_hammers_V(gm|wm)_", "", column),
-           hemi   = case_when(grepl("\\.L$", stem) ~ "L",
-                              grepl("\\.R$", stem) ~ "R",
-                              TRUE ~ "U"),
-           region = sub("\\.[LR]$", "", stem))
-}
-atlas <- parse_hammers(names(cat12))
-
-## Structures whose ROI label carries no meaningful tissue volume:
-## ventricles are CSF (their "Vgm" is partial-volume noise) and the corpus
-## callosum is white matter (its "Vgm" likewise).
-DROP_GM <- "ventricle|Third\\.ventricle|corpus\\.callosum"
-DROP_WM <- "ventricle|Third\\.ventricle"
-
-## Lobe / system assignment from the Hammers prefix codes.
-classify <- function(r) {
-  case_when(
-    grepl("^substantia\\.nigra", r)                        ~ "Brainstem/Nigra",
-    grepl("^brainstem", r)                                 ~ "Brainstem/Nigra",
-    grepl("^(caudate|putamen|pallidum|nucleus\\.accumbens)", r) ~ "Basal ganglia",
-    grepl("^thalamus", r)                                  ~ "Thalamus",
-    grepl("^cerebellum", r)                                ~ "Cerebellum",
-    grepl("^insula", r)                                    ~ "Insula",
-    grepl("^CG\\.", r)                                     ~ "Cingulate",
-    grepl("^TL\\.(hippocampus|amygdala|parahippocampal)", r) ~ "Medial temporal",
-    grepl("^TL\\.", r)                                     ~ "Temporal",
-    grepl("^FL\\.", r)                                     ~ "Frontal",
-    grepl("^PL\\.", r)                                     ~ "Parietal",
-    grepl("^OL\\.", r)                                     ~ "Occipital",
-    TRUE                                                   ~ "Other")
-}
-
-## Human-readable labels
-pretty_region <- function(r) {
-  r %>% gsub("^(TL|FL|PL|OL|CG)\\.", "", .) %>%
-    gsub("\\.", " ", .) %>%
-    gsub("\\bremainder\\b", "rem.", .) %>%
-    str_to_sentence()
-}
-
-region_dict <- atlas %>%
-  filter(hemi %in% c("L", "R", "U")) %>%
-  distinct(tissue, region) %>%
-  mutate(system = classify(region), label = pretty_region(region))
-
-kable(region_dict %>% filter(tissue == "GM") %>% count(system, name = "GM regions"),
-      caption = "Hammers regions available per system (grey matter).") %>%
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-```
-
-```{r build-bilateral, eval=have_cat12}
-## Bilateral mean. na.rm = FALSE deliberately: a single available hemisphere is
-## NOT a bilateral mean, and silently substituting it biases the comparison.
-build_volumes <- function(dat, tissue_code, drop_pat) {
-  a <- atlas %>% filter(tissue == tissue_code, !grepl(drop_pat, region))
-  regs <- unique(a$region)
-  if (!length(regs)) return(tibble(.rows = nrow(dat)))
-  out <- map_dfc(regs, function(r) {
-    cc <- a$column[a$region == r]
-    v <- if (length(cc) == 2)
-      rowMeans(cbind(num_safe(dat[[cc[1]]]), num_safe(dat[[cc[2]]])), na.rm = FALSE)
-    else num_safe(dat[[cc[1]]])
-    tibble(!!paste0(tolower(tissue_code), "_", r) := v)
-  })
-  out
-}
-vol_gm <- build_volumes(cat12, "GM", DROP_GM)
-vol_wm <- build_volumes(cat12, "WM", DROP_WM)
-
-## left/right kept separately for the asymmetry analysis
-lr_cols <- atlas %>% filter(tissue == "GM", hemi %in% c("L","R"),
-                            !grepl(DROP_GM, region))
-vol_lr <- if (nrow(lr_cols)) {
-  map_dfc(seq_len(nrow(lr_cols)), function(i)
-    tibble(!!paste0("lr_", lr_cols$region[i], "_", lr_cols$hemi[i]) :=
-             num_safe(cat12[[lr_cols$column[i]]])))
-} else {
-  tibble(.rows = nrow(cat12))
-}
-
-## Coerce only the numeric globals. MRI_Protocol is the scanner/sequence batch
-## label and must stay a character/factor -- an earlier version swept it up in a
-## starts_with("MRI_") coercion and turned it into all-NA.
-NUM_GLOBALS <- c("MRI_TIV", "MRI_GM_Tot", "MRI_WM", "MRI_CSF_Tot",
-                 "MRI_WMH_Tot", "MRI_IQR")
-## Asymmetry index per region, built here where the L/R pairing is explicit.
-vol_ai <- {
-  regs <- unique(lr_cols$region)
-  if (!length(regs)) tibble(.rows = nrow(cat12)) else
-    map_dfc(regs, function(r) {
-      cl <- lr_cols$column[lr_cols$region == r & lr_cols$hemi == "L"]
-      cr <- lr_cols$column[lr_cols$region == r & lr_cols$hemi == "R"]
-      v <- if (length(cl) == 1 && length(cr) == 1) {
-        L <- num_safe(cat12[[cl]]); R <- num_safe(cat12[[cr]])
-        (L - R) / ((L + R) / 2)
-      } else rep(NA_real_, nrow(cat12))
-      tibble(!!paste0("ai_", r) := v)
-    })
-}
-
-cat12_wide <- bind_cols(
-  cat12 %>% select(NHC, MRI_DATE_D, any_of(c("Session", "MRI_Protocol")),
-                   any_of(NUM_GLOBALS)) %>%
-    mutate(across(any_of(NUM_GLOBALS), num_safe),
-           batch = if ("MRI_Protocol" %in% names(.))
-                     as.character(MRI_Protocol) else NA_character_),
-  vol_gm, vol_wm, vol_lr, vol_ai)
-```
-
-```{r merge-imaging, eval=have_cat12}
-ja <- list(x = df_both %>% select(NHC, sample_d, saa_any_pos, SEX, age_at_sample),
-           y = cat12_wide, by = "NHC")
-if (utils::packageVersion("dplyr") >= "1.1.0") ja$relationship <- "many-to-many"
-
-img <- suppressWarnings(do.call(inner_join, ja)) %>%
-  mutate(mri_gap = abs(as.numeric(MRI_DATE_D - sample_d))) %>%
-  group_by(NHC) %>%
-  arrange(ifelse(is.na(mri_gap), Inf, mri_gap), .by_group = TRUE) %>%
-  slice(1) %>% ungroup()
-
-count_pos <- function(d) sum(d$saa_any_pos == "Positive", na.rm = TRUE)
-count_neg <- function(d) sum(d$saa_any_pos == "Negative", na.rm = TRUE)
-
-steps <- tibble(Step = "Subjects with SAA status and a CAT12 scan",
-                n = nrow(img), pos = count_pos(img), neg = count_neg(img))
-
-img <- img %>% filter(is.na(mri_gap) | mri_gap <= MAX_MRI_GAP)
-steps <- bind_rows(steps, tibble(
-  Step = sprintf("After MRI-sample interval <= %d days", MAX_MRI_GAP),
-  n = nrow(img), pos = count_pos(img), neg = count_neg(img)))
-
-img_all <- img                       # pre-QC set, kept for the quality histogram
-## CAT12 stores image quality either as a percentage (higher better, 0-100) or
-## as the native rating (lower better, ~0.5-10.5). Ratings convert to the
-## percentage grade with pct = 105 - 10 * rating.
-iqr_raw   <- num_safe(img$MRI_IQR)
-iqr_is_rating <- all(is.na(iqr_raw)) || max(iqr_raw, na.rm = TRUE) <= 11
-img$MRI_IQR_pct <- if (iqr_is_rating) 105 - 10 * iqr_raw else iqr_raw
-img_all$MRI_IQR_pct <- {
-  r <- num_safe(img_all$MRI_IQR)
-  if (iqr_is_rating) 105 - 10 * r else r
-}
-iqr_scale_note <- sprintf(
-  "CAT12 IQR read as %s (raw range %.2f-%.2f) -> quality %.1f%%-%.1f%%.",
-  if (iqr_is_rating) "the native rating, lower = better" else "a percentage, higher = better",
-  suppressWarnings(min(iqr_raw, na.rm = TRUE)), suppressWarnings(max(iqr_raw, na.rm = TRUE)),
-  suppressWarnings(min(img$MRI_IQR_pct, na.rm = TRUE)),
-  suppressWarnings(max(img$MRI_IQR_pct, na.rm = TRUE)))
-
-img <- img %>% filter(is.na(MRI_IQR_pct) | MRI_IQR_pct >= IQR_MIN)
-steps <- bind_rows(steps, tibble(
-  Step = sprintf("After CAT12 quality (rating <= %.1f, i.e. >= %d%%)",
-                 IQR_MAX_RATING, IQR_MIN),
-  n = nrow(img), pos = count_pos(img), neg = count_neg(img)))
-
-img$saa_any_pos <- factor(img$saa_any_pos, levels = c("Negative", "Positive"))
-
-## Everything downstream needs enough scans and both SAA groups present.
-imaging_ok <- nrow(img) >= MIN_N_MODEL &&
-              sum(img$saa_any_pos == "Positive", na.rm = TRUE) >= 3 &&
-              sum(img$saa_any_pos == "Negative", na.rm = TRUE) >= 3
-```
-
-## Quality control
-
-```{r imaging-gate, results='asis', eval=have_cat12}
-if (!imaging_ok)
-  cat(sprintf(paste0("> **The imaging models are skipped: %d scans remain ",
-      "(%d SAA-positive, %d SAA-negative), below the minimum of %d with at ",
-      "least 3 per group.** Check the quality-control table below — if the IQR ",
-      "step removed everything, inspect `iqr_scale_note`.\n"),
-      nrow(img), sum(img$saa_any_pos == "Positive", na.rm = TRUE),
-      sum(img$saa_any_pos == "Negative", na.rm = TRUE), MIN_N_MODEL))
-```
-
-```{r qc, eval=have_cat12}
-kable(steps %>% rename(`SAA positive` = pos, `SAA negative` = neg),
-      caption = "Imaging sample construction") %>%
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-
-cat(iqr_scale_note, "\n")
-cat(sprintf("MRI-sample interval: median %s d [IQR %s-%s], max %s d.\nScan quality: median %.1f%% [range %.1f-%.1f].",
-  round(median(img$mri_gap, na.rm = TRUE)),
-  round(quantile(img$mri_gap, .25, na.rm = TRUE)),
-  round(quantile(img$mri_gap, .75, na.rm = TRUE)),
-  round(max(img$mri_gap, na.rm = TRUE)),
-  median(img$MRI_IQR_pct, na.rm = TRUE), min(img$MRI_IQR_pct, na.rm = TRUE),
-  max(img$MRI_IQR_pct, na.rm = TRUE)))
-```
-
-```{r qc-plots, fig.width=9, fig.height=3.2, eval=have_cat12}
-p1 <- ggplot(img, aes(mri_gap)) +
-  geom_histogram(bins = 25, fill = "#4C72B0", colour = "white") +
-  labs(x = "|MRI date − sample date| (days)", y = "Scans", title = "Temporal offset")
-p2 <- ggplot(img_all, aes(MRI_IQR_pct, fill = MRI_IQR_pct >= IQR_MIN)) +
-  geom_histogram(bins = 25, colour = "white") +
-  geom_vline(xintercept = IQR_MIN, linetype = "dashed") +
-  scale_fill_manual(values = c("FALSE" = "#D55E00", "TRUE" = "#4C72B0"), guide = "none") +
-  labs(x = "CAT12 image quality (%, converted if stored as a rating)",
-       y = "Scans", title = "Scan quality")
-if (requireNamespace("patchwork", quietly = TRUE)) {
-  print(patchwork::wrap_plots(p1, p2, nrow = 1))
-} else { print(p1); print(p2) }
-```
-
-## Scanner / protocol harmonisation (ComBat)
-
-Scanner and sequence differences shift regional volumes independently of
-biology. ComBat removes those shifts while preserving the covariates named in
-its design — the SAA contrast, age, sex and TIV — so it cannot remove the effect
-under test. It needs enough scans per batch to be estimable; when it is not, the
-fallbacks are protocol as a covariate, or restriction to the dominant protocol.
-
-```{r combat-setup, eval=imaging_ok}
-COMBAT_MIN_BATCH <- 8     # minimum scans per protocol for ComBat
-COMBAT_MAX_LEVELS <- 4    # above this, protocol-as-covariate costs too much df
-DOMINANT_FRAC <- 0.80     # if one protocol holds this share and the rest are
-                          # unmodellable, restrict to it rather than give up
-
-img$batch <- if ("batch" %in% names(img)) {
-  b <- trimws(as.character(img$batch)); b[b %in% c("", "NA")] <- NA; b
-} else NA_character_
-
-batch_tab <- if (all(is.na(img$batch))) NULL else
-  table(Protocol = img$batch, SAA = img$saa_any_pos, useNA = "no")
-
-n_batch     <- if (is.null(batch_tab)) 0 else nrow(batch_tab)
-min_batch_n <- if (n_batch == 0) 0 else min(rowSums(batch_tab))
-confounded  <- n_batch > 0 && any(apply(batch_tab, 1, function(r) any(r == 0)))
-
-combat_pkg <- if (requireNamespace("neuroCombat", quietly = TRUE)) "neuroCombat" else
-              if (requireNamespace("sva", quietly = TRUE))        "sva" else NA_character_
-
-combat_ok  <- n_batch >= 2 && min_batch_n >= COMBAT_MIN_BATCH && !is.na(combat_pkg)
-covar_ok   <- !combat_ok && n_batch >= 2 && n_batch <= COMBAT_MAX_LEVELS && min_batch_n >= 3
-
-## When one protocol carries almost everything and the remainder are single
-## scans, neither ComBat nor a covariate can work — but discarding a handful of
-## scans removes the batch problem outright and costs little. That is a better
-## trade than carrying an unadjustable scanner effect through every model.
-dominant <- NA_character_; restrict_ok <- FALSE
-if (n_batch >= 2) {
-  bn <- rowSums(batch_tab)
-  top <- names(bn)[which.max(bn)]
-  if (max(bn) / sum(bn) >= DOMINANT_FRAC && all(batch_tab[top, ] >= 3) &&
-      !combat_ok && !covar_ok) {
-    dominant <- top; restrict_ok <- TRUE
-  }
-}
-
-if (!is.null(batch_tab)) {
-  print(kable(as.data.frame.matrix(batch_tab) %>%
-                tibble::rownames_to_column("Protocol"),
-        caption = "Scans per protocol by SAA status") %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")))
-}
-```
-
-```{r combat-decide, results='asis', eval=imaging_ok}
-cat(if (n_batch <= 1) {
-  "**One protocol only — no harmonisation needed.**\n"
-} else if (combat_ok) {
-  sprintf("**ComBat applied** via `%s` across %d protocols (smallest n = %d), protecting SAA status, sex, age and TIV.\n",
-          combat_pkg, n_batch, min_batch_n)
-} else if (covar_ok) {
-  sprintf("**ComBat not applied** — %s. Protocol is carried as a model covariate instead.\n",
-          if (is.na(combat_pkg))
-            "neither neuroCombat nor sva is installed (install one to enable it)"
-          else sprintf("the smallest protocol has %d scans, below the %d needed",
-                       min_batch_n, COMBAT_MIN_BATCH))
-} else if (restrict_ok) {
-  sprintf(paste0("**Restricted to the dominant protocol `%s`** (%d of %d scans). ",
-    "With %d protocols and the smallest holding %d scan(s), neither ComBat nor a ",
-    "protocol covariate can be estimated; dropping %d scan(s) removes the batch ",
-    "effect entirely. The full sample is retained as a sensitivity check.\n"),
-    dominant, sum(batch_tab[dominant, ]), sum(batch_tab), n_batch, min_batch_n,
-    sum(batch_tab) - sum(batch_tab[dominant, ]))
-} else {
-  sprintf("**Neither ComBat nor protocol adjustment is usable** (%d protocols, smallest n = %d). Scanner effects remain in the estimates and must be stated as a limitation.\n",
-          n_batch, min_batch_n)
-})
-if (confounded && !restrict_ok)
-  cat("\n> **Warning: at least one protocol contains only one SAA group.** ",
-      "Protocol and SAA status are partly confounded; no harmonisation can ",
-      "separate them, and the affected estimates should be treated as unsafe.\n")
-```
-
-```{r combat-apply, eval=imaging_ok}
-img_raw <- img          # pre-harmonisation, kept for the sensitivity comparison
-
-feature_cols <- grep("^(gm|wm)_", names(img), value = TRUE)
-
-if (combat_ok && length(feature_cols)) {
-  ok_rows <- !is.na(img$batch)
-  ## ComBat cannot take missing values; harmonise only complete features.
-  complete_feat <- feature_cols[vapply(feature_cols,
-    function(cc) all(is.finite(img[[cc]][ok_rows])), logical(1))]
-  dropped_feat <- setdiff(feature_cols, complete_feat)
-
-  ## Protected design: everything we do NOT want removed.
-  prot <- c("saa_any_pos", "SEX", "age_at_sample", "MRI_TIV")
-  prot <- prot[prot %in% names(img)]
-  mod_df <- droplevels(as.data.frame(img[ok_rows, prot, drop = FALSE]))
-  ## keep only terms that actually vary, or model.matrix hits the same
-  ## contrasts error that constant covariates cause in lm()
-  varies <- vapply(prot, function(cc) {
-    x <- mod_df[[cc]]
-    if (is.factor(x) || is.character(x)) length(unique(x[!is.na(x)])) >= 2
-    else { v <- suppressWarnings(stats::var(as.numeric(x), na.rm = TRUE))
-           is.finite(v) && v > 0 }
-  }, logical(1))
-  prot <- prot[varies]
-  stopifnot("saa_any_pos" %in% prot)   # never harmonise away the contrast
-  mod <- model.matrix(as.formula(paste("~", paste(prot, collapse = " + "))),
-                      data = mod_df)
-
-  dat <- t(as.matrix(img[ok_rows, complete_feat, drop = FALSE]))   # features x samples
-  bt  <- factor(img$batch[ok_rows])
-
-  harmonised <- try({
-    if (combat_pkg == "neuroCombat")
-      neuroCombat::neuroCombat(dat = dat, batch = bt, mod = mod)$dat.combat
-    else
-      sva::ComBat(dat = dat, batch = bt, mod = mod, par.prior = TRUE, prior.plots = FALSE)
-  }, silent = TRUE)
-
-  if (inherits(harmonised, "try-error")) {
-    combat_ok <- FALSE
-    message("ComBat failed: ", conditionMessage(attr(harmonised, "condition")))
-  } else {
-    hm <- t(harmonised)
-    for (k in seq_along(complete_feat))
-      img[[complete_feat[k]]][ok_rows] <- hm[, k]
-    cat(sprintf("ComBat harmonised %d of %d regional features across %d protocols (%d features skipped for missing values).",
-                length(complete_feat), length(feature_cols), nlevels(bt),
-                length(dropped_feat)))
-  }
-}
-
-## Restriction fallback: analyse the dominant protocol only.
-if (restrict_ok) {
-  img <- img %>% filter(!is.na(batch) & batch == dominant)
-  imaging_ok <- nrow(img) >= MIN_N_MODEL &&
-                sum(img$saa_any_pos == "Positive", na.rm = TRUE) >= 3 &&
-                sum(img$saa_any_pos == "Negative", na.rm = TRUE) >= 3
-  cat(sprintf("Restricted to protocol %s: %d scans (%d SAA+, %d SAA-).",
-              dominant, nrow(img),
-              sum(img$saa_any_pos == "Positive", na.rm = TRUE),
-              sum(img$saa_any_pos == "Negative", na.rm = TRUE)))
-}
-
-## Covariate fallback: protocol as a term in every model.
-EXTRA_COVARS <- if (!combat_ok && covar_ok) "batch" else character(0)
-if (length(EXTRA_COVARS)) img$batch <- factor(img$batch)
-
-BASE_COVARS <- c("SEX", "age_at_sample", "MRI_TIV", EXTRA_COVARS)
-```
-
-```{r power, eval=imaging_ok}
-n1 <- sum(img$saa_any_pos == "Positive"); n0 <- sum(img$saa_any_pos == "Negative")
-mde <- (qnorm(0.975) + qnorm(0.80)) * sqrt(1/n1 + 1/n0)
-mde_fdr <- (qnorm(1 - 0.05/2/20) + qnorm(0.80)) * sqrt(1/n1 + 1/n0)
-cat(sprintf(paste0(
-  "Detectable effect (80%% power, α = 0.05, two-sided): |β| ≥ %.2f SD with n = %d ",
-  "positive / %d negative.\nUnder a whole-atlas correction the bar rises to roughly ",
-  "|β| ≥ %.2f SD.\nEffects smaller than this cannot be ruled in or out by this sample."),
-  mde, n1, n0, mde_fdr))
-```
-
-## Global tissue volumes
-
-```{r global, eval=imaging_ok}
-GLOBALS <- c(MRI_TIV = "Total intracranial volume", MRI_GM_Tot = "Total grey matter",
-             MRI_WM = "Total white matter", MRI_CSF_Tot = "Total CSF",
-             MRI_WMH_Tot = "White-matter hyperintensities")
-
-## Shared by every forest/volcano plot below, so it must be defined in a chunk
-## that always runs -- not inside a conditionally evaluated plotting chunk.
-sig_colour <- function(P, Q, Beta)
-  ifelse(!is.na(Q) & Q < .05, ifelse(Beta > 0, "#0072B2", "#D55E00"),
-         ifelse(!is.na(P) & P < .05, "#000000", "gray60"))
-
-## Adding FDR to a result frame that came back empty must not error: map_dfr()
-## returns a 0x0 tibble when every model is skipped, and that has no P column.
-add_fdr <- function(res, pcol = "P") {
-  if (is.null(res) || !nrow(res) || !pcol %in% names(res)) return(res)
-  res$Q <- p.adjust(res[[pcol]], "BH")
-  res
-}
-
-fit_one <- function(outcome, data, covars = if (exists("BASE_COVARS"))
-                      BASE_COVARS else c("SEX", "age_at_sample", "MRI_TIV"),
-                    zscore = TRUE, verbose = TRUE) {
-  need <- c(outcome, "saa_any_pos", covars)
-  need <- need[need %in% names(data)]
-  if (!outcome %in% need) return(NULL)
-
-  d <- data %>% select(all_of(unique(c(need, "saa_any_pos")))) %>%
-    drop_na() %>% droplevels()
-  if (nrow(d) < MIN_N_MODEL || n_distinct(d$saa_any_pos) < 2) return(NULL)
-
-  ## Outcome must vary.
-  ov <- suppressWarnings(stats::var(as.numeric(d[[outcome]]), na.rm = TRUE))
-  if (!is.finite(ov) || ov == 0) return(NULL)
-  if (zscore) d[[outcome]] <- as.numeric(scale(d[[outcome]]))
-
-  ## Every outcome has its own complete-case subset. A covariate that is
-  ## constant within that subset (e.g. only one sex has a WMH measurement)
-  ## carries no information and makes lm() fail on the contrast, so it is
-  ## dropped from this model rather than aborting the document.
-  cv <- setdiff(need, c(outcome, "saa_any_pos"))
-  keep <- vapply(cv, function(cc) {
-    x <- d[[cc]]
-    if (is.factor(x) || is.character(x) || is.logical(x))
-      length(unique(x[!is.na(x)])) >= 2
-    else {
-      v <- suppressWarnings(stats::var(as.numeric(x), na.rm = TRUE))
-      is.finite(v) && v > 0
-    }
-  }, logical(1))
-  if (verbose && any(!keep))
-    message(sprintf("fit_one(%s): dropped constant covariate(s) %s",
-                    outcome, paste(cv[!keep], collapse = ", ")))
-  cv <- cv[keep]
-
-  fml <- sprintf("`%s` ~ saa_any_pos%s", outcome,
-                 if (length(cv)) paste0(" + `", paste(cv, collapse = "` + `"), "`") else "")
-  m <- try(lm(as.formula(fml), data = d), silent = TRUE)
-  if (inherits(m, "try-error")) return(NULL)
-
-  rn <- "saa_any_posPositive"
-  sm <- summary(m)$coefficients
-  if (!rn %in% rownames(sm) || is.na(sm[rn, "Estimate"])) return(NULL)
-  ci <- try(confint(m)[rn, ], silent = TRUE)
-  if (inherits(ci, "try-error")) ci <- c(NA_real_, NA_real_)
-
-  tibble(n = nrow(d), n_pos = sum(d$saa_any_pos == "Positive"),
-         Model = if (length(cv)) paste(cv, collapse = " + ") else "unadjusted",
-         Beta = unname(sm[rn, "Estimate"]), CI_l = ci[1], CI_u = ci[2],
-         P = unname(sm[rn, "Pr(>|t|)"]))
-}
-
-glob_res <- map_dfr(names(GLOBALS), function(v) {
-  ## TIV is the covariate elsewhere; as an outcome it is modelled without itself
-  cv <- if (v == "MRI_TIV") setdiff(BASE_COVARS, "MRI_TIV") else BASE_COVARS
-  r <- fit_one(v, img, covars = cv)
-  if (is.null(r)) return(NULL)
-  bind_cols(tibble(Measure = unname(GLOBALS[v])), r)
-}) %>% add_fdr()
-
-if (nrow(glob_res) && "Q" %in% names(glob_res)) {
-  glob_res %>% transmute(Measure, n, n_pos, `Adjusted for` = Model,
-    Beta = round(Beta, 3),
-    `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
-    p = round(P, 4), `q (BH)` = round(Q, 3)) %>%
-    kable(caption = "Global tissue volumes by SAA status (z-scored; adjusted for sex, age, TIV).") %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-} else {
-  cat("No global measure could be modelled — check the imaging diagnostics above.")
-}
-```
-
-## Primary analysis — nigrostriatal family
-
-```{r primary, eval=imaging_ok}
-NIGRO <- c("substantia.nigra", "putamen", "caudate.nucleus", "pallidum",
-           "nucleus.accumbens")
-MEDTEMP <- c("TL.hippocampus", "TL.amygdala", "TL.parahippocampal.and.ambient.gyrus")
-
-run_family <- function(regions, tissue = "gm", data = img, label = "") {
-  res <- map_dfr(regions, function(r) {
-    cc <- paste0(tissue, "_", r)
-    if (!cc %in% names(data)) return(NULL)
-    o <- fit_one(cc, data)
-    if (is.null(o)) return(NULL)
-    bind_cols(tibble(Region = pretty_region(r), token = r, Family = label), o)
-  })
-  if (!nrow(res)) return(res)
-  res %>% add_fdr() %>% arrange(P)
-}
-
-prim <- run_family(NIGRO, label = "Nigrostriatal")
-sec  <- run_family(MEDTEMP, label = "Medial temporal")
-
-show_family <- function(res, cap) {
-  if (!nrow(res)) return(cat("No region in this family could be modelled.\n"))
-  res %>% transmute(Region, n, n_pos, Beta = round(Beta, 3),
-      `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
-      Direction = ifelse(Beta > 0, "larger in SAA+", "smaller in SAA+"),
-      p = round(P, 4), q = round(Q, 3)) %>%
-    kable(caption = cap) %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")) %>%
-    row_spec(1, bold = TRUE)
-}
-show_family(prim, "PRIMARY: nigrostriatal grey matter, SAA+ vs SAA− (BH-FDR over the family).")
-```
-
-```{r secondary, eval=imaging_ok}
-show_family(sec, "SECONDARY: medial temporal grey matter. A positive β = relative preservation in SAA+.")
-```
-
-```{r primary-forest, fig.width=7.5, fig.height=4, eval=imaging_ok && nrow(prim)>0}
-fam <- bind_rows(prim, sec) %>%
-  mutate(col = sig_colour(P, Q, Beta),
-         Region = factor(Region, levels = rev(unique(Region))))
-ggplot(fam, aes(Beta, Region, colour = col)) +
-  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
-  geom_errorbarh(aes(xmin = CI_l, xmax = CI_u), height = .22, linewidth = 1.3) +
-  geom_point(size = 2.6) +
-  facet_grid(Family ~ ., scales = "free_y", space = "free_y") +
-  scale_colour_identity() +
-  labs(title = "A priori families — regional grey matter vs SAA status",
-       x = "β (SAA+ vs SAA−, SD units)", y = "",
-       caption = "Blue/orange = FDR q<0.05 within family; black = nominal p<0.05; grey = ns") +
-  theme(legend.position = "none")
-```
-
-## Anatomical composites
-
-```{r composites, eval=imaging_ok}
-## Mean of the z-scored member regions, so large structures do not dominate.
-gm_regions <- region_dict %>% filter(tissue == "GM", !grepl(DROP_GM, region))
-sys_list <- split(gm_regions$region, gm_regions$system)
-
-comp_dat <- img
-for (sn in names(sys_list)) {
-  cols <- paste0("gm_", sys_list[[sn]])
-  cols <- cols[cols %in% names(comp_dat)]
-  if (!length(cols)) next
-  z <- scale(as.matrix(comp_dat[, cols, drop = FALSE]))
-  comp_dat[[paste0("comp_", make.names(sn))]] <-
-    ifelse(rowSums(!is.na(z)) < ceiling(length(cols)/2), NA, rowMeans(z, na.rm = TRUE))
-}
-
-comp_res <- map_dfr(names(sys_list), function(sn) {
-  cc <- paste0("comp_", make.names(sn))
-  if (!cc %in% names(comp_dat)) return(NULL)
-  o <- fit_one(cc, comp_dat, zscore = FALSE)
-  if (is.null(o)) return(NULL)
-  bind_cols(tibble(System = sn, k_regions = length(sys_list[[sn]])), o)
-})
-if (nrow(comp_res)) {
-  comp_res <- comp_res %>% add_fdr() %>% arrange(P)
-  comp_res %>% transmute(System, `regions` = k_regions, n, n_pos,
-      Beta = round(Beta, 3), `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
-      p = round(P, 4), `q (BH)` = round(Q, 3)) %>%
-    kable(caption = "Anatomical composites (mean of z-scored member regions).") %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-  write.csv(comp_res, file.path(results_path, "Imaging_composites.csv"), row.names = FALSE)
-}
-```
-
-## Whole-atlas exploratory scan
-
-```{r scan, eval=imaging_ok}
-scan_tissue <- function(tissue_code, drop_pat, label) {
-  regs <- region_dict %>% filter(tissue == tissue_code, !grepl(drop_pat, region))
-  pre <- tolower(tissue_code)
-  res <- map_dfr(regs$region, function(r) {
-    cc <- paste0(pre, "_", r)
-    if (!cc %in% names(img)) return(NULL)
-    o <- fit_one(cc, img)
-    if (is.null(o)) return(NULL)
-    bind_cols(tibble(Tissue = label, Region = pretty_region(r), token = r,
-                     System = classify(r)), o)
-  })
-  if (!nrow(res)) return(res)
-  res %>% add_fdr() %>% arrange(P)
-}
-
-scan_gm <- scan_tissue("GM", DROP_GM, "Grey matter")
-scan_wm <- scan_tissue("WM", DROP_WM, "White matter")
-scan_all <- bind_rows(scan_gm, scan_wm)
-
-## A regional effect adjusted only for TIV inherits any shift in the whole
-## tissue compartment: if total white matter differs between groups, every
-## white-matter ROI will appear to differ too. Refitting each region with its
-## own global volume as an extra covariate asks the sharper question -- does
-## THIS region depart from the global pattern?
-scan_vs_global <- function(tissue_code, drop_pat, global_col, label) {
-  if (!global_col %in% names(img)) return(NULL)
-  regs <- region_dict %>% filter(tissue == tissue_code, !grepl(drop_pat, region))
-  pre <- tolower(tissue_code)
-  res <- map_dfr(regs$region, function(r) {
-    cc <- paste0(pre, "_", r)
-    if (!cc %in% names(img)) return(NULL)
-    o <- fit_one(cc, img, covars = c(BASE_COVARS, global_col))
-    if (is.null(o)) return(NULL)
-    bind_cols(tibble(Tissue = label, Region = pretty_region(r), token = r), o)
-  })
-  if (!nrow(res)) return(res)
-  res %>% add_fdr() %>% arrange(P)
-}
-scan_gm_g <- scan_vs_global("GM", DROP_GM, "MRI_GM_Tot", "Grey matter")
-scan_wm_g <- scan_vs_global("WM", DROP_WM, "MRI_WM",     "White matter")
-scan_global_adj <- bind_rows(scan_gm_g, scan_wm_g)
-if (nrow(scan_global_adj))
-  write.csv(scan_global_adj,
-            file.path(results_path, "Imaging_scan_global_adjusted.csv"),
-            row.names = FALSE)
-write.csv(scan_all, file.path(results_path, "Imaging_whole_atlas_scan.csv"),
-          row.names = FALSE)
-
-cat(sprintf("Regions tested: %d grey matter, %d white matter. Surviving BH-FDR within tissue: %d GM, %d WM. Nominally p<0.05: %d GM, %d WM (expected by chance: %.1f and %.1f).",
-  nrow(scan_gm), nrow(scan_wm),
-  sum(scan_gm$Q < .05, na.rm = TRUE), sum(scan_wm$Q < .05, na.rm = TRUE),
-  sum(scan_gm$P < .05, na.rm = TRUE), sum(scan_wm$P < .05, na.rm = TRUE),
-  .05 * nrow(scan_gm), .05 * nrow(scan_wm)))
-```
-
-```{r scan-table, eval=imaging_ok}
-if (nrow(scan_all))
-  scan_all %>% arrange(P) %>% head(20) %>%
-    transmute(Tissue, Region, System, n, n_pos, Beta = round(Beta, 3),
-              `95% CI` = sprintf("[%.2f, %.2f]", CI_l, CI_u),
-              p = round(P, 4), `q (BH within tissue)` = round(Q, 3)) %>%
-    kable(caption = "Top 20 regions across the whole atlas — exploratory, ranked by raw p.") %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
-                  font_size = 11)
-```
-
-```{r scan-global-adj, eval=imaging_ok && nrow(scan_all)>0}
-if (nrow(scan_global_adj)) {
-  cmp_glob <- inner_join(
-    scan_all        %>% select(Tissue, token, Region, B_tiv = Beta, P_tiv = P),
-    scan_global_adj %>% select(Tissue, token, B_glob = Beta, P_glob = P),
-    by = c("Tissue", "token")) %>% arrange(P_tiv)
-  cat(sprintf("Nominal hits before vs after adjusting for the tissue total: %d -> %d.\n",
-              sum(cmp_glob$P_tiv < .05), sum(cmp_glob$P_glob < .05)))
-  cmp_glob %>% head(12) %>%
-    transmute(Tissue, Region,
-              `TIV only` = sprintf("%.2f (p=%.3f)", B_tiv, P_tiv),
-              `+ tissue total` = sprintf("%.2f (p=%.3f)", B_glob, P_glob),
-              Verdict = ifelse(P_tiv < .05 & P_glob >= .05, "global shift",
-                        ifelse(P_glob < .05, "regional", "ns"))) %>%
-    kable(caption = paste("Regional effects before and after adjusting for the",
-      "tissue compartment total. 'Global shift' means the region only looked",
-      "different because the whole compartment did.")) %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
-                  font_size = 11)
-}
-```
-
-```{r scan-volcano, fig.width=9, fig.height=4.5, eval=imaging_ok && nrow(scan_all)>0}
-vp <- scan_all %>% mutate(sig = ifelse(Q < .05, "FDR q<0.05",
-                               ifelse(P < .05, "nominal p<0.05", "ns")))
-ggplot(vp, aes(Beta, -log10(P), colour = sig)) +
-  geom_hline(yintercept = -log10(.05), linetype = "dashed", colour = "grey60") +
-  geom_vline(xintercept = 0, linetype = "dotted", colour = "grey70") +
-  geom_point(alpha = .85, size = 2) +
-  facet_wrap(~ Tissue) +
-  scale_colour_manual(values = c("FDR q<0.05" = "#D55E00",
-                                 "nominal p<0.05" = "#000000", "ns" = "grey65")) +
-  labs(title = "Whole-atlas scan: regional volume vs SAA status",
-       subtitle = "Exploratory. Interpret against the detectable-effect bar reported above.",
-       x = "β (SAA+ vs SAA−, SD units)", y = expression(-log[10](p)), colour = NULL) +
-  theme(legend.position = "bottom")
-```
-
-```{r scan-by-system, fig.width=8, fig.height=4.5, eval=imaging_ok && nrow(scan_gm)>0}
-## Is any anatomical system shifted as a whole? A one-sample test of the
-## regional betas within each system — coherence, not significance-counting.
-sys_shift <- scan_gm %>% group_by(System) %>%
-  filter(n() >= 3) %>%
-  summarise(k = n(), mean_beta = mean(Beta, na.rm = TRUE),
-            p_shift = tryCatch(t.test(Beta)$p.value, error = function(e) NA_real_),
-            .groups = "drop") %>%
-  arrange(mean_beta)
-
-ggplot(sys_shift, aes(mean_beta, reorder(System, mean_beta),
-                      fill = p_shift < .05)) +
-  geom_col(width = .65) +
-  geom_vline(xintercept = 0, colour = "grey40") +
-  scale_fill_manual(values = c("FALSE" = "grey70", "TRUE" = "#D55E00"), guide = "none") +
-  labs(title = "Mean regional effect by anatomical system (grey matter)",
-       subtitle = "Average beta across the regions of each system; orange = p<0.05",
-       x = "Mean β (SAA+ vs SAA−, SD units)", y = "")
-kable(sys_shift %>% transmute(System, regions = k, mean_beta = round(mean_beta, 3),
-                              p = round(p_shift, 4)),
-      caption = paste("System-level coherence of the regional effects. These are",
-        "eight pre-defined anatomical systems, not a scan, so raw p is reported",
-        "without multiplicity adjustment.")) %>%
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-```
-
-## Left–right asymmetry
-
-```{r asymmetry, eval=imaging_ok}
-## Asymmetry index = (L − R) / ((L + R)/2). Signed, so a group difference means
-## the pathology is lateralised differently, not just larger.
-cat(sprintf("Asymmetry columns available in the imaging sample: %d of %d nigrostriatal regions.\n",
-            sum(paste0("ai_", NIGRO) %in% names(img)), length(NIGRO)))
-
-asym_res <- map_dfr(NIGRO, function(r) {
-  cc <- paste0("ai_", r)
-  if (!cc %in% names(img)) return(NULL)
-  d <- img %>% mutate(AI = .data[[cc]], absAI = abs(.data[[cc]]))
-  o1 <- fit_one("AI",    d, covars = setdiff(BASE_COVARS, "MRI_TIV"), zscore = FALSE)
-  o2 <- fit_one("absAI", d, covars = setdiff(BASE_COVARS, "MRI_TIV"), zscore = FALSE)
-  if (is.null(o1)) return(NULL)
-  tibble(Region = pretty_region(r), n = o1$n, n_pos = o1$n_pos,
-         Beta_signed = round(o1$Beta, 4), p_signed = round(o1$P, 4),
-         Beta_abs = if (is.null(o2)) NA_real_ else round(o2$Beta, 4),
-         p_abs    = if (is.null(o2)) NA_real_ else round(o2$P, 4))
-})
-if (nrow(asym_res)) {
-  asym_res <- asym_res %>% mutate(q_signed = round(p.adjust(p_signed, "BH"), 3))
-  kable(asym_res, caption = paste("Asymmetry of the nigrostriatal family.",
-    "Signed = direction of lateralisation (L-R); abs = degree of lateralisation",
-    "regardless of side.")) %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-  write.csv(asym_res, file.path(results_path, "Imaging_asymmetry.csv"), row.names = FALSE)
-} else cat("No nigrostriatal asymmetry index could be modelled.")
-```
-
-## Sensitivity analyses
-
-```{r sensitivity, eval=imaging_ok}
-## (a) proportional normalisation instead of TIV as a covariate
-## (b) IQR added as a covariate
-## (c) restricted to scans within one year of sampling
-prop_dat <- img
-for (r in NIGRO) {
-  cc <- paste0("gm_", r)
-  if (cc %in% names(prop_dat) && "MRI_TIV" %in% names(prop_dat))
-    prop_dat[[paste0("prop_", r)]] <- prop_dat[[cc]] / prop_dat$MRI_TIV
-}
-iqr_dat  <- img
-near_dat <- img %>% filter(is.na(mri_gap) | mri_gap <= 365)
-
-sens <- map_dfr(NIGRO, function(r) {
-  base <- fit_one(paste0("gm_", r), img)
-  pre  <- if (exists("img_raw") && (isTRUE(combat_ok) || isTRUE(restrict_ok)))
-            fit_one(paste0("gm_", r), img_raw) else NULL
-  prop <- if (paste0("prop_", r) %in% names(prop_dat))
-    fit_one(paste0("prop_", r), prop_dat,
-            covars = setdiff(BASE_COVARS, "MRI_TIV")) else NULL
-  iqrm <- fit_one(paste0("gm_", r), iqr_dat,
-                  covars = c(BASE_COVARS, "MRI_IQR_pct"))
-  near <- fit_one(paste0("gm_", r), near_dat)
-  if (is.null(base)) return(NULL)
-  tibble(Region = pretty_region(r),
-         `All protocols` = if (is.null(pre)) "—" else sprintf("%.2f (p=%.3f)", pre$Beta, pre$P),
-         `TIV covariate` = sprintf("%.2f (p=%.3f)", base$Beta, base$P),
-         `Proportional`  = if (is.null(prop)) "—" else sprintf("%.2f (p=%.3f)", prop$Beta, prop$P),
-         `+ IQR`         = if (is.null(iqrm)) "—" else sprintf("%.2f (p=%.3f)", iqrm$Beta, iqrm$P),
-         `MRI ≤1 y (n=%d)` = if (is.null(near)) "—" else sprintf("%.2f (p=%.3f)", near$Beta, near$P))
-})
-if (nrow(sens)) {
-  names(sens)[ncol(sens)] <- sprintf("MRI <=1 y (n=%d)", nrow(near_dat))
-  kable(sens, caption = paste("Nigrostriatal family across harmonisation,",
-        "normalisation and inclusion choices. Beta in SD units except the",
-        "proportional column. A large gap between the all-protocols column and",
-        "the main estimate means scanner effects were doing real work.")) %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-}
-```
-
-
-## Interpretation notes
-
-```{r closing, results='asis', eval=imaging_ok}
-top_gm <- if (nrow(scan_gm)) scan_gm[1, ] else NULL
-cat(sprintf("
-**Sample.** %d scans, %d SAA-positive. Detects |beta| >= %.2f SD at 80%% power;
-smaller effects are out of reach, so nulls here are uninformative rather than
-negative.
-
-**Primary family.** %s
-
-**Whole atlas.** %d grey-matter and %d white-matter regions; %d and %d survive
-FDR. %s Roughly %d nominal hits are expected by chance in grey matter alone, so
-single regions there are candidates, not results. The system-level plot is the
-more reliable view: a real effect shifts a whole system, not one parcel.
-
-**Harmonisation.** %s
-
-**Excluded.** Ventricles and corpus callosum from the grey-matter analysis (their
-Hammers grey-matter volume is partial-volume noise); ventricles from white matter.
-",
-nrow(img), n1, mde,
-if (nrow(prim)) sprintf("Best region %s, beta = %.2f [%.2f, %.2f], p = %.3f, q = %.3f.",
-  prim$Region[1], prim$Beta[1], prim$CI_l[1], prim$CI_u[1], prim$P[1], prim$Q[1])
-  else "Could not be fitted.",
-nrow(scan_gm), nrow(scan_wm),
-sum(scan_gm$Q < .05, na.rm = TRUE), sum(scan_wm$Q < .05, na.rm = TRUE),
-if (!is.null(top_gm)) sprintf("Strongest grey-matter signal: %s (beta = %.2f, p = %.3f).",
-  top_gm$Region, top_gm$Beta, top_gm$P) else "",
-round(.05 * nrow(scan_gm)),
-if (n_batch <= 1) "Single protocol; none needed."
-  else if (isTRUE(combat_ok)) sprintf("ComBat over %d protocols, protecting the SAA contrast, sex, age and TIV.", n_batch)
-  else if (isTRUE(covar_ok)) sprintf("Protocol carried as a covariate (smallest n = %d).", min_batch_n)
-  else if (isTRUE(restrict_ok)) sprintf("Restricted to protocol %s; %d scan(s) excluded.", dominant, sum(batch_tab) - sum(batch_tab[dominant, ]))
-  else "Not harmonised - state as a limitation."))
-```
-
-
 # Summary of methodological choices
 
 ```{r summary-notes, results='asis'}
 cat(sprintf("
-- **Merge.** Clinical visits paired with the biofluid sample closest in time (`visit_date`, not the baseline date). %s
-- **Long-format REDCap.** Subject-level fields carried down within NHC before collapsing to one row per subject, so core symptoms and visit scores coexist.
-- **Reading.** `guess_max = Inf`, without which readxl types the visit-level columns from the empty enrolment rows and discards their data.
-- **SAA recoding.** Anchored patterns; every raw level is printed above for verification. Indeterminate results excluded (n = %d), not folded into either group.
-- **Combined cohort.** Own-site result preferred, Munich as fallback — discordant pairs are no longer silently coded Positive. This cohort contains the Sant Pau cohort, so the two tables are not independent.
-- **Plausibility limits.** Values outside each scale range are set to NA and counted. In this dataset the guard finds nothing: the impossible Mayo values seen previously (mean 21, SD 62 on a 0–4 scale) came from the baseline-date row selection picking the wrong rows, and the date fix alone resolves them. The guard remains as a regression check.
-- **Tests.** Rank-based for continuous variables, Fisher for categorical, with SMD alongside the mean/risk difference and BH-FDR across each biomarker panel.
-- **Coverage gate.** Assays with fewer than %d observations per group are omitted rather than printed as `NA (NA)`.
-- **Imaging.** Both segmentations on the same subjects, volumes z-scored so structures of different size share an axis, with an a priori 3-structure family alongside the 7-structure FDR.
-", merge_note, n_indet, MIN_PER_GROUP))
+- **Scope.** Sant Pau (SAA02) only, clinical variables and A/T status. Other
+  biofluid biomarkers and the MRI analyses are parked; they are recoverable from
+  the git history of this file.
+- **Merge.** Each clinical visit paired with the biofluid sample closest in time
+  (`visit_date`, not the baseline date). %s
+- **Long-format REDCap.** Subject-level fields carried down within NHC before
+  collapsing to one row per subject, so core symptoms and visit scores coexist.
+  The progression section deliberately uses all visits instead.
+- **Reading.** `guess_max = Inf`, without which readxl types the visit-level
+  columns from the empty enrolment rows and discards their data.
+- **Recoding.** Anchored SAA patterns and substring A/T patterns; every raw level
+  is printed above for checking. Indeterminate SAA excluded (n = %d).
+- **Plausibility limits.** Values outside each scale range are set to NA and
+  counted; the guard finds nothing in this dataset and remains as a regression
+  check.
+- **Tests.** Rank-based for continuous, Fisher for categorical, with SMD next to
+  the mean or risk difference. No multiplicity adjustment: the comparisons are
+  pre-specified and direction-led.
+", merge_note, n_indet))
 ```
 
 # References
@@ -2065,57 +1029,24 @@ is what it says about our finding, not a summary of the paper.
    prevalence are flat. DaT-SPECT was not analysed against SAA status, so our
    DaT result has no direct published comparator.
 
-**Glial markers and AD co-pathology**
+**AD co-pathology**
 
-2. Morenas-Rodriguez E, Alcolea D, Suarez-Calvet M, et al. *Different pattern of
-   CSF glial markers between dementia with Lewy bodies and Alzheimer's disease.*
-   Sci Rep 2019;9:7803. doi:10.1038/s41598-019-44173-8
-   — YKL-40 elevation in DLB tracked tau, not synuclein, and was unrelated to
-   amyloid status. GFAP was not measured. Sets the prior that glial markers in
-   DLB follow AD co-pathology.
-
-3. Cousins KAQ, Shaw LM, Chen-Plotkin A, et al. *Plasma GFAP associates with
-   secondary Alzheimer's pathology in Lewy body disease.* Ann Clin Transl Neurol
-   2022;9(6):802-813. doi:10.1002/acn3.51768
-   — Plasma GFAP in Lewy body disease tracks concomitant amyloid. Our CSF GFAP
-   elevation in SAA+ is amyloid-independent in both strata, i.e. against this
-   account — but at n = 11 vs 11.
-
-4. Honig LS, Kang MS, Lamoureux J, Marder K. *Cerebrospinal fluid seed
+2. Honig LS, Kang MS, Lamoureux J, Marder K. *Cerebrospinal fluid seed
    aggregation assay and Alzheimer biomarkers in a Dementia with Lewy Body
    cohort.* Alzheimers Dement 2025;21(Suppl 2):e107531. doi:10.1002/alz70856_107531
-   — No difference in amyloid or tau biomarker status between SAA+ and SAA-, and
-   no evidence of increased AD pathology in SAA-. Our null a-path replicates
-   this, which is why the mediation question resolves as "not amyloid-mediated".
+   — No difference in amyloid or tau biomarker status between SAA+ and SAA-.
+   Our A/T null replicates this.
 
-**Imaging**
-
-5. Tosun D, Landau SM, Weiner MW, Blauwendraat C; ADNI. *Neuroimaging features of
-   CSF alpha-synuclein seed amplification assay positivity in elderly individuals
-   in AD continuum.* Alzheimers Dement 2024;20(Suppl 2):e092637.
-   doi:10.1002/alz.092637
-   — Cortical atrophy differences by SAA status, but **no medial temporal or
-   hippocampal effect**, and no subcortical analysis. Supports treating our
-   medial-temporal volumetric signal as noise.
-
-6. Cohen JS, Phillips JS, Das SR, et al. *Posterior hippocampal sparing in Lewy
-   body disorders with Alzheimer's copathology: an in vivo MRI study.*
-   Neuroimage Clin 2024;43:103714. doi:10.1016/j.nicl.2024.103714
-   — Hippocampal involvement in Lewy body disease is driven by AD co-pathology.
-
-7. Burton EJ, Barber R, Mukaetova-Ladinska EB, et al. *Medial temporal lobe
+3. Burton EJ, Barber R, Mukaetova-Ladinska EB, et al. *Medial temporal lobe
    atrophy on MRI differentiates Alzheimer's disease from dementia with Lewy
    bodies and vascular cognitive impairment.* Brain 2009;132(1):195-203.
    doi:10.1093/brain/awn298
    — The classic MTA result, DLB vs AD rather than SAA-stratified. Our visual
-   MTA finding (higher in SAA-) sits in this tradition; our CAT12 composite
-   contradicts it.
+   MTA finding (higher in SAA-) sits in this tradition.
 
 **Where this leaves us.** RBD and hallucinations replicate. Parkinsonism does
-not. DaT-SCAN against SAA status appears not to have been reported. The GFAP
-result runs against the prevailing AD-co-pathology account and needs replication
-before it is claimable. The imaging is an underpowered null and the published
-work agrees there is no medial temporal effect to find.
+not. DaT-SCAN against SAA status appears not to have been reported, and is the
+most novel of the clinical results.
 
 # Reproducibility
 
