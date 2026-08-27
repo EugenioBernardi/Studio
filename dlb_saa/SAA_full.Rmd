@@ -394,7 +394,7 @@ analytic_df <- analytic_df %>%
 
     ## Own-site result preferred, Munich as fallback. The original rule coded
     ## ANY positive as Positive, which silently resolved every discordant pair
-    ## in favour of Positive -- incompatible with the concordance analysis.
+    ## in favour of Positive. Kept for reference; nothing is grouped by it.
     saa_any_pos = factor(coalesce(as.character(saa_local_pos),
                                   as.character(saa_munich_pos)),
                          levels = c("Negative", "Positive", "Indeterminate")),
@@ -454,16 +454,19 @@ analytic_df <- analytic_df %>%
 
 ## Diagnostic certainty. Raw levels are printed below -- check them before
 ## trusting the recode, the wording varies between fields.
-dx_raw <- coalesce_cols(analytic_df, c("dxlewy_last", "dx_estudio_last_visit",
-                                       "diagnostico_visita", "visitdiagnosis",
-                                       "dxbaselinelewy"))
+## `diagnosis` carries values like "DLB prob" and "DLBpos", so it leads the list.
+dx_raw <- coalesce_cols(analytic_df, c("diagnosis", "dxlewy_last",
+                                       "dx_estudio_last_visit", "diagnostico_visita",
+                                       "visitdiagnosis", "dxbaselinelewy"))
 
 analytic_df$dlb_certainty <- {
   v <- tolower(trimws(dx_raw))
   out <- rep(NA_character_, length(v))
-  out[grepl("probab", v)]              <- "Probable DLB"
-  out[grepl("posib|possib", v)]        <- "Possible DLB"
-  out[grepl("mci|dcl|prodrom", v)]     <- "MCI-LB / prodromal"
+  ## Order matters. "prob" is tested first because "DLBprob" contains neither
+  ## "pos" nor "posib"; only then is the bare "pos" of "DLBpos" read as possible.
+  out[grepl("prob", v)]                <- "Probable DLB"
+  out[is.na(out) & grepl("posib|possib|pos", v)] <- "Possible DLB"
+  out[is.na(out) & grepl("mci|dcl|prodrom", v)]  <- "MCI-LB / prodromal"
   factor(out, levels = c("MCI-LB / prodromal", "Possible DLB", "Probable DLB"))
 }
 analytic_df$dx_raw <- dx_raw
@@ -606,8 +609,8 @@ n_indet <- sum(analytic_df$saa_any_pos == "Indeterminate", na.rm = TRUE)
 
 df_saa2 <- analytic_df %>% filter(saa_local_pos %in% c("Negative","Positive")) %>%
   mutate(saa_local_pos = droplevels(saa_local_pos))
-## Iñigo: Sant Pau only. saa_any_pos is kept so the SAA1/SAA2 concordance
-## section can still use it, but no analysis is grouped by it.
+## Sant Pau only. saa_any_pos is still derived above but nothing is grouped by
+## it; the concordance section it served has been removed.
 
 saveRDS(list(analytic_df = analytic_df, df_saa2 = df_saa2),
         file.path(results_path, "analytic_df.rds"))
@@ -805,134 +808,176 @@ gt_demo_saa2
 
 # Which combination discriminates best?
 
-The combined rows in the table above answer "does this differ between groups".
-The question Inigo is asking is different: **which rule best separates SAA+ from
-SAA-**. That is a discrimination problem, so it is reported with sensitivity,
-specificity and odds ratios rather than a p value alone.
+Two separate questions, so two separate screens:
 
-Two things to keep in mind while reading it. Every AND rule is evaluated only in
-patients who have **both** tests, so a stricter rule is also a smaller and
-differently selected sample: RBD clinical-and-PSG drops from 71 patients to 23,
-which is why it loses significance despite a larger effect. And these rules are
-screened, not pre-specified, so the ranking is a hypothesis generator.
+- **Clinical features alone** — fluctuations, hallucinations, clinical RBD,
+  parkinsonism, hyposmia. Can the bedside picture identify SAA positivity?
+- **Objective tests alone** — DaT-SCAN, polysomnography, MIBG. Do the
+  instrumental biomarkers do better?
+
+No multiplicity adjustment: this is exploratory and the two families are
+distinct hypotheses, not one scan. Rules are ranked by Youden index.
+
+One thing to watch throughout: an AND rule is only evaluable in patients who had
+**both** tests, so it runs on a smaller and differently selected sample. The n
+column moves for that reason, not because patients were dropped for cause.
 
 ```{r rule-screen}
-## Binary features, NA preserved. A feature that was never assessed must stay
-## missing rather than becoming a negative.
-feat <- tibble(
+feat_all <- tibble(
   saa = df_saa2$saa_local_pos,
   `Fluctuations`   = df_saa2$fluctuations   == "Yes",
   `Hallucinations` = df_saa2$hallucinations == "Yes",
   `RBD clinical`   = df_saa2$rbdclinical    == "Yes",
   `Parkinsonism`   = df_saa2$parkinsonism   == "Yes",
+  `Hyposmia`       = df_saa2$hyposmia       == "Yes",
   `DaT abnormal`   = df_saa2$datscan_bin    == "Abnormal",
   `PSG RBD`        = df_saa2$psg_rbd        == "Yes",
-  `MIBG abnormal`  = df_saa2$mibg           == "Yes",
-  `Hyposmia`       = df_saa2$hyposmia       == "Yes")
-fnames <- setdiff(names(feat), "saa")
-fnames <- fnames[vapply(fnames, function(f) sum(!is.na(feat[[f]])) >= 15 &&
-                          length(unique(na.omit(feat[[f]]))) > 1, logical(1))]
+  `MIBG abnormal`  = df_saa2$mibg           == "Yes")
 
-## Metrics for one rule, on the patients where the rule is evaluable.
-rule_metrics <- function(rule, saa, label, kind, n_used) {
+CLINICAL_F  <- c("Fluctuations", "Hallucinations", "RBD clinical",
+                 "Parkinsonism", "Hyposmia")
+OBJECTIVE_F <- c("DaT abnormal", "PSG RBD", "MIBG abnormal")
+
+usable <- function(f) f %in% names(feat_all) &&
+  sum(!is.na(feat_all[[f]])) >= 15 && length(unique(na.omit(feat_all[[f]]))) > 1
+
+rule_metrics <- function(rule, saa, label, kind) {
   ok <- !is.na(rule) & !is.na(saa)
   if (sum(ok) < 15) return(NULL)
   r <- rule[ok]; g <- droplevels(saa[ok])
   if (nlevels(g) != 2) return(NULL)
   pos <- g == "Positive"
-  tp <- sum(r & pos); fp <- sum(r & !pos)
-  fn <- sum(!r & pos); tn <- sum(!r & !pos)
+  tp <- sum(r & pos); fp <- sum(r & !pos); fn <- sum(!r & pos); tn <- sum(!r & !pos)
   if ((tp + fn) < 5 || (tn + fp) < 5) return(NULL)
   sens <- tp / (tp + fn); spec <- tn / (tn + fp)
-  ## Haldane-Anscombe correction so a zero cell does not give an infinite OR
   or <- ((tp + .5) * (tn + .5)) / ((fp + .5) * (fn + .5))
   se <- sqrt(1/(tp+.5) + 1/(fp+.5) + 1/(fn+.5) + 1/(tn+.5))
-  p <- tryCatch(fisher.test(matrix(c(tp, fn, fp, tn), 2))$p.value,
-                error = function(e) NA_real_)
-  tibble(Rule = label, Type = kind, Features = n_used, n = sum(ok),
-         `n SAA+` = sum(pos),
+  tibble(Rule = label, Type = kind, n = sum(ok), `n SAA+` = sum(pos),
          Sens = round(100 * sens), Spec = round(100 * spec),
          PPV = round(100 * tp / max(1, tp + fp)),
          NPV = round(100 * tn / max(1, tn + fn)),
          Youden = round(sens + spec - 1, 2),
+         ## for a binary rule the area under the ROC is balanced accuracy
+         AUC = round((sens + spec) / 2, 3),
          OR = round(or, 2),
          OR_CI = sprintf("%.2f-%.2f", exp(log(or) - 1.96*se), exp(log(or) + 1.96*se)),
-         p = p)
+         p = tryCatch(fisher.test(matrix(c(tp, fn, fp, tn), 2))$p.value,
+                      error = function(e) NA_real_))
 }
 
-rules <- list()
-for (f in fnames)
-  rules[[length(rules) + 1]] <- rule_metrics(feat[[f]], feat$saa, f, "single", 1)
-for (i in seq_along(fnames)) for (j in seq_along(fnames)) if (i < j) {
-  a <- fnames[i]; b <- fnames[j]
-  rules[[length(rules) + 1]] <- rule_metrics(feat[[a]] & feat[[b]], feat$saa,
-    paste(a, "AND", b), "AND", 2)
-  rules[[length(rules) + 1]] <- rule_metrics(feat[[a]] | feat[[b]], feat$saa,
-    paste(a, "OR", b), "OR", 2)
+screen_family <- function(fs, family) {
+  fs <- fs[vapply(fs, usable, logical(1))]
+  if (length(fs) < 1) return(tibble())
+  out <- list()
+  for (f in fs)
+    out[[length(out)+1]] <- rule_metrics(feat_all[[f]], feat_all$saa, f, "single")
+  if (length(fs) > 1)
+    for (i in seq_along(fs)) for (j in seq_along(fs)) if (i < j) {
+      a <- fs[i]; b <- fs[j]
+      out[[length(out)+1]] <- rule_metrics(feat_all[[a]] & feat_all[[b]],
+        feat_all$saa, paste(a, "AND", b), "AND")
+      out[[length(out)+1]] <- rule_metrics(feat_all[[a]] | feat_all[[b]],
+        feat_all$saa, paste(a, "OR", b), "OR")
+    }
+  res <- bind_rows(out)
+  if (nrow(res)) res$Family <- family
+  res
 }
-screen <- bind_rows(rules)
 
-if (!nrow(screen)) {
-  cat("No rule had enough evaluable patients.")
-} else {
-  screen <- screen %>% mutate(q_BH = p.adjust(p, "BH")) %>% arrange(desc(Youden))
-  write.csv(screen, file.path(results_path, "Rule_screen.csv"), row.names = FALSE)
-  cat(sprintf("%d rules screened over %d features. %d reach p < 0.05, %d survive BH-FDR.\n",
-      nrow(screen), length(fnames), sum(screen$p < .05, na.rm = TRUE),
-      sum(screen$q_BH < .05, na.rm = TRUE)))
-  screen %>% head(15) %>%
-    transmute(Rule, Type, n, `n SAA+`, Sens, Spec, PPV, NPV, Youden,
-              OR = sprintf("%.2f (%s)", OR, OR_CI),
-              p = signif(p, 3), q = signif(q_BH, 3)) %>%
-    kable(caption = paste("Top 15 rules by Youden index. Sens/Spec/PPV/NPV are",
-      "percentages for predicting SAA positivity. n changes between rules",
-      "because each is evaluated only where its components were assessed.")) %>%
+screen_clin <- screen_family(CLINICAL_F,  "Clinical")
+screen_obj  <- screen_family(OBJECTIVE_F, "Objective tests")
+screen <- bind_rows(screen_clin, screen_obj)
+
+show_screen <- function(res, cap) {
+  if (!nrow(res)) return(cat("No rule in this family had enough evaluable patients.\n"))
+  res %>% arrange(desc(Youden)) %>%
+    transmute(Rule, Type, n, `n SAA+`, Sens, Spec, PPV, NPV, Youden, AUC,
+              OR = sprintf("%.2f (%s)", OR, OR_CI), p = signif(p, 3)) %>%
+    kable(caption = cap) %>%
     kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
                   font_size = 11)
 }
+show_screen(screen_clin, paste("CLINICAL features, ranked by Youden index.",
+  "Sens/Spec/PPV/NPV are percentages for predicting SAA positivity."))
 ```
 
-```{r rule-screen-plot, fig.width=7.5, fig.height=5}
-if (exists("screen") && nrow(screen) >= 5) {
-  ggplot(screen, aes(100 - Spec, Sens, colour = Type, size = n)) +
-    geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey65") +
-    geom_point(alpha = .75) +
-    {if (requireNamespace("ggrepel", quietly = TRUE))
-       ggrepel::geom_text_repel(data = head(screen[order(-screen$Youden), ], 6),
-         aes(label = Rule), size = 3, colour = "grey25", max.overlaps = 20)
-     else geom_text(data = head(screen[order(-screen$Youden), ], 6),
-         aes(label = Rule), size = 3, colour = "grey25", vjust = -1)} +
-    scale_size_continuous(range = c(1.5, 6)) +
-    coord_equal(xlim = c(0, 100), ylim = c(0, 100)) +
-    labs(x = "100 - specificity (%)", y = "Sensitivity (%)",
-         title = "Every screened rule, as a point in ROC space",
-         subtitle = "Distance above the diagonal is the Youden index; size is the number of evaluable patients",
-         colour = NULL, size = "n") +
-    theme(legend.position = "right")
-}
+```{r rule-screen-obj}
+show_screen(screen_obj, paste("OBJECTIVE tests, ranked by Youden index.",
+  "n falls sharply for AND rules because few patients had both tests."))
 ```
 
-```{r rule-screen-counts}
-## The graded counts, as ROC curves rather than as a group difference: does
-## "how many features are present" order patients by SAA status at all?
+```{r rule-screen-save}
+if (nrow(screen)) {
+  write.csv(screen, file.path(results_path, "Rule_screen.csv"), row.names = FALSE)
+  sig <- screen %>% filter(!is.na(p), p < 0.05) %>% arrange(desc(Youden))
+  cat(sprintf("Clinical: %d rules, %d with p < 0.05. Objective: %d rules, %d with p < 0.05.\n",
+      nrow(screen_clin), sum(screen_clin$p < .05, na.rm = TRUE),
+      nrow(screen_obj),  sum(screen_obj$p  < .05, na.rm = TRUE)))
+} else sig <- tibble()
+```
+
+## ROC of the significant rules
+
+For a binary rule the ROC is a single point and its area equals balanced
+accuracy, `(sensitivity + specificity) / 2`. The graded counts are continuous
+enough to trace a real curve, so both are shown together: curves for the counts,
+points for the rules that reached p < 0.05.
+
+```{r roc-significant, fig.width=7.5, fig.height=6}
+roc_curves <- NULL
 if (requireNamespace("pROC", quietly = TRUE)) {
-  auc_tab <- map_dfr(c("n_core", "n_indicative", "n_core_plus"), function(v) {
-    if (!has_col(df_saa2, v)) return(NULL)
+  score_defs <- list(`Core clinical count (0-4)` = "n_core",
+                     `Indicative biomarkers (0-3)` = "n_indicative",
+                     `Core + biomarkers (0-7)` = "n_core_plus")
+  roc_list <- list(); auc_rows <- list()
+  for (nm in names(score_defs)) {
+    v <- score_defs[[nm]]
+    if (!has_col(df_saa2, v)) next
     d <- df_saa2 %>% mutate(x = num_safe(.data[[v]])) %>%
       filter(!is.na(x), !is.na(saa_local_pos))
-    if (nrow(d) < 20 || n_distinct(d$saa_local_pos) < 2) return(NULL)
-    r <- pROC::roc(response = d$saa_local_pos, predictor = d$x,
-                   levels = c("Negative", "Positive"), direction = "<", quiet = TRUE)
+    if (nrow(d) < 20 || n_distinct(d$saa_local_pos) < 2 || n_distinct(d$x) < 3) next
+    r <- pROC::roc(d$saa_local_pos, d$x, levels = c("Negative", "Positive"),
+                   direction = "<", quiet = TRUE)
     ci <- as.numeric(pROC::ci.auc(r))
-    tibble(Score = v, n = nrow(d), `n SAA+` = sum(d$saa_local_pos == "Positive"),
-           AUC = round(as.numeric(pROC::auc(r)), 3),
-           `95% CI` = sprintf("%.2f-%.2f", ci[1], ci[3]))
-  })
-  if (nrow(auc_tab))
-    kable(auc_tab, caption = paste("Discrimination of the graded counts.",
-      "AUC 0.5 means the count carries no information about SAA status.")) %>%
-      kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-} else cat("pROC is not installed; install.packages('pROC') to get the AUCs.")
+    roc_list[[nm]] <- tibble(score = nm, spec = rev(r$specificities),
+                             sens = rev(r$sensitivities))
+    auc_rows[[nm]] <- tibble(Score = nm, n = nrow(d),
+      `n SAA+` = sum(d$saa_local_pos == "Positive"),
+      AUC = round(as.numeric(pROC::auc(r)), 3),
+      `95% CI` = sprintf("%.2f-%.2f", ci[1], ci[3]))
+  }
+  roc_curves <- bind_rows(roc_list)
+  if (length(auc_rows))
+    print(kable(bind_rows(auc_rows), caption = paste("Graded counts as continuous",
+      "predictors of SAA status. AUC 0.5 = no information.")) %>%
+      kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")))
+}
+
+g <- ggplot() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey65") +
+  coord_equal(xlim = c(0, 100), ylim = c(0, 100)) +
+  labs(x = "100 - specificity (%)", y = "Sensitivity (%)",
+       title = "ROC space: significant rules and graded counts",
+       colour = NULL, shape = NULL)
+if (!is.null(roc_curves) && nrow(roc_curves))
+  g <- g + geom_line(data = roc_curves,
+                     aes(100 * (1 - spec), 100 * sens, colour = score), linewidth = .9)
+if (nrow(sig))
+  g <- g + geom_point(data = sig, aes(100 - Spec, Sens, shape = Family),
+                      size = 3.2, colour = "#D55E00") +
+           geom_text(data = sig, aes(100 - Spec, Sens, label = Rule),
+                     size = 2.8, vjust = -1.1, colour = "grey25")
+g + theme(legend.position = "bottom")
+```
+
+```{r roc-significant-table}
+if (nrow(sig)) {
+  sig %>% transmute(Family, Rule, n, `n SAA+`, Sens, Spec, AUC,
+                    OR = sprintf("%.2f (%s)", OR, OR_CI), p = signif(p, 3)) %>%
+    kable(caption = paste("Rules reaching p < 0.05. AUC here is balanced accuracy,",
+      "the area under the single-point ROC of a binary rule.")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
+} else cat("No rule reached p < 0.05.")
 ```
 
 # Cognitive progression (MMSE and MoCA)
@@ -1141,79 +1186,6 @@ if (nrow(pd) >= 5) {
 } else {
   cat(sprintf("Only %d subjects have both UPDRS III and SPPB — no plot drawn.", nrow(pd)))
 }
-```
-
-# MRI availability
-
-```{r mri-availability}
-mri_avail <- analytic_df %>%
-  mutate(has_mri = !is.na(as_date_safe(mridate)) | !is.na(num_safe(mta)) |
-                   !is.na(num_safe(fazekas))) %>%
-  summarise(`Merged subjects` = n(),
-            `With any MRI record` = sum(has_mri),
-            `With MRI date`   = sum(!is.na(as_date_safe(mridate))),
-            `With MTA score`  = sum(!is.na(num_safe(mta))),
-            `With Fazekas`    = sum(!is.na(num_safe(fazekas))))
-
-mri_by_grp <- df_saa2 %>%
-  mutate(has_mri = ifelse(!is.na(as_date_safe(mridate)) | !is.na(num_safe(mta)) |
-                          !is.na(num_safe(fazekas)), "MRI available", "No MRI")) %>%
-  count(saa_local_pos, has_mri) %>%
-  pivot_wider(names_from = has_mri, values_from = n, values_fill = 0)
-
-kable(t(mri_avail), col.names = "n", caption = "MRI availability, all merged subjects") %>%
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-kable(mri_by_grp, caption = "MRI availability within the combined SAA cohort") %>%
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
-```
-
-# SAA assay concordance
-
-```{r concordance}
-both_assays <- analytic_df %>%
-  filter(saa_munich_pos %in% c("Negative","Positive"),
-         saa_local_pos  %in% c("Negative","Positive")) %>%
-  mutate(saa_munich_pos = droplevels(saa_munich_pos),
-         saa_local_pos  = droplevels(saa_local_pos),
-         concordant = saa_munich_pos == saa_local_pos)
-
-ct <- table(Munich = both_assays$saa_munich_pos, SantPau = both_assays$saa_local_pos)
-
-conc_txt <- if (sum(ct) >= 2 && all(dim(ct) == c(2,2))) {
-  agree <- sum(diag(ct)) / sum(ct)
-  pe <- sum(rowSums(ct) * colSums(ct)) / sum(ct)^2
-  kap <- (agree - pe) / (1 - pe)
-  se  <- sqrt(agree * (1 - agree) / (sum(ct) * (1 - pe)^2))
-  mc  <- suppressWarnings(mcnemar.test(ct, correct = TRUE))
-  sprintf(paste("n = %d subjects have both assays. Agreement %.1f%% (%d/%d).",
-                "Cohen's κ = %.2f (95%% CI %.2f–%.2f). McNemar p = %.3f.",
-                "Munich+/SantPau− = %d; Munich−/SantPau+ = %d."),
-          sum(ct), 100*agree, sum(diag(ct)), sum(ct), kap,
-          kap - 1.96*se, kap + 1.96*se, mc$p.value,
-          ct["Positive","Negative"], ct["Negative","Positive"])
-} else sprintf("Only %d subjects have both assays — no concordance statistics computed.", sum(ct))
-
-as.data.frame.matrix(ct) %>% tibble::rownames_to_column("Munich (SAA01)") %>%
-  gt(rowname_col = "Munich (SAA01)") %>%
-  tab_header(title = md("**SAA concordance — subjects tested on both assays**"),
-             subtitle = conc_txt) %>%
-  tab_spanner(label = "Sant Pau (SAA02)", columns = everything()) %>%
-  cols_align("center") %>% opt_stylize(style = 1, color = "blue")
-```
-
-```{r discordant-listing}
-## Which subjects disagree, with the third assay and AD biomarkers to arbitrate.
-disc <- both_assays %>% filter(!concordant) %>%
-  transmute(NHC, visit = visit_any, sample = sample_d, gap_d = date_diff,
-            Munich = saa_munich_pos, SantPau = saa_local_pos, Third = saa_third,
-            AT_profile, datscan_bin, psg_rbd, rbdclinical, parkinsonism,
-            hallucinations)
-if (nrow(disc)) {
-  write.csv(disc, file.path(results_path, "SAA_discordant_subjects.csv"), row.names = FALSE)
-  kable(disc, caption = "Discordant subjects — review individually.") %>%
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
-                  font_size = 11)
-} else cat("No discordant pairs.")
 ```
 
 # Summary of methodological choices
