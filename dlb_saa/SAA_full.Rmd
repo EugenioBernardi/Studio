@@ -149,6 +149,24 @@ num_safe <- function(x) {                      # "<200", "1,5", " 12 "
 }
 
 has_col <- function(df, x) x %in% names(df)
+
+## First non-missing value across a list of candidate columns, coalesced
+## row-wise. The join suffixes clinical/biofluid name clashes, so each candidate
+## is also tried with _clin and _bio appended.
+coalesce_cols <- function(df, candidates, numeric = FALSE) {
+  nms <- unlist(lapply(candidates, function(x)
+    c(x, paste0(x, "_clin"), paste0(x, "_bio"))))
+  nms <- nms[nms %in% names(df)]
+  if (!length(nms))
+    return(if (numeric) rep(NA_real_, nrow(df)) else rep(NA_character_, nrow(df)))
+  out <- if (numeric) rep(NA_real_, nrow(df)) else rep(NA_character_, nrow(df))
+  for (nm in nms) {
+    v <- if (numeric) num_safe(df[[nm]]) else as.character(df[[nm]])
+    if (!numeric) v[!is.na(v) & trimws(v) == ""] <- NA
+    out <- dplyr::coalesce(out, v)
+  }
+  out
+}
 ```
 
 ```{r clinical-reshape}
@@ -404,12 +422,9 @@ analytic_df <- analytic_df %>%
 
 ## Diagnostic certainty. Raw levels are printed below -- check them before
 ## trusting the recode, the wording varies between fields.
-dx_raw <- coalesce(
-  as.character(grab(analytic_df, c("dxlewy_last"))),
-  as.character(grab(analytic_df, c("dx_estudio_last_visit"))),
-  as.character(grab(analytic_df, c("diagnostico_visita"))),
-  as.character(grab(analytic_df, c("visitdiagnosis"))),
-  as.character(grab(analytic_df, c("dxbaselinelewy"))))
+dx_raw <- coalesce_cols(analytic_df, c("dxlewy_last", "dx_estudio_last_visit",
+                                       "diagnostico_visita", "visitdiagnosis",
+                                       "dxbaselinelewy"))
 
 analytic_df$dlb_certainty <- {
   v <- tolower(trimws(dx_raw))
@@ -423,15 +438,14 @@ analytic_df$dx_raw <- dx_raw
 
 ## GDS-FAST
 analytic_df$gds_fast <- {
-  g <- coalesce(num_safe(grab(analytic_df, c("gds_visit"))),
-                num_safe(grab(analytic_df, c("GDS"))),
-                num_safe(grab(analytic_df, c("gds_fast_last_visit"))))
+  g <- coalesce_cols(analytic_df, c("gds_visit", "GDS", "gds_fast_last_visit"),
+                     numeric = TRUE)
   g[!is.na(g) & (g < 1 | g > 7)] <- NA
   g
 }
 
 ## MIBG, needed for the biomarker count
-analytic_df$mibg <- recode_yesno(grab(analytic_df, c("mibg")))
+analytic_df$mibg <- recode_yesno(coalesce_cols(analytic_df, c("mibg")))
 
 ## ---- combined categories --------------------------------------------------
 yes <- function(x) !is.na(x) & x == "Yes"
@@ -754,12 +768,20 @@ MMSE from the biofluids follow-ups.
 saa_lookup <- df_saa2 %>% select(NHC, saa_local_pos, SEX, age_at_sample)
 
 ## MoCA: one row per dated clinical visit
-moca_long <- clin %>%
-  transmute(NHC, date = visit_any, score = num_safe(puntuaciones), test = "MoCA") %>%
-  filter(!is.na(NHC), !is.na(date), !is.na(score), score >= 0, score <= 30)
+moca_long <- if (!has_col(clin, "puntuaciones")) {
+  tibble(NHC = character(), date = as.Date(character()),
+         score = numeric(), test = character())
+} else {
+  clin %>%
+    transmute(NHC, date = visit_any, score = num_safe(puntuaciones), test = "MoCA") %>%
+    filter(!is.na(NHC), !is.na(date), !is.na(score), score >= 0, score <= 30)
+}
 
 ## MMSE: from the biofluids follow-ups; FUPDATE where present, else sample date
-mmse_long <- bio %>%
+mmse_long <- if (!has_col(bio, "MMSE")) {
+  tibble(NHC = character(), date = as.Date(character()),
+         score = numeric(), test = character())
+} else bio %>%
   transmute(NHC,
             date = coalesce(as_date_safe(if ("FUPDATE" %in% names(bio)) FUPDATE else NA),
                             sample_d),
