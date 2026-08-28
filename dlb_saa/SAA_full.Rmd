@@ -1160,7 +1160,10 @@ names(tab1)[3:4] <- c(sprintf("SAA- (n=%d)", n_neg), sprintf("SAA+ (n=%d)", n_po
 ## ---------------------------------------------------------------------------
 save_table_jpg <- function(df, file, title = NULL, align = NULL,
                            col_x = NULL, base_pt = NULL) {
-  df <- as.data.frame(lapply(df, as.character), stringsAsFactors = FALSE)
+  ## df[] preserves the column names; as.data.frame(lapply(...)) sanitises them
+  ## and turns "SAA- (n=37)" into "SAA...n.37."
+  df <- as.data.frame(df, stringsAsFactors = FALSE, check.names = FALSE)
+  df[] <- lapply(df, as.character)
   nr <- nrow(df); nc <- ncol(df)
   if (!nr) return(invisible(NULL))
   if (is.null(align)) align <- c("l", rep("r", nc - 1))
@@ -1180,8 +1183,14 @@ save_table_jpg <- function(df, file, title = NULL, align = NULL,
   ## pitch, capped so a short table does not end up with giant text.
   top <- if (is.null(title)) 0.97 else 0.90
   pitch <- (top - 0.04) / (nr + 1)
-  pt <- if (!is.null(base_pt)) base_pt else
-    min(11, max(5.5, pitch * IMG_H / IMG_DPI * 72 * 0.55))
+  ## The font must satisfy BOTH constraints: the row pitch, and the total width
+  ## of the widest cells. Sizing on height alone let long cells such as
+  ## "78.8 [72.3, 81.6]" run into the next column.
+  pt_h <- pitch * IMG_H / IMG_DPI * 72 * 0.55
+  chars <- if (exists("w")) sum(w) else sum(nchar(names(df)) + 2)
+  pt_w <- (0.96 * IMG_W / IMG_DPI) * 72 / (chars * 0.5)
+  pt <- if (!is.null(base_pt)) base_pt else min(11, max(5, pt_h, na.rm = TRUE),
+                                                pt_w, na.rm = TRUE)
 
   cells <- do.call(rbind, lapply(seq_len(nr), function(i)
     data.frame(x = xs, y = top - i * pitch, lab = unlist(df[i, ], use.names = FALSE),
