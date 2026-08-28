@@ -46,6 +46,9 @@ MAX_GAP_DAYS <- 365   # visit <-> sample; pairs beyond this are flagged
 ## Restrict the analysis cohort to probable DLB (Inigo). Set to FALSE to keep
 ## every Lewy diagnosis; the diagnosis breakdown is printed either way.
 PROBABLE_ONLY <- TRUE
+## "MCI-LB probable" is probable Lewy body disease at the prodromal stage, not
+## DLB dementia. TRUE keeps those patients as well; FALSE restricts to dementia.
+INCLUDE_MCI_LB_PROBABLE <- FALSE
 
 ## ---------------------------------------------------------------------------
 ## DATA-QUALITY GUARDS
@@ -650,12 +653,28 @@ dx_before <- df_saa2 %>% count(dlb_certainty, saa_local_pos) %>%
 print(kable(dx_before, caption = "Diagnoses in the Sant Pau SAA cohort before restriction.") %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")))
 
+## Patients the recoder could not classify: list their raw diagnosis so any
+## probable DLB hidden behind unrecognised wording can be recovered rather than
+## silently dropped by the restriction.
+unclassified <- df_saa2 %>% filter(is.na(dlb_certainty)) %>%
+  count(dx_raw, saa_local_pos, name = "n")
+if (nrow(unclassified)) {
+  print(kable(unclassified, caption = paste("Cohort patients with no recoded",
+    "diagnosis. Check these before accepting the restriction: if any is",
+    "probable DLB, add its wording to recode_dx().")) %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")))
+} else cat("Every patient in the cohort has a recoded diagnosis.\n")
+
 if (PROBABLE_ONLY) {
   n_pre <- nrow(df_saa2)
-  df_saa2 <- df_saa2 %>% filter(dlb_certainty == "Probable DLB") %>%
+  keep_dx <- c("Probable DLB",
+               if (INCLUDE_MCI_LB_PROBABLE) "MCI-LB probable")
+  df_saa2 <- df_saa2 %>% filter(dlb_certainty %in% keep_dx) %>%
     mutate(saa_local_pos = droplevels(saa_local_pos))
-  cat(sprintf("Restricted to probable DLB: %d of %d patients retained.\n",
-              nrow(df_saa2), n_pre))
+  cat(sprintf("Restricted to %s: %d of %d patients retained (%d SAA+, %d SAA-).\n",
+              paste(keep_dx, collapse = " and "), nrow(df_saa2), n_pre,
+              sum(df_saa2$saa_local_pos == "Positive"),
+              sum(df_saa2$saa_local_pos == "Negative")))
 }
 ## Sant Pau only. saa_any_pos is still derived above but nothing is grouped by
 ## it; the concordance section it served has been removed.
