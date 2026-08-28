@@ -1198,7 +1198,11 @@ save_table_jpg <- function(df, file, title = NULL, align = NULL,
     scale_x_continuous(limits = c(0, 1), expand = c(0, 0)) +
     scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
     theme_void() +
-    theme(plot.margin = margin(4, 4, 4, 4))
+    ## theme_void() leaves the background transparent; PNG keeps the alpha
+    ## channel and viewers render it black, so paint it explicitly.
+    theme(plot.margin = margin(4, 4, 4, 4),
+          plot.background = element_rect(fill = "white", colour = NA),
+          panel.background = element_rect(fill = "white", colour = NA))
   if (!is.null(title))
     p <- p + annotate("text", x = 0.02, y = 0.965, label = title, hjust = 0,
                       size = (pt + 1.5) / 2.845, fontface = "bold", colour = "grey10")
@@ -1206,14 +1210,14 @@ save_table_jpg <- function(df, file, title = NULL, align = NULL,
   ## submission copy, capped at 600 x 800 px
   ggsave(file.path(results_path, file), p, device = "jpeg",
          width = IMG_W / IMG_DPI, height = IMG_H / IMG_DPI, dpi = IMG_DPI,
-         units = "in", quality = 100)
+         units = "in", quality = 100, bg = "white")
   kb <- round(file.size(file.path(results_path, file)) / 1024)
 
   ## readable copy: same physical layout, more pixels
   hires <- sub("\\.jpg$", "_hires.png", file)
   ggsave(file.path(results_path, hires), p, device = "png",
          width = IMG_W / IMG_DPI, height = IMG_H / IMG_DPI,
-         dpi = IMG_DPI * HIRES_SCALE, units = "in")
+         dpi = IMG_DPI * HIRES_SCALE, units = "in", bg = "white")
 
   cat(sprintf("%s: %d rows, %.1f pt text, %d x %d px, %d KB %s\n  %s: %d x %d px\n",
               file, nr, pt, IMG_W, IMG_H, kb,
