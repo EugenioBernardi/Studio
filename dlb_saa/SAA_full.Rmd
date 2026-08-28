@@ -1090,7 +1090,12 @@ that earn their place. Check them at full size before submitting: if a row is
 unreadable, drop it rather than shrinking the font further.
 
 ```{r abstract-tables}
+## AD/PD caps uploads at 600 x 800 px, which is small for a 20-row table. Two
+## versions are written from the same layout: the capped JPG for submission, and
+## a high-resolution PNG for reading and for emailing to co-authors. PNG because
+## JPEG smears text edges on flat backgrounds.
 IMG_W <- 600; IMG_H <- 800; IMG_DPI <- 100
+HIRES_SCALE <- 3
 
 ## Compact summary rows: median [IQR] for numeric, n (%) per level for factors.
 sum_rows <- function(dat, v, label, group = "saa_local_pos") {
@@ -1145,25 +1150,75 @@ n_neg <- sum(df_saa2$saa_local_pos == "Negative")
 n_pos <- sum(df_saa2$saa_local_pos == "Positive")
 names(tab1)[3:4] <- c(sprintf("SAA- (n=%d)", n_neg), sprintf("SAA+ (n=%d)", n_pos))
 
-save_table_jpg <- function(df, file, title = NULL) {
-  if (!requireNamespace("gridExtra", quietly = TRUE)) {
-    message("gridExtra not installed; skipping ", file); return(invisible(NULL))
-  }
-  th <- gridExtra::ttheme_minimal(
-    base_size = 7,
-    core = list(fg_params = list(hjust = 0, x = 0.02)),
-    colhead = list(fg_params = list(fontface = "bold", hjust = 0, x = 0.02)))
-  g <- gridExtra::tableGrob(df, rows = NULL, theme = th)
-  p <- ggplot() + theme_void() +
-    annotation_custom(g) +
-    { if (!is.null(title)) labs(title = title) else NULL } +
-    theme(plot.title = element_text(size = 8, face = "bold", hjust = 0))
+## ---------------------------------------------------------------------------
+## Table images.
+## The previous version handed a tableGrob to annotation_custom(), which draws
+## the grob at its natural size and centres it, leaving most of a 600 x 800
+## canvas empty and the text unreadably small. This lays the table out on
+## explicit coordinates instead, so the rows fill the height and the columns
+## fill the width whatever the row count.
+## ---------------------------------------------------------------------------
+save_table_jpg <- function(df, file, title = NULL, align = NULL,
+                           col_x = NULL, base_pt = NULL) {
+  df <- as.data.frame(lapply(df, as.character), stringsAsFactors = FALSE)
+  nr <- nrow(df); nc <- ncol(df)
+  if (!nr) return(invisible(NULL))
+  if (is.null(align)) align <- c("l", rep("r", nc - 1))
+
+  ## Column x positions from the widest cell in each column.
+  if (is.null(col_x)) {
+    w <- vapply(seq_len(nc), function(j)
+      max(nchar(c(names(df)[j], df[[j]])), na.rm = TRUE), numeric(1))
+    w <- w + 2                      # gutter
+    col_x <- c(0, cumsum(w)[-nc]) / sum(w)
+    col_x <- 0.02 + col_x * 0.96
+    right <- col_x + (w / sum(w)) * 0.96 - 0.012
+  } else right <- col_x
+  xs <- ifelse(align == "l", col_x, right)
+
+  ## Rows share the height below the title; the font follows from the row
+  ## pitch, capped so a short table does not end up with giant text.
+  top <- if (is.null(title)) 0.97 else 0.90
+  pitch <- (top - 0.04) / (nr + 1)
+  pt <- if (!is.null(base_pt)) base_pt else
+    min(11, max(5.5, pitch * IMG_H / IMG_DPI * 72 * 0.55))
+
+  cells <- do.call(rbind, lapply(seq_len(nr), function(i)
+    data.frame(x = xs, y = top - i * pitch, lab = unlist(df[i, ], use.names = FALSE),
+               hj = ifelse(align == "l", 0, 1), stringsAsFactors = FALSE)))
+  head <- data.frame(x = xs, y = top + pitch * 0.35, lab = names(df),
+                     hj = ifelse(align == "l", 0, 1), stringsAsFactors = FALSE)
+
+  p <- ggplot() +
+    geom_text(data = head, aes(x, y, label = lab, hjust = hj),
+              size = pt / 2.845, fontface = "bold", colour = "grey30") +
+    geom_text(data = cells, aes(x, y, label = lab, hjust = hj),
+              size = pt / 2.845, colour = "grey10") +
+    geom_hline(yintercept = top - pitch * 0.45, linewidth = .5, colour = "grey20") +
+    scale_x_continuous(limits = c(0, 1), expand = c(0, 0)) +
+    scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
+    theme_void() +
+    theme(plot.margin = margin(4, 4, 4, 4))
+  if (!is.null(title))
+    p <- p + annotate("text", x = 0.02, y = 0.965, label = title, hjust = 0,
+                      size = (pt + 1.5) / 2.845, fontface = "bold", colour = "grey10")
+
+  ## submission copy, capped at 600 x 800 px
   ggsave(file.path(results_path, file), p, device = "jpeg",
          width = IMG_W / IMG_DPI, height = IMG_H / IMG_DPI, dpi = IMG_DPI,
-         units = "in", quality = 92)
+         units = "in", quality = 100)
   kb <- round(file.size(file.path(results_path, file)) / 1024)
-  cat(sprintf("%s written: %d x %d px, %d KB %s\n", file, IMG_W, IMG_H, kb,
-              if (kb > 500) "-- OVER the 500 KB limit" else "(within limits)"))
+
+  ## readable copy: same physical layout, more pixels
+  hires <- sub("\\.jpg$", "_hires.png", file)
+  ggsave(file.path(results_path, hires), p, device = "png",
+         width = IMG_W / IMG_DPI, height = IMG_H / IMG_DPI,
+         dpi = IMG_DPI * HIRES_SCALE, units = "in")
+
+  cat(sprintf("%s: %d rows, %.1f pt text, %d x %d px, %d KB %s\n  %s: %d x %d px\n",
+              file, nr, pt, IMG_W, IMG_H, kb,
+              if (kb > 500) "-- OVER the 500 KB limit" else "(within limits)",
+              hires, IMG_W * HIRES_SCALE, IMG_H * HIRES_SCALE))
 }
 
 cat(sprintf("Table 1: %d rows. At %d px tall that is about %.0f px per row%s\n",
@@ -1178,14 +1233,20 @@ kable(tab1, caption = "Table 1 as exported.") %>%
 
 ```{r abstract-table2}
 ## Table 2 stacks the count thresholds on the paired clinical/objective rules.
+## One Rule column rather than Measure plus Rule: nine columns do not fit in
+## 600 px, and the measure is short enough to fold into the rule text.
+short <- c("Core clinical criteria (0-4)" = "Core criteria",
+           "Indicative biomarkers (0-3)" = "Biomarkers",
+           "Core + biomarkers (0-7)" = "Core + biomarkers")
 t2a <- if (exists("thr_tab") && nrow(thr_tab))
-  thr_tab %>% transmute(Measure = Score, Rule = paste0(">= ", Threshold),
-                        n, Sens, Spec, PPV, NPV,
-                        OR = sprintf("%.1f", OR), p = signif(p, 2)) else NULL
+  thr_tab %>% transmute(
+    Rule = paste0(ifelse(is.na(short[Score]), Score, short[Score]), " >= ", Threshold),
+    n, Sens, Spec, PPV, NPV, OR = sprintf("%.1f", OR),
+    p = format.pval(p, digits = 2, eps = .001)) else NULL
 t2b <- if (exists("pair_rules") && nrow(pair_rules))
-  pair_rules %>% transmute(Measure = "Clinical + objective test", Rule,
-                           n, Sens, Spec, PPV, NPV,
-                           OR = sprintf("%.1f", OR), p = signif(p, 2)) else NULL
+  pair_rules %>% transmute(Rule = gsub(" compatible", "", Rule),
+                           n, Sens, Spec, PPV, NPV, OR = sprintf("%.1f", OR),
+                           p = format.pval(p, digits = 2, eps = .001)) else NULL
 tab2 <- bind_rows(t2a, t2b)
 
 if (nrow(tab2)) {
