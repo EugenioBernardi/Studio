@@ -1341,11 +1341,14 @@ cat("\nFEATURES CITED\n")
 for (v in c("rbdclinical", "datscan_bin", "psg_rbd", "hyposmia")) {
   if (!has_col(d, v)) next
   lv <- if (v == "datscan_bin") "Abnormal" else "Yes"
-  ok <- !is.na(d[[v]])
-  cat(sprintf("  %-13s SAA+ %s | SAA- %s | Fisher p = %.3f\n", v,
+  ok <- !is.na(d[[v]]) & !is.na(d$saa_local_pos)
+  tb <- table(droplevels(factor(d[[v]][ok])), droplevels(d$saa_local_pos[ok]))
+  ## a feature present in every patient has one row and no test to run
+  pv <- if (nrow(tb) > 1 && ncol(tb) > 1) fisher.test(tb)$p.value else NA_real_
+  cat(sprintf("  %-13s SAA+ %s | SAA- %s | Fisher p = %s\n", v,
       pct(sum(d[[v]][ok & pos] == lv), sum(ok & pos)),
       pct(sum(d[[v]][ok & !pos] == lv), sum(ok & !pos)),
-      fisher.test(table(d[[v]][ok], d$saa_local_pos[ok]))$p.value))
+      ifelse(is.na(pv), "not testable", sprintf("%.3f", pv))))
 }
 cat("\nOdds ratios and CIs are in the rule tables above; the core-criteria AUC",
     "is in the count-discrimination table.\n")
