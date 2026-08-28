@@ -1116,9 +1116,11 @@ rules are folded into the single table rather than kept apart: they are treated
 as variables like any other, with the same SAA-negative / SAA-positive / p
 columns, and no ROC or sensitivity/specificity.
 
-The footnote is written as its own image. It is too long to sit legibly under a
-600-pixel-wide table, and pasting it into the abstract box would cost about a
-hundred of the 280 words.
+The footnote sits under the table in the same image. It runs to about a hundred
+words, so putting it in the abstract box would take a third of the 280-word
+allowance; inside the image it costs nothing. The renderer takes the space the
+footnote needs out of the table's share before it sets the row pitch, so the
+rows shrink to make room rather than running into the note.
 
 ```{r abstract-tables}
 IMG_W <- 600; IMG_H <- 800; IMG_DPI <- 100
@@ -1291,7 +1293,7 @@ ascii_safe <- function(x) {
   x
 }
 
-save_table_jpg <- function(df, file, title = NULL, align = NULL,
+save_table_jpg <- function(df, file, title = NULL, note = NULL, align = NULL,
                            col_x = NULL, base_pt = NULL) {
   ## df[] preserves the column names; as.data.frame(lapply(...)) sanitises them
   ## and turns "SAA- (n=37)" into "SAA...n.37."
@@ -1299,6 +1301,7 @@ save_table_jpg <- function(df, file, title = NULL, align = NULL,
   df[] <- lapply(df, function(z) ascii_safe(as.character(z)))
   names(df) <- ascii_safe(names(df))
   if (!is.null(title)) title <- ascii_safe(title)
+  if (!is.null(note))  note  <- ascii_safe(note)
   nr <- nrow(df); nc <- ncol(df)
   if (!nr) return(invisible(NULL))
   if (is.null(align)) align <- c("l", rep("r", nc - 1))
@@ -1314,18 +1317,53 @@ save_table_jpg <- function(df, file, title = NULL, align = NULL,
   } else right <- col_x
   xs <- ifelse(align == "l", col_x, right)
 
-  ## Rows share the height below the title; the font follows from the row
-  ## pitch, capped so a short table does not end up with giant text.
+  ## ---- vertical budget ------------------------------------------------------
+  ## Title, then the rows, then the footnote. The footnote is set at 70 per cent
+  ## of the table size and wrapped to the full canvas width, and the space it
+  ## needs is taken out of the table's share BEFORE the row pitch is computed --
+  ## otherwise the last rows and the note occupy the same pixels.
   top <- if (is.null(title)) 0.97 else 0.90
-  pitch <- (top - 0.04) / (nr + 1)
-  ## The font must satisfy BOTH constraints: the row pitch, and the total width
-  ## of the widest cells. Sizing on height alone let long cells such as
-  ## "78.8 [72.3, 81.6]" run into the next column.
-  pt_h <- pitch * IMG_H / IMG_DPI * 72 * 0.55
+  ## 0.58 em per character, measured against the rendered note: 0.50 (the factor
+  ## the column widths use, where the gutters absorb the error) let the longest
+  ## footnote line run past the right edge of the canvas.
+  usable_pt_w <- function(pt) floor((0.96 * IMG_W / IMG_DPI) * 72 / (pt * 0.58))
+
+  ## first pass: the table font as if the note were not there, to set its size
+  pitch0 <- (top - 0.04) / (nr + 1)
+  pt_h <- pitch0 * IMG_H / IMG_DPI * 72 * 0.55
   chars <- if (exists("w")) sum(w) else sum(nchar(names(df)) + 2)
   pt_w <- (0.96 * IMG_W / IMG_DPI) * 72 / (chars * 0.5)
   pt <- if (!is.null(base_pt)) base_pt else min(11, max(5, pt_h, na.rm = TRUE),
                                                 pt_w, na.rm = TRUE)
+
+  note_lines <- NULL; bottom <- 0.04
+  if (!is.null(note)) {
+    note_pt <- max(4.5, pt * 0.70)
+    ## The note hangs BELOW `bottom`: a gap, then the lines running downwards.
+    ## Its total height therefore has to be inside `bottom`, or the first line
+    ## is drawn level with the last rows -- which is exactly what happened.
+    NOTE_GAP <- 0.028; NOTE_FLOOR <- 0.022
+    note_geom <- function(pt) {
+      lines <- strwrap(note, width = usable_pt_w(pt))
+      lh <- (pt * 1.22 / 72) * IMG_DPI / IMG_H
+      list(lines = lines, lh = lh,
+           bottom = NOTE_FLOOR + NOTE_GAP + length(lines) * lh)
+    }
+    ng <- note_geom(note_pt)
+    ## the note must not eat the table: shrink it until the rows keep at least
+    ## 55 per cent of the height below the title
+    while (ng$bottom > (top - 0.02) * 0.45 && note_pt > 4.5) {
+      note_pt <- note_pt - 0.25
+      ng <- note_geom(note_pt)
+    }
+    note_lines <- ng$lines; note_lh <- ng$lh; bottom <- ng$bottom
+    ## the rows now have less height, so the table font follows it down
+    pitch <- (top - bottom) / (nr + 1)
+    pt <- if (!is.null(base_pt)) base_pt else
+      min(11, max(5, pitch * IMG_H / IMG_DPI * 72 * 0.55, na.rm = TRUE),
+          pt_w, na.rm = TRUE)
+  }
+  pitch <- (top - bottom) / (nr + 1)
 
   cells <- do.call(rbind, lapply(seq_len(nr), function(i)
     data.frame(x = xs, y = top - i * pitch, lab = unlist(df[i, ], use.names = FALSE),
@@ -1355,6 +1393,19 @@ save_table_jpg <- function(df, file, title = NULL, align = NULL,
   if (!is.null(title))
     p <- p + annotate("text", x = 0.02, y = 0.965, label = title, hjust = 0,
                       size = (pt + 1.5) / 2.845, fontface = "bold", colour = "grey10")
+  if (!is.null(note_lines)) {
+    nl <- length(note_lines)
+    ## lines run downwards from a gap below the rule, never above it
+    nd <- data.frame(x = 0.02,
+                     y = bottom - NOTE_GAP - (seq_len(nl) - 1) * note_lh,
+                     lab = note_lines)
+    p <- p +
+      geom_segment(aes(x = 0.02, xend = 0.98, y = bottom - 0.008,
+                       yend = bottom - 0.008),
+                   linewidth = .4, colour = "grey55") +
+      geom_text(data = nd, aes(x, y, label = lab), hjust = 0,
+                size = note_pt / 2.845, colour = "grey25")
+  }
 
   ## submission copy, capped at 600 x 800 px and at 500 KB
   cap <- save_jpg_capped(p, file.path(results_path, file))
@@ -1366,25 +1417,15 @@ save_table_jpg <- function(df, file, title = NULL, align = NULL,
          width = IMG_W / IMG_DPI, height = IMG_H / IMG_DPI,
          dpi = IMG_DPI * HIRES_SCALE, units = "in", bg = "white")
 
-  cat(sprintf("%s: %d rows, %.1f pt text, %d x %d px, %d KB at quality %d %s\n  %s: %d x %d px\n",
-              file, nr, pt, IMG_W, IMG_H, kb, cap$q,
+  cat(sprintf("%s: %d rows at %.1f pt%s, %d x %d px, %d KB at quality %d %s\n  %s: %d x %d px\n",
+              file, nr, pt,
+              if (is.null(note_lines)) "" else
+                sprintf(", footnote %d lines at %.1f pt", length(note_lines), note_pt),
+              IMG_W, IMG_H, kb, cap$q,
               if (kb > MAX_KB) "-- STILL OVER the 500 KB limit" else "(within limits)",
               hires, IMG_W * HIRES_SCALE, IMG_H * HIRES_SCALE))
 }
 
-cat(sprintf("Table 1: %d rows. At %d px tall that is about %.0f px per row%s\n",
-    nrow(tab1), IMG_H, IMG_H / (nrow(tab1) + 3),
-    if (IMG_H / (nrow(tab1) + 3) < 20) " -- likely too cramped, drop rows." else "."))
-save_table_jpg(tab1, "Abstract_Table1.jpg",
-               "Table 1. Cohort by CSF aSyn-SAA status")
-kable(tab1, caption = "Table 1 as exported.") %>%
-  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
-                font_size = 11)
-```
-
-```{r table-footnote}
-## The footnote as its own image, so it can go in the second upload slot at a
-## size a reader can actually read. Rendered as wrapped text on the same canvas.
 TABLE_NOTE <- paste(
   "Data are median [IQR] or n (%). Percentages calculated over available data.",
   "Wilcoxon rank-sum test for continuous variables, Fisher's exact test for",
@@ -1399,41 +1440,14 @@ TABLE_NOTE <- paste(
   "Assessment; PSG, polysomnography; p-tau181, phosphorylated tau 181; RBD, REM",
   "sleep behaviour disorder.")
 
-save_note_jpg <- function(txt, file, title = NULL, width_chars = 62, pt = 11) {
-  txt <- ascii_safe(txt); if (!is.null(title)) title <- ascii_safe(title)
-  lines <- strwrap(txt, width = width_chars)
-  n <- length(lines)
-  top <- if (is.null(title)) 0.97 else 0.92
-  pitch <- min(0.045, (top - 0.03) / (n + 1))
-  d <- data.frame(x = 0.03, y = top - seq_len(n) * pitch, lab = lines)
-  p <- ggplot() +
-    geom_text(data = d, aes(x, y, label = lab), hjust = 0, size = pt / 2.845,
-              colour = "grey10") +
-    scale_x_continuous(limits = c(0, 1), expand = c(0, 0)) +
-    scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
-    theme_void() +
-    theme(plot.margin = margin(4, 4, 4, 4),
-          plot.background = element_rect(fill = "white", colour = NA),
-          panel.background = element_rect(fill = "white", colour = NA))
-  if (!is.null(title))
-    p <- p + annotate("text", x = 0.03, y = 0.965, label = title, hjust = 0,
-                      size = (pt + 1.5) / 2.845, fontface = "bold", colour = "grey10")
-  cap <- save_jpg_capped(p, file.path(results_path, file))
-  kb <- cap$kb
-  hires <- sub("\\.jpg$", "_hires.png", file)
-  ggsave(file.path(results_path, hires), p, device = "png",
-         width = IMG_W / IMG_DPI, height = IMG_H / IMG_DPI,
-         dpi = IMG_DPI * HIRES_SCALE, units = "in", bg = "white")
-  cat(sprintf("%s: %d lines, %.1f pt, %d KB at quality %d %s\n", file, n, pt, kb, cap$q,
-              if (kb > MAX_KB) "-- STILL OVER the 500 KB limit" else "(within limits)"))
-}
-save_note_jpg(TABLE_NOTE, "Abstract_Table1_footnote.jpg", "Table 1. Footnote")
-
-cat("\nFootnote text, to paste if it goes in the abstract box instead:\n\n")
-cat(strwrap(TABLE_NOTE, width = 88), sep = "\n")
-cat(sprintf("\n\n(%d words -- it would not fit inside the 280-word limit.)\n",
-            lengths(gregexpr("\\S+", TABLE_NOTE))))
+save_table_jpg(tab1, "Abstract_Table1.jpg",
+               title = "Table 1. Cohort by CSF aSyn-SAA status",
+               note  = TABLE_NOTE)
+kable(tab1, caption = "Table 1 as exported.") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
+                font_size = 11)
 ```
+
 
 ## Numbers quoted in the abstract
 
