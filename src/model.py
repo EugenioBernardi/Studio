@@ -109,3 +109,64 @@ def pool(act, center_frac=0.72):
     k = max(1, int(round(h * center_frac)))
     o = (h - k) // 2
     return act[:, :, o:o + k, o:o + k].mean(dim=(2, 3)).numpy()
+
+
+class GainLesion:
+    """Multiplicative channel gain dysregulation at a stage output.
+
+    This replaces the additive-noise lesion of the first experiment, which was
+    uninformative: independent noise at each spatial position is averaged away
+    by the pooled readout, so the lesion had almost no behavioural effect. A
+    per-channel gain is constant across space and therefore survives pooling.
+    It models surviving-but-dysregulated tissue rather than outright unit loss.
+    Severity is the standard deviation of the log gain.
+    """
+
+    kind = "gain"
+
+    def __init__(self, stage, severity, n_channels, seed=0):
+        self.stage, self.severity = stage, severity
+        g = torch.Generator().manual_seed(seed)
+        self.gain = torch.exp(torch.randn(n_channels, generator=g) * severity)
+
+    def apply(self, act):
+        if self.severity == 0:
+            return act
+        return act * self.gain[None, :, None, None]
+
+
+class DecayLesion:
+    """Random deletion of individual synaptic weights within a stage.
+
+    This is the lesion model used by the existing in-silico neurodegeneration
+    literature, included here so that any conclusion about deficit shape can be
+    tested for dependence on the lesion model rather than assumed to generalise
+    from channel ablation. Because CORnet blocks are recurrent, a deleted weight
+    is absent at every timestep, as a lost synapse would be.
+
+    The lesion mutates the model, so `apply_weights` and `restore` must bracket
+    the forward passes that use it.
+    """
+
+    kind = "decay"
+
+    def __init__(self, model, stage, severity, seed=0):
+        self.stage, self.severity = stage, severity
+        self.convs = [m for m in getattr(model, stage).modules()
+                      if isinstance(m, nn.Conv2d)]
+        self.origin = [c.weight.data.clone() for c in self.convs]
+        rng = np.random.default_rng(seed)
+        self.masks = [torch.from_numpy(
+            (rng.random(tuple(c.weight.shape)) >= severity).astype(np.float32))
+            for c in self.convs]
+
+    def apply_weights(self):
+        for c, w, m in zip(self.convs, self.origin, self.masks):
+            c.weight.data = w * m
+
+    def restore(self):
+        for c, w in zip(self.convs, self.origin):
+            c.weight.data = w.clone()
+
+    def apply(self, act):  # damage lives in the weights, not the activations
+        return act

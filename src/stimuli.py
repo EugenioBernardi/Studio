@@ -12,7 +12,7 @@ Conditions fall into two families, which carry the study's central contrast:
       The form is present but the evidence for it is impoverished or corrupted.
       Clinically, this is the apperceptive profile.
 
-  transformation      unusual_view
+  transformation      rotated, sheared
       The evidence is clean but the form is presented outside its canonical
       pose, so identification requires view-invariant representation.
 """
@@ -23,11 +23,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 IMG_SIZE = 224
 LETTERS = list("AEFHKNPRTX")
-CONDITIONS = ["canonical", "fragmented", "low_contrast", "noise", "crowded", "unusual_view"]
+CONDITIONS = ["canonical", "fragmented", "low_contrast", "noise", "crowded", "rotated", "sheared"]
 
 # Degradation-family vs transformation-family conditions (excluding canonical).
 DEGRADATION = ["fragmented", "low_contrast", "noise", "crowded"]
-TRANSFORMATION = ["unusual_view"]
+TRANSFORMATION = ["rotated", "sheared"]
 
 _FONT_PATTERNS = [
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
@@ -116,11 +116,17 @@ def make_stimulus(letter, condition, rng, font_path=None, size=None):
 
     if condition == "crowded":
         arr = _crowd(letter, font_path, size, rng)
-    elif condition == "unusual_view":
-        # Rotation well outside the upright range, plus shear, so that identity
-        # must survive a pose change rather than a loss of signal.
+    elif condition == "rotated":
+        # Rotation well outside the upright range: identity must survive a pose
+        # change rather than a loss of signal.
         rot = rng.uniform(50, 130) * rng.choice([-1, 1])
-        arr = _render_letter(letter, font_path, size, rotation=rot, shear=rng.uniform(-0.35, 0.35))
+        arr = _render_letter(letter, font_path, size, rotation=rot)
+    elif condition == "sheared":
+        # Strong shear, minimal rotation: a second transformation condition that
+        # is geometrically independent of rotation, so that the transformation
+        # family does not rest on a single manipulation.
+        sh = rng.uniform(0.75, 1.25) * rng.choice([-1, 1])
+        arr = _render_letter(letter, font_path, size, rotation=rng.uniform(-10, 10), shear=sh)
     else:
         # Small jitter everywhere so the probe cannot exploit exact position.
         arr = _render_letter(letter, font_path, size,
