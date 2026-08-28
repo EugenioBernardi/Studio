@@ -56,7 +56,8 @@ MAX_GAP_DAYS <- 365   # visit <-> sample; pairs beyond this are flagged
 PROBABLE_ONLY <- TRUE
 ## "MCI-LB probable" is probable Lewy body disease at the prodromal stage, not
 ## DLB dementia. TRUE keeps those patients as well; FALSE restricts to dementia.
-INCLUDE_MCI_LB_PROBABLE <- FALSE
+## iRBD, possible DLB and MCI-LB possible stay out of the cohort either way.
+INCLUDE_MCI_LB_PROBABLE <- TRUE
 
 ## ---------------------------------------------------------------------------
 ## DATA-QUALITY GUARDS
@@ -678,7 +679,8 @@ if (PROBABLE_ONLY) {
   keep_dx <- c("Probable DLB",
                if (INCLUDE_MCI_LB_PROBABLE) "MCI-LB probable")
   df_saa2 <- df_saa2 %>% filter(dlb_certainty %in% keep_dx) %>%
-    mutate(saa_local_pos = droplevels(saa_local_pos))
+    mutate(saa_local_pos = droplevels(saa_local_pos),
+           dlb_certainty = droplevels(dlb_certainty))
   cat(sprintf("Restricted to %s: %d of %d patients retained (%d SAA+, %d SAA-).\n",
               paste(keep_dx, collapse = " and "), nrow(df_saa2), n_pre,
               sum(df_saa2$saa_local_pos == "Positive"),
