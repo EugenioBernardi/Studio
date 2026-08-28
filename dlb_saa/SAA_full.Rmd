@@ -34,6 +34,14 @@ desktop_path <- "~/Desktop/Ricerca/Lewy_R/SAA"
 results_path <- file.path(desktop_path, "Results")
 dir.create(results_path, recursive = TRUE, showWarnings = FALSE)
 
+## Keep every figure as a file as well. html_document is self-contained by
+## default, so plots are embedded in the HTML as base64 and rmarkdown then
+## deletes the temporary figure folder -- leaving nothing to attach to an email.
+## Pointing fig.path inside Results survives that cleanup.
+fig_dir <- file.path(results_path, "figures")
+dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
+knitr::opts_chunk$set(fig.path = paste0(fig_dir, "/"))
+
 f_clin  <- file.path(desktop_path, "datafreeze_lewy.xlsx")
 f_bio   <- file.path(desktop_path, "BIOFLUIDS_CLINICAL.xlsx")
 
