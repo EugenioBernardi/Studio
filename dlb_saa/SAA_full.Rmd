@@ -1109,14 +1109,23 @@ sum_rows <- function(dat, v, label, group = "saa_local_pos") {
     f <- droplevels(factor(x))
     p <- tryCatch(fisher.test(table(f, g), simulate.p.value = TRUE)$p.value,
                   error = function(e) NA)
-    map_dfr(seq_along(levels(f)), function(i) {
-      l <- levels(f)[i]
-      pc <- function(k) sprintf("%d (%.0f%%)", sum(f[g == k] == l),
-                                100 * mean(f[g == k] == l))
-      tibble(Variable = if (i == 1) label else "", Level = l,
-             `SAA-` = pc(lv[1]), `SAA+` = pc(lv[2]),
-             p = if (i == 1 && !is.na(p)) format.pval(p, digits = 2, eps = .001) else "")
-    })
+    pc <- function(k, l) sprintf("%d (%.0f%%)", sum(f[g == k] == l),
+                                 100 * mean(f[g == k] == l))
+    if (nlevels(f) == 2) {
+      ## A binary variable needs one row, not two: the second level implies the
+      ## first. At 600 px wide the table has no room for redundant rows.
+      l <- levels(f)[2]
+      tibble(Variable = paste0(label, ", ", l), Level = "",
+             `SAA-` = pc(lv[1], l), `SAA+` = pc(lv[2], l),
+             p = ifelse(is.na(p), "", format.pval(p, digits = 2, eps = .001)))
+    } else {
+      map_dfr(seq_along(levels(f)), function(i) {
+        l <- levels(f)[i]
+        tibble(Variable = if (i == 1) label else "", Level = l,
+               `SAA-` = pc(lv[1], l), `SAA+` = pc(lv[2], l),
+               p = if (i == 1 && !is.na(p)) format.pval(p, digits = 2, eps = .001) else "")
+      })
+    }
   }
 }
 
@@ -1157,6 +1166,9 @@ save_table_jpg <- function(df, file, title = NULL) {
               if (kb > 500) "-- OVER the 500 KB limit" else "(within limits)"))
 }
 
+cat(sprintf("Table 1: %d rows. At %d px tall that is about %.0f px per row%s\n",
+    nrow(tab1), IMG_H, IMG_H / (nrow(tab1) + 3),
+    if (IMG_H / (nrow(tab1) + 3) < 20) " -- likely too cramped, drop rows." else "."))
 save_table_jpg(tab1, "Abstract_Table1.jpg",
                "Table 1. Cohort by CSF alpha-synuclein SAA status")
 kable(tab1, caption = "Table 1 as exported.") %>%
@@ -1177,6 +1189,9 @@ t2b <- if (exists("pair_rules") && nrow(pair_rules))
 tab2 <- bind_rows(t2a, t2b)
 
 if (nrow(tab2)) {
+  cat(sprintf("Table 2: %d rows, about %.0f px per row%s\n",
+      nrow(tab2), IMG_H / (nrow(tab2) + 3),
+      if (IMG_H / (nrow(tab2) + 3) < 20) " -- likely too cramped, drop rows." else "."))
   save_table_jpg(tab2, "Abstract_Table2.jpg",
                  "Table 2. Counts of criteria and paired clinical/objective rules")
   kable(tab2, caption = "Table 2 as exported.") %>%
