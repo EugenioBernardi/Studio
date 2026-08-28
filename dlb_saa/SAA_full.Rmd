@@ -1302,6 +1302,55 @@ if (nrow(tab2)) {
 } else cat("Neither the threshold table nor the paired rules produced rows.")
 ```
 
+## Numbers quoted in the abstract
+
+Every figure the abstract text cites, printed together so it can be checked
+against the tables above without hunting through the document.
+
+```{r abstract-numbers}
+## ---------------------------------------------------------------------------
+## Nothing new is computed here; this is a transcription aid. If a number in
+## the abstract does not appear below, it does not come from this analysis.
+## ---------------------------------------------------------------------------
+d <- df_saa2
+pos <- d$saa_local_pos == "Positive"
+
+pct <- function(k, n) sprintf("%d/%d (%.0f%%)", k, n, 100 * k / n)
+med <- function(x) { x <- num_safe(x); x <- x[!is.na(x)]
+  sprintf("%.1f [%.1f, %.1f]", median(x), quantile(x, .25), quantile(x, .75)) }
+
+cat("COHORT\n")
+cat(sprintf("  n = %d (%d SAA+, %d SAA-)\n", nrow(d), sum(pos), sum(!pos)))
+if (has_col(d, "SEX")) {
+  f <- d$SEX == "Female"
+  cat(sprintf("  Women: %s\n", pct(sum(f, na.rm = TRUE), sum(!is.na(f)))))
+}
+cat(sprintf("  Age at sampling, whole cohort, median [IQR]: %s\n",
+            med(d$age_at_sample)))
+
+cat("\nSTAGE\n")
+st <- table(d$cog_stage, d$saa_local_pos)
+print(st)
+if (nrow(st) == 2 && ncol(st) == 2)
+  cat(sprintf("  Positivity: MCI %s vs dementia %s, Fisher p = %.3f\n",
+      pct(st["MCI","Positive"], sum(st["MCI",])),
+      pct(st["Dementia","Positive"], sum(st["Dementia",])),
+      fisher.test(st)$p.value))
+
+cat("\nFEATURES CITED\n")
+for (v in c("rbdclinical", "datscan_bin", "psg_rbd", "hyposmia")) {
+  if (!has_col(d, v)) next
+  lv <- if (v == "datscan_bin") "Abnormal" else "Yes"
+  ok <- !is.na(d[[v]])
+  cat(sprintf("  %-13s SAA+ %s | SAA- %s | Fisher p = %.3f\n", v,
+      pct(sum(d[[v]][ok & pos] == lv), sum(ok & pos)),
+      pct(sum(d[[v]][ok & !pos] == lv), sum(ok & !pos)),
+      fisher.test(table(d[[v]][ok], d$saa_local_pos[ok]))$p.value))
+}
+cat("\nOdds ratios and CIs are in the rule tables above; the core-criteria AUC",
+    "is in the count-discrimination table.\n")
+```
+
 # Cognitive progression (MMSE and MoCA)
 
 Longitudinal scores, so this uses **all** visits rather than the single row per
