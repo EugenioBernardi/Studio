@@ -43,6 +43,10 @@ f_bio   <- file.path(desktop_path, "BIOFLUIDS_CLINICAL.xlsx")
 ## ---------------------------------------------------------------------------
 MAX_GAP_DAYS <- 365   # visit <-> sample; pairs beyond this are flagged
 
+## Restrict the analysis cohort to probable DLB (Inigo). Set to FALSE to keep
+## every Lewy diagnosis; the diagnosis breakdown is printed either way.
+PROBABLE_ONLY <- TRUE
+
 ## ---------------------------------------------------------------------------
 ## DATA-QUALITY GUARDS
 ## Values outside these ranges are set to NA and reported in section 2.
@@ -452,21 +456,45 @@ analytic_df <- analytic_df %>%
 
 ## Diagnostic certainty. Raw levels are printed below -- check them before
 ## trusting the recode, the wording varies between fields.
-## `diagnosis` carries values like "DLB prob" and "DLBpos", so it leads the list.
-dx_raw <- coalesce_cols(analytic_df, c("diagnosis", "dxlewy_last",
-                                       "dx_estudio_last_visit", "diagnostico_visita",
-                                       "visitdiagnosis", "dxbaselinelewy"))
+## ---------------------------------------------------------------------------
+## Diagnosis. Two problems in the previous version, both silent:
+##  1. coalesce took the first NON-MISSING value, and `diagnosis` holds
+##     "Diagnostico CONFIRMADO"/"PENDIENTE" for most rows -- non-missing but
+##     uninformative, so they blocked the fallback to dxlewy_last and left the
+##     variable almost entirely NA.
+##  2. "MCI-LBprob" matched "prob" and became Probable DLB, and "MCI-AD" fell
+##     through to the prodromal branch although it is an Alzheimer diagnosis.
+## Each field is therefore recoded FIRST and the recoded values are coalesced,
+## so an uninformative entry yields NA and the next field is tried.
+## ---------------------------------------------------------------------------
+DX_FIELDS <- c("dxlewy_last", "diagnosis", "dx_estudio_last_visit",
+               "diagnostico_visita", "visitdiagnosis", "dxbaselinelewy")
 
-analytic_df$dlb_certainty <- {
-  v <- tolower(trimws(dx_raw))
+recode_dx <- function(x) {
+  v <- tolower(trimws(as.character(x)))
+  v <- gsub("[^a-z]", "", v)              # "DLB prob" and "DLBprob" alike
   out <- rep(NA_character_, length(v))
-  ## Order matters. "prob" is tested first because "DLBprob" contains neither
-  ## "pos" nor "posib"; only then is the bare "pos" of "DLBpos" read as possible.
-  out[grepl("prob", v)]                <- "Probable DLB"
-  out[is.na(out) & grepl("posib|possib|pos", v)] <- "Possible DLB"
-  out[is.na(out) & grepl("mci|dcl|prodrom", v)]  <- "MCI-LB / prodromal"
-  factor(out, levels = c("MCI-LB / prodromal", "Possible DLB", "Probable DLB"))
+  is_lb  <- grepl("dlb|lewy|lb", v)
+  is_mci <- grepl("mci|dcl|prodrom", v)
+  ## MCI-AD is not a Lewy diagnosis, and must be caught before the mci branch
+  out[grepl("mciad|dclad", v)]                        <- "MCI-AD"
+  out[is.na(out) & is_mci & is_lb & grepl("prob", v)] <- "MCI-LB probable"
+  out[is.na(out) & is_mci & is_lb]                    <- "MCI-LB possible"
+  out[is.na(out) & is_lb & grepl("prob", v)]          <- "Probable DLB"
+  out[is.na(out) & is_lb & grepl("pos", v)]           <- "Possible DLB"
+  out[is.na(out) & grepl("irbd|isolatedrbd", v)]      <- "iRBD"
+  out[is.na(out) & grepl("^ad$|alzheimer", v)]        <- "AD"
+  ## "Diagnostico CONFIRMADO/PENDIENTE", "Otros", "Cognitively normal" -> NA
+  factor(out, levels = c("iRBD", "MCI-LB possible", "MCI-LB probable",
+                         "Possible DLB", "Probable DLB", "MCI-AD", "AD"))
 }
+
+dx_recoded <- lapply(intersect(DX_FIELDS, names(analytic_df)),
+                     function(f) as.character(recode_dx(analytic_df[[f]])))
+analytic_df$dlb_certainty <- factor(Reduce(dplyr::coalesce, dx_recoded),
+  levels = c("iRBD", "MCI-LB possible", "MCI-LB probable",
+             "Possible DLB", "Probable DLB", "MCI-AD", "AD"))
+dx_raw <- coalesce_cols(analytic_df, DX_FIELDS)
 analytic_df$dx_raw <- dx_raw
 
 ## GDS-FAST
@@ -474,11 +502,19 @@ analytic_df$gds_fast <- {
   g <- coalesce_cols(analytic_df, c("gds_visit", "GDS", "gds_fast_last_visit"),
                      numeric = TRUE)
   g[!is.na(g) & (g < 1 | g > 7)] <- NA
-  g
+  factor(g, levels = 1:7, labels = paste("GDS", 1:7))   # ordinal stage, not a score
 }
 
 ## MIBG, needed for the biomarker count
 analytic_df$mibg <- recode_yesno(coalesce_cols(analytic_df, c("mibg")))
+
+## A/T in three groups: discordant profiles pooled as intermediate.
+analytic_df$at_group <- factor(dplyr::case_when(
+  is.na(analytic_df$A_clean) | is.na(analytic_df$T_clean) ~ NA_character_,
+  analytic_df$A_clean == "A-" & analytic_df$T_clean == "T-" ~ "AT-negative",
+  analytic_df$A_clean == "A+" & analytic_df$T_clean == "T+" ~ "AT-positive",
+  TRUE ~ "AT-intermediate"),
+  levels = c("AT-negative", "AT-intermediate", "AT-positive"))
 
 ## ---- combined categories --------------------------------------------------
 yes <- function(x) !is.na(x) & x == "Yes"
@@ -607,6 +643,20 @@ n_indet <- sum(analytic_df$saa_any_pos == "Indeterminate", na.rm = TRUE)
 
 df_saa2 <- analytic_df %>% filter(saa_local_pos %in% c("Negative","Positive")) %>%
   mutate(saa_local_pos = droplevels(saa_local_pos))
+
+## Diagnosis composition of the SAA cohort, before any restriction.
+dx_before <- df_saa2 %>% count(dlb_certainty, saa_local_pos) %>%
+  pivot_wider(names_from = saa_local_pos, values_from = n, values_fill = 0)
+print(kable(dx_before, caption = "Diagnoses in the Sant Pau SAA cohort before restriction.") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed")))
+
+if (PROBABLE_ONLY) {
+  n_pre <- nrow(df_saa2)
+  df_saa2 <- df_saa2 %>% filter(dlb_certainty == "Probable DLB") %>%
+    mutate(saa_local_pos = droplevels(saa_local_pos))
+  cat(sprintf("Restricted to probable DLB: %d of %d patients retained.\n",
+              nrow(df_saa2), n_pre))
+}
 ## Sant Pau only. saa_any_pos is still derived above but nothing is grouped by
 ## it; the concordance section it served has been removed.
 
@@ -739,8 +789,9 @@ LAB <- c(
   hyposmia="Hyposmia", dysautonomia="Dysautonomia", repeatedfalls="Repeated falls",
   hypersomnia="Hypersomnia", neurolepticsens="Neuroleptic sensitivity",
   mayo_total_score="Mayo Fluctuations Scale", sppb_total_score="SPPB total",
-  datscan_bin="DaT-SCAN abnormal", psg_rbd="PSG-confirmed RBD",
-  A_clean="Amyloid status", AT_profile="A/T profile", mta="MTA score", fazekas="Fazekas score",
+  datscan_bin="DaT-SCAN abnormal", psg_rbd="PSG compatible with RBD",
+  A_clean="Amyloid status", AT_profile="A/T profile", at_group="A/T profile",
+  mta="MTA score", fazekas="Fazekas score",
   dlb_certainty="Diagnosis", gds_fast="GDS-FAST stage", mibg="MIBG abnormal",
   rbd_any="RBD (clinical or PSG)", rbd_both="RBD (clinical and PSG)",
   park_dat_any="Parkinsonism or abnormal DaT", park_dat_both="Parkinsonism and abnormal DaT",
@@ -755,8 +806,7 @@ build_clinical <- function(data, group_var) {
   blocks <- list(
     list(t="cat",  v=c("SEX","apoe4_carrier"),                      h="Demographics"),
     list(t="cont", v=c("age_at_sample","EDUC"),                      h="Demographics"),
-    list(t="cat",  v="dlb_certainty",                                h="Diagnosis"),
-    list(t="cont", v="gds_fast",                                     h="Diagnosis"),
+    list(t="cat",  v=c("dlb_certainty", "gds_fast"),                 h="Diagnosis"),
     list(t="cont", v=c("puntuaciones","visuoespacialp","identificacionp","atencionp",
                        "lenguajep","abstraccionp","orientacionp","mis"),
                                                                      h="Cognition (MoCA)"),
@@ -770,7 +820,7 @@ build_clinical <- function(data, group_var) {
     list(t="cat",  v=c("hyposmia","dysautonomia","repeatedfalls","hypersomnia",
                        "neurolepticsens"),                           h="Supportive features"),
     list(t="cont", v=c("mayo_total_score","sppb_total_score"),        h="Scales"),
-    list(t="cat",  v=c("datscan_bin","psg_rbd","mibg","A_clean","AT_profile"), h="Biomarkers & imaging"),
+    list(t="cat",  v=c("datscan_bin","psg_rbd","mibg","at_group"),   h="Biomarkers & imaging"),
     list(t="cat",  v=c("rbd_any","rbd_both","park_dat_any","park_dat_both"),
                                                                      h="Combined categories"),
     list(t="cont", v=c("n_indicative","n_tests_done","n_core_plus"),
@@ -987,7 +1037,7 @@ if (nrow(pair_cross)) {
 ## The same pairs collapsed to a single rule: both components positive.
 pair_rules <- bind_rows(
   rule_metrics(df_saa2$rbdclinical == "Yes" & df_saa2$psg_rbd == "Yes",
-               df_saa2$saa_local_pos, "RBD clinical AND PSG"),
+               df_saa2$saa_local_pos, "RBD clinical AND PSG compatible"),
   rule_metrics(df_saa2$parkinsonism == "Yes" & df_saa2$datscan_bin == "Abnormal",
                df_saa2$saa_local_pos, "Parkinsonism AND DaT"),
   rule_metrics(df_saa2$dysautonomia == "Yes" & df_saa2$mibg == "Yes",
@@ -1001,6 +1051,111 @@ if (nrow(pair_rules)) {
       "who had both assessed, which is why it is much smaller than the cohort.")) %>%
     kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"))
 } else cat("No pair reached the minimum evaluable sample.")
+```
+
+# Tables for the abstract
+
+AD/PD accepts JPG images up to 500 KB and 600 by 800 pixels, and images do not
+count towards the 280-word limit. Two are written to the Results folder.
+
+At 600 pixels wide a table has to stay narrow, so these carry only the columns
+that earn their place. Check them at full size before submitting: if a row is
+unreadable, drop it rather than shrinking the font further.
+
+```{r abstract-tables}
+IMG_W <- 600; IMG_H <- 800; IMG_DPI <- 100
+
+## Compact summary rows: median [IQR] for numeric, n (%) per level for factors.
+sum_rows <- function(dat, v, label, group = "saa_local_pos") {
+  if (!has_col(dat, v)) return(NULL)
+  x <- dat[[v]]; g <- dat[[group]]
+  ok <- !is.na(x) & !is.na(g); if (sum(ok) < 3) return(NULL)
+  x <- x[ok]; g <- droplevels(g[ok])
+  lv <- levels(g)
+  if (is.numeric(x)) {
+    f <- function(k) sprintf("%.1f [%.1f, %.1f]", median(x[g == k]),
+                             quantile(x[g == k], .25), quantile(x[g == k], .75))
+    p <- tryCatch(wilcox.test(x ~ g, exact = FALSE)$p.value, error = function(e) NA)
+    tibble(Variable = label, Level = "", `SAA-` = f(lv[1]), `SAA+` = f(lv[2]),
+           p = ifelse(is.na(p), "", format.pval(p, digits = 2, eps = .001)))
+  } else {
+    f <- droplevels(factor(x))
+    p <- tryCatch(fisher.test(table(f, g), simulate.p.value = TRUE)$p.value,
+                  error = function(e) NA)
+    map_dfr(seq_along(levels(f)), function(i) {
+      l <- levels(f)[i]
+      pc <- function(k) sprintf("%d (%.0f%%)", sum(f[g == k] == l),
+                                100 * mean(f[g == k] == l))
+      tibble(Variable = if (i == 1) label else "", Level = l,
+             `SAA-` = pc(lv[1]), `SAA+` = pc(lv[2]),
+             p = if (i == 1 && !is.na(p)) format.pval(p, digits = 2, eps = .001) else "")
+    })
+  }
+}
+
+T1_VARS <- list(
+  c("age_at_sample", "Age, years"), c("SEX", "Sex"),
+  c("EDUC", "Education, years"), c("apoe4_carrier", "APOE e4 carrier"),
+  c("gds_fast", "GDS-FAST"), c("puntuaciones", "MoCA total"),
+  c("updrs3_total_score", "MDS-UPDRS III"),
+  c("fluctuations", "Fluctuations"), c("hallucinations", "Visual hallucinations"),
+  c("rbdclinical", "RBD, clinical"), c("parkinsonism", "Parkinsonism"),
+  c("datscan_bin", "DaT-SCAN"), c("psg_rbd", "PSG compatible with RBD"),
+  c("mibg", "MIBG"), c("at_group", "A/T profile"))
+
+tab1 <- map_dfr(T1_VARS, function(z) sum_rows(df_saa2, z[1], z[2]))
+
+n_neg <- sum(df_saa2$saa_local_pos == "Negative")
+n_pos <- sum(df_saa2$saa_local_pos == "Positive")
+names(tab1)[3:4] <- c(sprintf("SAA- (n=%d)", n_neg), sprintf("SAA+ (n=%d)", n_pos))
+
+save_table_jpg <- function(df, file, title = NULL) {
+  if (!requireNamespace("gridExtra", quietly = TRUE)) {
+    message("gridExtra not installed; skipping ", file); return(invisible(NULL))
+  }
+  th <- gridExtra::ttheme_minimal(
+    base_size = 7,
+    core = list(fg_params = list(hjust = 0, x = 0.02)),
+    colhead = list(fg_params = list(fontface = "bold", hjust = 0, x = 0.02)))
+  g <- gridExtra::tableGrob(df, rows = NULL, theme = th)
+  p <- ggplot() + theme_void() +
+    annotation_custom(g) +
+    { if (!is.null(title)) labs(title = title) else NULL } +
+    theme(plot.title = element_text(size = 8, face = "bold", hjust = 0))
+  ggsave(file.path(results_path, file), p, device = "jpeg",
+         width = IMG_W / IMG_DPI, height = IMG_H / IMG_DPI, dpi = IMG_DPI,
+         units = "in", quality = 92)
+  kb <- round(file.size(file.path(results_path, file)) / 1024)
+  cat(sprintf("%s written: %d x %d px, %d KB %s\n", file, IMG_W, IMG_H, kb,
+              if (kb > 500) "-- OVER the 500 KB limit" else "(within limits)"))
+}
+
+save_table_jpg(tab1, "Abstract_Table1.jpg",
+               "Table 1. Cohort by CSF alpha-synuclein SAA status")
+kable(tab1, caption = "Table 1 as exported.") %>%
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
+                font_size = 11)
+```
+
+```{r abstract-table2}
+## Table 2 stacks the count thresholds on the paired clinical/objective rules.
+t2a <- if (exists("thr_tab") && nrow(thr_tab))
+  thr_tab %>% transmute(Measure = Score, Rule = paste0(">= ", Threshold),
+                        n, Sens, Spec, PPV, NPV,
+                        OR = sprintf("%.1f", OR), p = signif(p, 2)) else NULL
+t2b <- if (exists("pair_rules") && nrow(pair_rules))
+  pair_rules %>% transmute(Measure = "Clinical + objective test", Rule,
+                           n, Sens, Spec, PPV, NPV,
+                           OR = sprintf("%.1f", OR), p = signif(p, 2)) else NULL
+tab2 <- bind_rows(t2a, t2b)
+
+if (nrow(tab2)) {
+  save_table_jpg(tab2, "Abstract_Table2.jpg",
+                 "Table 2. Counts of criteria and paired clinical/objective rules")
+  kable(tab2, caption = "Table 2 as exported.") %>%
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
+                  font_size = 11)
+} else cat("Neither the threshold table nor the paired rules produced rows.")
 ```
 
 # Cognitive progression (MMSE and MoCA)
