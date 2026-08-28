@@ -509,6 +509,18 @@ analytic_df$dlb_certainty <- factor(Reduce(dplyr::coalesce, dx_recoded),
 dx_raw <- coalesce_cols(analytic_df, DX_FIELDS)
 analytic_df$dx_raw <- dx_raw
 
+## Cognitive stage. Within the analysis cohort this is exactly the diagnosis
+## (MCI-LB probable = prodromal, probable DLB = dementia); it is derived from
+## the diagnosis rather than from GDS-FAST because GDS is missing for many
+## patients and its cut-point between stages is not applied consistently.
+analytic_df$cog_stage <- factor(dplyr::case_when(
+  analytic_df$dlb_certainty %in% c("MCI-LB possible", "MCI-LB probable",
+                                   "MCI-AD")            ~ "MCI",
+  analytic_df$dlb_certainty %in% c("Possible DLB", "Probable DLB",
+                                   "AD")                ~ "Dementia",
+  TRUE                                                  ~ NA_character_),
+  levels = c("MCI", "Dementia"))
+
 ## GDS-FAST
 analytic_df$gds_fast <- {
   g <- coalesce_cols(analytic_df, c("gds_visit", "GDS", "gds_fast_last_visit"),
@@ -562,9 +574,13 @@ analytic_df <- analytic_df %>%
     n_core_plus = ifelse(is.na(n_core) | is.na(n_indicative), NA_real_,
       n_core + n_indicative))
 
-cat(sprintf("Diagnostic certainty recoded for %d of %d subjects. GDS available in %d. MIBG in %d.\n",
+cat(sprintf(paste("Diagnostic certainty recoded for %d of %d subjects.",
+                  "Cognitive stage in %d (MCI %d, dementia %d). MIBG in %d.\n"),
   sum(!is.na(analytic_df$dlb_certainty)), nrow(analytic_df),
-  sum(!is.na(analytic_df$gds_fast)), sum(!is.na(analytic_df$mibg))))
+  sum(!is.na(analytic_df$cog_stage)),
+  sum(analytic_df$cog_stage == "MCI", na.rm = TRUE),
+  sum(analytic_df$cog_stage == "Dementia", na.rm = TRUE),
+  sum(!is.na(analytic_df$mibg))))
 
 dx_check <- tibble(Raw = dx_raw,
                    Recoded = as.character(analytic_df$dlb_certainty)) %>%
@@ -822,6 +838,7 @@ LAB <- c(
   A_clean="Amyloid status", AT_profile="A/T profile", at_group="A/T profile",
   mta="MTA score", fazekas="Fazekas score",
   dlb_certainty="Diagnosis", gds_fast="GDS-FAST stage", mibg="MIBG abnormal",
+  cog_stage="Cognitive stage",
   rbd_any="RBD (clinical or PSG)", rbd_both="RBD (clinical and PSG)",
   park_dat_any="Parkinsonism or abnormal DaT", park_dat_both="Parkinsonism and abnormal DaT",
   n_indicative="Indicative biomarkers positive (0-3)",
@@ -835,7 +852,7 @@ build_clinical <- function(data, group_var) {
   blocks <- list(
     list(t="cat",  v=c("SEX","apoe4_carrier"),                      h="Demographics"),
     list(t="cont", v=c("age_at_sample","EDUC"),                      h="Demographics"),
-    list(t="cat",  v=c("dlb_certainty", "gds_fast"),                 h="Diagnosis"),
+    list(t="cat",  v=c("dlb_certainty", "cog_stage"),                h="Diagnosis"),
     list(t="cont", v=c("puntuaciones","visuoespacialp","identificacionp","atencionp",
                        "lenguajep","abstraccionp","orientacionp","mis"),
                                                                      h="Cognition (MoCA)"),
@@ -1139,7 +1156,7 @@ sum_rows <- function(dat, v, label, group = "saa_local_pos") {
 T1_VARS <- list(
   c("age_at_sample", "Age, years"), c("SEX", "Sex"),
   c("EDUC", "Education, years"), c("apoe4_carrier", "APOE e4 carrier"),
-  c("gds_fast", "GDS-FAST"), c("puntuaciones", "MoCA total"),
+  c("cog_stage", "Cognitive stage"), c("puntuaciones", "MoCA total"),
   c("updrs3_total_score", "MDS-UPDRS III"),
   c("fluctuations", "Fluctuations"), c("hallucinations", "Visual hallucinations"),
   c("rbdclinical", "RBD, clinical"), c("parkinsonism", "Parkinsonism"),
