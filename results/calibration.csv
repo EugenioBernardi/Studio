@@ -1,0 +1,8 @@
+kind,stage,severity,seed,condition,accuracy,n
+intact,none,0.0,0,canonical,1.000000,30
+intact,none,0.0,0,fragmented,0.633333,30
+intact,none,0.0,0,low_contrast,0.933333,30
+intact,none,0.0,0,noise,1.000000,30
+intact,none,0.0,0,crowded,0.566667,30
+intact,none,0.0,0,rotated,0.900000,30
+intact,none,0.0,0,sheared,0.933333,30
