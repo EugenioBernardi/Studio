@@ -93,7 +93,19 @@ def forward_from(model, stage, act_in, lesion=None):
     return a
 
 
-def pool(act):
-    """Spatially average-pool: the readout should depend on what a stage
-    represents, not on where in the image it fired."""
-    return act.mean(dim=(2, 3)).numpy()
+def pool(act, center_frac=0.72):
+    """Average-pool over a central window of the feature map.
+
+    Reading out from the whole map blends flanking letters into the target and
+    turns the crowding condition into a pooling artefact rather than a
+    perceptual effect. Restricting the readout to the central field matches the
+    clinical situation, where the target is foveated, while leaving units with
+    large receptive fields free to register interference from the flankers --
+    which is what crowding actually is.
+    """
+    if center_frac >= 1.0:
+        return act.mean(dim=(2, 3)).numpy()
+    h = act.shape[-1]
+    k = max(1, int(round(h * center_frac)))
+    o = (h - k) // 2
+    return act[:, :, o:o + k, o:o + k].mean(dim=(2, 3)).numpy()
