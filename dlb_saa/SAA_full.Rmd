@@ -1081,12 +1081,21 @@ if (nrow(pair_cross)) {
 
 ```{r domain-binaries}
 ## The same pairs collapsed to a single rule: both components positive.
+## `&` does not propagate NA the way this rule needs: FALSE & NA is FALSE, so a
+## patient who is clinically RBD-negative and never had a PSG came out as
+## rule-negative rather than unevaluable. That put 23 patients without a PSG
+## into the denominator as negatives and made the rule look stronger than it is
+## (n = 42, p = 0.038 instead of n = 19, p = 0.17). Both components must have
+## been assessed, the same complete-case rule used for the counts.
+and_assessed <- function(a, b) ifelse(is.na(a) | is.na(b), NA, a & b)
+
 pair_rules <- bind_rows(
-  rule_metrics(df_saa2$rbdclinical == "Yes" & df_saa2$psg_rbd == "Yes",
+  rule_metrics(and_assessed(df_saa2$rbdclinical == "Yes", df_saa2$psg_rbd == "Yes"),
                df_saa2$saa_local_pos, "RBD clinical AND PSG compatible"),
-  rule_metrics(df_saa2$parkinsonism == "Yes" & df_saa2$datscan_bin == "Abnormal",
+  rule_metrics(and_assessed(df_saa2$parkinsonism == "Yes",
+                            df_saa2$datscan_bin == "Abnormal"),
                df_saa2$saa_local_pos, "Parkinsonism AND DaT"),
-  rule_metrics(df_saa2$dysautonomia == "Yes" & df_saa2$mibg == "Yes",
+  rule_metrics(and_assessed(df_saa2$dysautonomia == "Yes", df_saa2$mibg == "Yes"),
                df_saa2$saa_local_pos, "Dysautonomia AND MIBG"))
 
 if (nrow(pair_rules)) {
