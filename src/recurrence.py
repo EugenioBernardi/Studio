@@ -97,15 +97,16 @@ def main(a):
     probe = LogisticRegression(max_iter=3000, C=0.05).fit(sc.transform(feats(tr_img)), tr_y)
     print(f"probe fitted [{time.time()-t0:.0f}s]", flush=True)
 
-    cache = {}
-    for i in range(0, len(te_img), a.chunk):
-        x = torch.from_numpy(S.to_model_input(te_img[i:i + a.chunk]))
-        c, it = stage_inputs(model, x)
-        for s in STAGES:
-            cache.setdefault(s, []).append(c[s])
-        cache.setdefault("_intact", []).append(pool(it))
-    cache = {k: (torch.cat(v) if k != "_intact" else np.concatenate(v))
-             for k, v in cache.items()}
+    def cache_stage(stage):
+        """Inputs to one stage only. Caching all four at once exhausted memory."""
+        parts = []
+        for i in range(0, len(te_img), a.chunk):
+            x = torch.from_numpy(S.to_model_input(te_img[i:i + a.chunk]))
+            c, _ = stage_inputs(model, x)
+            parts.append(c[stage])
+        return torch.cat(parts)
+
+    intact = feats(te_img)
 
     fh = open(os.path.join(RESULTS, "recurrence.csv"), "w")
     fh.write("kind,stage,severity,seed,condition,accuracy,n\n")
@@ -119,15 +120,19 @@ def main(a):
         fh.flush()
         return (pred == te_y).mean()
 
-    record("intact", "none", 0.0, 0, cache["_intact"])
+    record("intact", "none", 0.0, 0, intact)
 
-    grid = [(mode, st, sv, sd) for mode in ["ff", "rec"] for st in BLOCKS
+    grid = [(mode, st, sv, sd) for st in BLOCKS for mode in ["ff", "rec"]
             for sv in a.severities for sd in range(a.seeds)]
+    cur_stage, cur_cache = None, None
     for n, (mode, st, sv, sd) in enumerate(grid, 1):
+        if st != cur_stage:
+            cur_cache = None
+            cur_cache, cur_stage = cache_stage(st), st
         blk = getattr(model, st)
         blk._les = Lesion(st, "ablation", sv, n_chan[st], seed=sd)
         blk._mode = mode
-        out = [run_from(model, st, cache[st][i:i + a.chunk], None)
+        out = [run_from(model, st, cur_cache[i:i + a.chunk], None)
                for i in range(0, len(te_img), a.chunk)]
         blk._les = blk._mode = None
         acc = record(mode, st, sv, sd, np.concatenate(out))
