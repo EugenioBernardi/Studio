@@ -15,6 +15,7 @@ import sys
 
 import numpy as np
 import pandas as pd
+from sklearn.isotonic import IsotonicRegression
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import stimuli as S
@@ -37,9 +38,23 @@ def load(fname):
     return df, intact, les
 
 
+def monotone(sev, pres):
+    """Isotonic (non-increasing) fit of a preservation curve.
+
+    Damage cannot help, so preservation is non-increasing in severity by
+    construction. Fitting that constraint before locating a crossing keeps
+    sampling noise in a single point from displacing the matched severity, which
+    raw first-crossing search is highly sensitive to.
+    """
+    if len(sev) < 2:
+        return pres
+    return IsotonicRegression(increasing=False, out_of_bounds="clip").fit(
+        sev, pres).predict(sev)
+
+
 def matched_severity(sub, target=0.75, ref="canonical"):
     r = sub[sub.condition == ref].sort_values("severity")
-    sev, pres = r.severity.values, r.preservation.values
+    sev, pres = r.severity.values, monotone(r.severity.values, r.preservation.values)
     below = np.where(pres <= target)[0]
     if len(below) == 0:
         return np.nan
@@ -62,10 +77,12 @@ def dissociation_table(les, kind, target=0.75):
             if np.isnan(sev):
                 dropped += 1
                 continue
-            prof = {c: float(np.interp(sev,
-                    sub[sub.condition == c].sort_values("severity").severity.values,
-                    sub[sub.condition == c].sort_values("severity").preservation.values))
-                    for c in S.CONDITIONS}
+            prof = {}
+            for c in S.CONDITIONS:
+                rc = sub[sub.condition == c].sort_values("severity")
+                prof[c] = float(np.interp(
+                    sev, rc.severity.values,
+                    monotone(rc.severity.values, rc.preservation.values)))
             deg = np.mean([prof[c] for c in S.DEGRADATION])
             tra = np.mean([prof[c] for c in S.TRANSFORMATION])
             rows.append(dict(stage=stage, seed=seed, matched_severity=sev, **prof,

@@ -31,9 +31,15 @@ TRANSFORMATION = ["rotated", "sheared"]
 
 _FONT_PATTERNS = [
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
 ]
 
 
@@ -49,7 +55,7 @@ def available_fonts():
 FONTS = available_fonts()
 
 
-def _render_letter(letter, font_path, size, rotation=0.0, shear=0.0):
+def _render_letter(letter, font_path, size, rotation=0.0, shear=0.0, dx=0, dy=0):
     """Render one letter as a float array in [0, 1]; 0 is ink, 1 is background."""
     pad = IMG_SIZE * 2
     img = Image.new("L", (pad, pad), 255)
@@ -69,7 +75,7 @@ def _render_letter(letter, font_path, size, rotation=0.0, shear=0.0):
         img = img.rotate(rotation, resample=Image.BICUBIC, fillcolor=255)
 
     left = (pad - IMG_SIZE) // 2
-    img = img.crop((left, left, left + IMG_SIZE, left + IMG_SIZE))
+    img = img.crop((left - dx, left - dy, left - dx + IMG_SIZE, left - dy + IMG_SIZE))
     return np.asarray(img, dtype=np.float32) / 255.0
 
 
@@ -91,15 +97,21 @@ def _fragment(arr, rng, n_patches=7, radius=11):
     return out
 
 
-def _crowd(letter, font_path, size, rng):
-    """Flank the target with two distractor letters at close spacing."""
-    target = _render_letter(letter, font_path, size)
+def _crowd(letter, font_path, size, rng, rotation=0.0, shear=0.0, dx=0, dy=0):
+    """Flank the target with two distractor letters at close spacing.
+
+    The target carries the same small pose jitter as every other condition, so
+    that crowding differs from canonical only by the presence of the flankers.
+    """
+    target = _render_letter(letter, font_path, size, rotation=rotation, shear=shear,
+                            dx=dx, dy=dy)
     flankers = [l for l in LETTERS if l != letter]
     left, right = rng.choice(flankers, size=2, replace=False)
     offset = int(size * 0.62)
     out = target.copy()
     for flank, sign in ((left, -1), (right, +1)):
-        f = _render_letter(flank, font_path, size)
+        f = _render_letter(flank, font_path, size, rotation=rotation, shear=shear,
+                           dx=dx, dy=dy)
         shifted = np.ones_like(f)
         if sign < 0:
             shifted[:, : IMG_SIZE - offset] = f[:, offset:]
@@ -112,24 +124,32 @@ def _crowd(letter, font_path, size, rng):
 def make_stimulus(letter, condition, rng, font_path=None, size=None):
     """Return one stimulus as a float array in [0, 1], shape (224, 224)."""
     font_path = font_path or FONTS[rng.integers(len(FONTS))]
-    size = size or int(rng.integers(96, 132))
+    size = size or int(rng.integers(84, 132))
+    # Position jitter, applied identically in every condition. Without it the
+    # target sits at a fixed location and a linear template on raw pixels solves
+    # most of the battery, so the readout would not depend on the ventral-stream
+    # representation at all. The range keeps the target inside the foveal
+    # readout window.
+    dx, dy = (int(rng.integers(-26, 27)), int(rng.integers(-26, 27)))
 
     if condition == "crowded":
-        arr = _crowd(letter, font_path, size, rng)
+        arr = _crowd(letter, font_path, size, rng, dx=dx, dy=dy,
+                     rotation=rng.uniform(-8, 8), shear=rng.uniform(-0.08, 0.08))
     elif condition == "rotated":
         # Rotation well outside the upright range: identity must survive a pose
         # change rather than a loss of signal.
         rot = rng.uniform(50, 130) * rng.choice([-1, 1])
-        arr = _render_letter(letter, font_path, size, rotation=rot)
+        arr = _render_letter(letter, font_path, size, rotation=rot, dx=dx, dy=dy)
     elif condition == "sheared":
         # Strong shear, minimal rotation: a second transformation condition that
         # is geometrically independent of rotation, so that the transformation
         # family does not rest on a single manipulation.
         sh = rng.uniform(0.75, 1.25) * rng.choice([-1, 1])
-        arr = _render_letter(letter, font_path, size, rotation=rng.uniform(-10, 10), shear=sh)
+        arr = _render_letter(letter, font_path, size, rotation=rng.uniform(-10, 10),
+                             shear=sh, dx=dx, dy=dy)
     else:
         # Small jitter everywhere so the probe cannot exploit exact position.
-        arr = _render_letter(letter, font_path, size,
+        arr = _render_letter(letter, font_path, size, dx=dx, dy=dy,
                              rotation=rng.uniform(-8, 8), shear=rng.uniform(-0.08, 0.08))
 
     if condition == "fragmented":

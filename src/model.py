@@ -52,10 +52,15 @@ class Lesion:
 
     def __init__(self, stage, kind, severity, n_channels, seed=0):
         self.stage, self.kind, self.severity = stage, kind, severity
+        # Nested across severity: one channel ordering is drawn per seed and
+        # increasing severity silences a prefix of it, so a severity curve is a
+        # single lesion getting worse rather than a series of unrelated lesions.
+        # Degeneration removes further units; it does not reshuffle which ones.
         rng = np.random.default_rng(seed)
+        order = rng.permutation(n_channels)
         n_kill = int(round(severity * n_channels))
-        dead = rng.choice(n_channels, n_kill, replace=False) if n_kill else np.array([], dtype=int)
-        self.dead = torch.from_numpy(np.isin(np.arange(n_channels), dead))
+        self.dead = torch.from_numpy(
+            np.isin(np.arange(n_channels), order[:n_kill]))
         self.seed = seed
 
     def apply(self, act):
