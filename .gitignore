@@ -1,4 +1,3 @@
 data/*.pth
 __pycache__/
 *.pyc
-results/lesion_results_v3.csv
