@@ -132,10 +132,10 @@ def run(args):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--n-train", type=int, default=30)
-    p.add_argument("--n-test", type=int, default=7)
+    p.add_argument("--n-test", type=int, default=10)
     p.add_argument("--chunk", type=int, default=40)
     p.add_argument("--threads", type=int, default=4)
-    p.add_argument("--out", default="lesion_results_v2.csv")
+    p.add_argument("--out", default="lesion_results_v3.csv")
     p.add_argument("--calibrate", action="store_true")
     a = p.parse_args()
 
@@ -153,8 +153,8 @@ if __name__ == "__main__":
         # ablation, so their ranges are an order of magnitude tighter; the
         # decay grid carries a sixth point because V1 crosses the matching
         # target below 0.10 while V2 crosses near 0.20.
-        a.severities = {"ablation": [0.08, 0.16, 0.26, 0.40, 0.55],
-                        "decay": [0.01, 0.03, 0.06, 0.10, 0.16, 0.25],
+        a.severities = {"ablation": [0.06, 0.14, 0.24, 0.36, 0.50],
+                        "decay": [0.02, 0.05, 0.09, 0.14, 0.20, 0.28],
                         "gain": [0.15, 0.30, 0.45, 0.65, 0.90]}
         a.seeds = {"ablation": 6, "decay": 6, "gain": 5}
     run(a)
