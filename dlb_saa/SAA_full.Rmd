@@ -1131,7 +1131,7 @@ HIRES_SCALE <- 3
 ## paired rules, expressed as ordinary yes/no variables so they can be tested
 ## and displayed exactly like the clinical features above them.
 ## rbd_both and park_dat_both are already NA unless BOTH components were
-## assessed, which is the denominator the table reports.
+## assessed, which is what their n column reports.
 ## ---------------------------------------------------------------------------
 df_tab <- df_saa2 %>% mutate(
   core_ge2 = factor(ifelse(is.na(n_core), NA, ifelse(n_core >= 2, "Yes", "No")),
@@ -1150,11 +1150,12 @@ df_tab <- df_saa2 %>% mutate(
 ##   pos   : level to report for a binary variable. NA collapses to a single row
 ##           labelled with the variable name alone -- "Cognitive fluctuations"
 ##           rather than "Cognitive fluctuations, Yes".
-##   denom : print k/n (%) instead of k (%). Used wherever the denominator is
-##           not the whole group, so a reader is never left to assume it is.
 ##   multi : keep every level on its own row even when there are only two.
+## The counts are plain k (%): the n column already carries how many patients
+## the row rests on, and printing k/n as well said the same thing twice in the
+## same row while costing the font size the extra width.
 ## ---------------------------------------------------------------------------
-sum_rows <- function(dat, v, label, pos = NA, denom = FALSE, multi = FALSE,
+sum_rows <- function(dat, v, label, pos = NA, multi = FALSE,
                      group = "saa_local_pos") {
   if (!has_col(dat, v)) return(NULL)
   x <- dat[[v]]; g <- dat[[group]]
@@ -1177,8 +1178,7 @@ sum_rows <- function(dat, v, label, pos = NA, denom = FALSE, multi = FALSE,
                 error = function(e) NA)
   pc <- function(k, l) {
     n <- sum(g == k); m <- sum(f[g == k] == l)
-    if (denom) sprintf("%d/%d (%.0f%%)", m, n, 100 * m / n)
-    else sprintf("%d (%.0f%%)", m, 100 * m / n)
+    sprintf("%d (%.0f%%)", m, 100 * m / n)
   }
   if (nlevels(f) == 2 && !multi) {
     l <- if (!is.na(pos)) pos else levels(f)[2]
@@ -1198,7 +1198,7 @@ sum_rows <- function(dat, v, label, pos = NA, denom = FALSE, multi = FALSE,
 
 ## ---------------------------------------------------------------------------
 ## The table, in the order it is read. Each entry is
-##   variable, label, level to report, explicit denominator, one row per level.
+##   variable, label, level to report, one row per level.
 ## ---------------------------------------------------------------------------
 T1_SPEC <- list(
   list("age_at_sample",      "Age, years"),
@@ -1212,22 +1212,21 @@ T1_SPEC <- list(
   list("hallucinations",     "Visual hallucinations",    pos = "Yes"),
   list("rbdclinical",        "RBD, clinical",            pos = "Yes"),
   list("parkinsonism",       "Parkinsonism",             pos = "Yes"),
-  list("datscan_bin",        "DaT-SCAN",                 pos = "Abnormal", denom = TRUE),
-  list("psg_rbd",            "Polysomnography, RBD-compatible", pos = "Yes", denom = TRUE),
-  list("mibg",               "MIBG",                     pos = "Abnormal", denom = TRUE),
+  list("datscan_bin",        "DaT-SCAN",                 pos = "Abnormal"),
+  list("psg_rbd",            "Polysomnography, RBD-compatible", pos = "Yes"),
+  list("mibg",               "MIBG",                     pos = "Abnormal"),
   list("at_group",           "CSF A/T profile",          multi = TRUE),
   list("n_core",             "Number of core features met"),
   list("core_ge2",           "Core features \u2265 2",       pos = "Yes"),
   list("core_ge3",           "Core features \u2265 3",       pos = "Yes"),
   list("core_ge4",           "Core features \u2265 4",       pos = "Yes"),
-  list("rbd_both",           "RBD with PSG confirmation", pos = "Yes", denom = TRUE),
+  list("rbd_both",           "RBD with PSG confirmation", pos = "Yes"),
   list("park_dat_both",      "Parkinsonism with DaT-SCAN confirmation",
-                             pos = "Yes", denom = TRUE))
+                             pos = "Yes"))
 
 built <- lapply(T1_SPEC, function(z)
   sum_rows(df_tab, z[[1]], z[[2]],
            pos   = if (is.null(z$pos))   NA    else z$pos,
-           denom = if (is.null(z$denom)) FALSE else z$denom,
            multi = if (is.null(z$multi)) FALSE else z$multi))
 tab1 <- bind_rows(built)
 
@@ -1433,8 +1432,8 @@ save_table_jpg <- function(df, file, title = NULL, note = NULL, align = NULL,
 }
 
 TABLE_NOTE <- paste(
-  "n is the number of patients with the variable available. Data are median",
-  "[IQR] or n (%). Percentages calculated over available data.",
+  "n is the number of patients in whom the variable was available; percentages",
+  "are calculated over that n within each group. Data are median [IQR] or n (%).",
   "Wilcoxon rank-sum test for continuous variables, Fisher's exact test for",
   "categorical variables; two-sided p values, uncorrected for multiple",
   "comparisons. A/T profile based on CSF amyloid A\u03b242/40 ratio and p-tau181.",
