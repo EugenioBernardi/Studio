@@ -1162,11 +1162,14 @@ sum_rows <- function(dat, v, label, pos = NA, denom = FALSE, multi = FALSE,
   x <- x[ok]; g <- droplevels(g[ok]); lv <- levels(g)
   fmt_p <- function(p) if (is.na(p)) "" else format.pval(p, digits = 2, eps = .001)
 
+  n_obs <- sum(ok)          # patients contributing to this row, both groups
+
   if (is.numeric(x)) {
     f <- function(k) sprintf("%.1f [%.1f, %.1f]", median(x[g == k]),
                              quantile(x[g == k], .25), quantile(x[g == k], .75))
     p <- tryCatch(wilcox.test(x ~ g, exact = FALSE)$p.value, error = function(e) NA)
-    return(tibble(Variable = label, `SAA-` = f(lv[1]), `SAA+` = f(lv[2]), p = fmt_p(p)))
+    return(tibble(Variable = label, n = as.character(n_obs),
+                  `SAA-` = f(lv[1]), `SAA+` = f(lv[2]), p = fmt_p(p)))
   }
 
   f <- droplevels(factor(x))
@@ -1182,14 +1185,15 @@ sum_rows <- function(dat, v, label, pos = NA, denom = FALSE, multi = FALSE,
     if (!l %in% levels(f)) return(NULL)
     ## the label carries the level only when the level itself is informative
     nm <- if (!is.na(pos) && pos %in% c("Abnormal", "Male")) paste0(label, ", ", tolower(pos)) else label
-    return(tibble(Variable = nm, `SAA-` = pc(lv[1], l), `SAA+` = pc(lv[2], l),
-                  p = fmt_p(p)))
+    return(tibble(Variable = nm, n = as.character(n_obs),
+                  `SAA-` = pc(lv[1], l), `SAA+` = pc(lv[2], l), p = fmt_p(p)))
   }
   ## the p value belongs on the heading row: it is a single test across levels
   levs <- map_dfr(levels(f), function(l)
-    tibble(Variable = paste0("  ", l), `SAA-` = pc(lv[1], l), `SAA+` = pc(lv[2], l),
-           p = ""))
-  bind_rows(tibble(Variable = label, `SAA-` = "", `SAA+` = "", p = fmt_p(p)), levs)
+    tibble(Variable = paste0("  ", l), n = "",
+           `SAA-` = pc(lv[1], l), `SAA+` = pc(lv[2], l), p = ""))
+  bind_rows(tibble(Variable = label, n = as.character(n_obs),
+                   `SAA-` = "", `SAA+` = "", p = fmt_p(p)), levs)
 }
 
 ## ---------------------------------------------------------------------------
@@ -1240,7 +1244,7 @@ if (length(dropped))
 ## be read as "not measured", but it says almost nothing on its own.
 n_neg <- sum(df_saa2$saa_local_pos == "Negative")
 n_pos <- sum(df_saa2$saa_local_pos == "Positive")
-names(tab1)[2:3] <- c(sprintf("aSyn-SAA\u2212 (n=%d)", n_neg),
+names(tab1)[3:4] <- c(sprintf("aSyn-SAA\u2212 (n=%d)", n_neg),
                       sprintf("aSyn-SAA+ (n=%d)", n_pos))
 
 
@@ -1332,7 +1336,9 @@ save_table_jpg <- function(df, file, title = NULL, note = NULL, align = NULL,
   pitch0 <- (top - 0.04) / (nr + 1)
   pt_h <- pitch0 * IMG_H / IMG_DPI * 72 * 0.55
   chars <- if (exists("w")) sum(w) else sum(nchar(names(df)) + 2)
-  pt_w <- (0.96 * IMG_W / IMG_DPI) * 72 / (chars * 0.5)
+  ## 0.55 em per character, not 0.50: at 0.50 the longest label in column 1
+  ## ("Parkinsonism with DaT-SCAN confirmation") ran into the n column.
+  pt_w <- (0.96 * IMG_W / IMG_DPI) * 72 / (chars * 0.55)
   pt <- if (!is.null(base_pt)) base_pt else min(11, max(5, pt_h, na.rm = TRUE),
                                                 pt_w, na.rm = TRUE)
 
@@ -1427,7 +1433,8 @@ save_table_jpg <- function(df, file, title = NULL, note = NULL, align = NULL,
 }
 
 TABLE_NOTE <- paste(
-  "Data are median [IQR] or n (%). Percentages calculated over available data.",
+  "n is the number of patients with the variable available. Data are median",
+  "[IQR] or n (%). Percentages calculated over available data.",
   "Wilcoxon rank-sum test for continuous variables, Fisher's exact test for",
   "categorical variables; two-sided p values, uncorrected for multiple",
   "comparisons. A/T profile based on CSF amyloid A\u03b242/40 ratio and p-tau181.",
@@ -1446,6 +1453,13 @@ save_table_jpg(tab1, "Abstract_Table1.jpg",
 kable(tab1, caption = "Table 1 as exported.") %>%
   kable_styling(full_width = FALSE, bootstrap_options = c("striped","condensed"),
                 font_size = 11)
+```
+
+The submission image itself, so the abstract, the table and the analysis behind
+it are all in one document rather than in a folder somebody has to be sent.
+
+```{r table-preview, echo=FALSE, out.width="100%", fig.cap="Abstract_Table1.jpg, exactly as it will be uploaded (600 x 800 px)."}
+knitr::include_graphics(file.path(results_path, "Abstract_Table1.jpg"))
 ```
 
 
