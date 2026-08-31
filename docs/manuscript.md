@@ -188,26 +188,141 @@ CKA result itself tested for lesion-model dependence.
 
 ## Results
 
-*Rewritten from the confirmatory re-run.*
+The intact model performed every condition above chance (0.10): canonical 0.98,
+low contrast 0.99, noise 0.96, rotated 0.90, sheared 0.89, fragmented 0.66,
+crowded 0.58.
+
+### Damage at early and intermediate stages is degradation-selective
+
+Once lesions are equated on canonical performance, the pre-specified
+early-minus-late contrast was:
+
+| Damage mechanism | early − late | permutation *p* |
+|---|---|---|
+| channel ablation | **+0.121** | **0.0003** |
+| gain dysregulation | **+0.113** | **0.0043** |
+| synaptic deletion | +0.017 | 0.62 |
+
+Under ablation and gain the per-stage gradient is monotonic and in the predicted
+direction — ablation V1 +0.119, V2 +0.147, V4 +0.032, IT −0.008; gain V1 +0.141,
+V2 +0.088, V4 0.000, IT +0.004. **H1 is supported** under two of three
+mechanisms: damage at early-to-intermediate stages disproportionately impairs
+stimuli whose evidence is impoverished, relative to stimuli that are merely
+transformed. Synaptic deletion shows no gradient.
+
+**H2 is not supported** under any mechanism. IT damage did not selectively impair
+transformed stimuli; its dissociation index is indistinguishable from zero
+throughout. There is no double dissociation, only its early half.
+
+### Severity matching is necessary
+
+Within a mechanism, stages required substantially different nominal severities
+for equal canonical impairment — under ablation, 0.205 at V1 against 0.359 at V2.
+Comparing raw lesion magnitudes across levels of a hierarchy mistakes fragility
+for specificity.
+
+### Behavioural and representational vulnerability come apart
+
+Behaviourally, IT was the most robust stage under ablation (mean preservation
+0.725, against 0.586, 0.541 and 0.491 for V2, V1 and V4) and under gain (0.777).
+On centred kernel alignment under whole-network damage, the opposite holds and it
+holds for every mechanism: later layers lose representational similarity to the
+healthy model faster than early ones (rank correlation of CKA with depth −0.879
+ablation, −0.845 synaptic deletion, −0.692 gain; all *p* < 0.0001).
+
+Two things follow. The representational result reported for synaptic decay
+[Moo25] replicates here and is **not** mechanism-dependent — it is robust. And
+the stage whose representation is disturbed most is not the stage whose damage
+costs most behaviourally. Representational change is a poor guide to functional
+consequence, which matters because representational similarity is a common
+outcome measure in this literature.
+
+### Two negative results
+
+**Recurrence.** Damaging the refinement timesteps of a block rather than its
+initial feedforward pass, at matched severity, did not produce a
+degradation-selective deficit (recurrent minus feedforward dissociation −0.055,
+*p* = 0.23, four usable cells per mode). The early-stage gradient reported above
+therefore has no mechanistic account here. The test was underpowered and should
+be read as uninformative rather than as evidence against the hypothesis.
+
+**False percepts.** Amplifying the gain on recurrent timesteps raised the
+model's confidence in a letter on stimuli containing none, from 0.46 to 0.97,
+with entropy falling to 0.001. This is an artefact. The IT feature norm inflates
+roughly fourfold across the gain range; confidence rises on signal-present trials
+even as accuracy on them falls from 0.51 to 0.16; and L2-normalising the feature
+vector before the readout flattens the effect. More fundamentally, the intact
+model is already about 0.85 confident on pure noise, because a ten-way readout
+with no reject option cannot report that nothing is present. The measure was not
+a valid index of false percepts, and testing this properly requires an open-set
+readout.
+
+### A methodological result obtained by accident
+
+An earlier version of this experiment produced a significant dissociation of the
+opposite sign under synaptic deletion (−0.128, *p* = 0.007), with sensitivity
+analyses and per-seed consistency that all looked sound. It did not survive a
+change to the stimuli. In that version letters were always centred, and a linear
+probe on 28×28 raw pixels scored 0.807 — beating the network on crowding — so the
+readout was not relying on the ventral-stream representation at all. Adding
+position jitter dropped the pixel baseline to 0.200 against 0.817 for trained IT,
+and the effect disappeared and reversed.
+
+We report this because the discarded result was not obviously flawed. It was
+statistically robust, mechanistically interpretable, and wrong. Studies in this
+literature do not routinely report a pixel-level baseline for their stimuli, and
+on this evidence they should.
 
 ## Discussion
 
-*Rewritten from the confirmatory re-run.*
+Damage at early and intermediate stages of a ventral-stream model produces a
+disproportionate impairment for degraded stimuli, under two mechanistically
+distinct forms of damage, with lesions equated for their effect on clean stimuli.
+That is the apperceptive pattern, and it arises at the levels of the hierarchy
+where posterior cortical atrophy pathology concentrates [Lew87, Leh11, Fir19].
+The corresponding late-stage prediction fails: IT damage produces no selective
+loss for transformed stimuli, despite the model demonstrably building
+transformation tolerance across those stages.
 
-### Limitations to state plainly
+Three qualifications bound how far this travels.
 
-The relationship between this model's behaviour and human vision is not close,
-and the paper should not pretend otherwise. ImageNet-trained convolutional
-networks degrade far more steeply than human observers under contrast reduction,
-additive noise, blur and fragmentation [Gei18], with contour integration emerging
-only at very large training scale [Lon25]. Crowding in such networks is driven by
-pooling and receptive-field structure and fails several human signatures,
-including global uncrowding and similarity effects [Vol17, Lon19, Doe19b]; the
-crowding condition here should therefore be read as flanker interference in the
-model, not as a model of human crowding. Consequently the degradation conditions
-index sensitivity to impoverished evidence *in this model*, and mapping that onto
-the clinical apperceptive profile is an assumption, not a result.
+The result is mechanism-dependent in a limited way. Ablation and gain
+dysregulation agree; synaptic deletion, the mechanism used by most of this
+literature and arguably the most defensible biologically given that synapse loss
+is the strongest clinicopathological correlate of cognition [Ser11, Sch11], shows
+no gradient at all. We are not able to say which mechanism should be believed,
+and that is itself the point: [Gue20] argued that conclusions from damaged
+networks can be artefacts of implementation, and this is a case where one of three
+implementations disagrees with the other two.
 
-Further limits: damage was confined to one stage at a time whereas degeneration
-is distributed; behaviour was read out only from IT; the model omits the dorsal
-contributions prominent in PCA; and no patient data were analysed.
+The relationship to human vision is loose. Convolutional networks degrade far
+more steeply than people under noise, contrast reduction and fragmentation
+[Gei18, Lon25], and their crowding fails human signatures [Vol17, Lon19, Doe19b].
+The degradation conditions index sensitivity to impoverished evidence in this
+model; mapping that onto the clinical apperceptive profile remains an assumption.
+
+And the strongest practical finding is a caution rather than a discovery. A
+result that survived permutation testing, bootstrap intervals, leave-one-out
+sensitivity analysis and per-seed consistency checks was nonetheless an artefact
+of a stimulus set that a linear pixel classifier could solve. Every claim in this
+literature rests on the assumption that the network is doing the work; that
+assumption is cheap to test and, as far as we can determine, rarely tested.
+
+### Limitations
+
+Five to six lesion seeds per cell; one architecture; synthetic stimuli; damage
+confined to one stage at a time whereas degeneration is distributed; behaviour
+read out only from IT; the dorsal contributions prominent in PCA are absent; and
+no patient data were analysed. The claims are claims about a model.
+
+### Next steps
+
+The comparison that would make this clinical is a severity-matched profile from
+patients on the corresponding tests against a contrast group of amnestic
+Alzheimer's disease, related to the posterior-to-anterior gradient of atrophy. A
+second direction, better specified than anything attempted here, is to drive the
+model along the documented disease trajectory — mechanism changing with stage,
+damage weighted by the known posterior distribution — and ask whether the
+predicted order of test failure matches the event-based sequence already
+estimated from cohort data [Fir20], and whether a clinical profile carries enough
+information to identify disease locus at all.
