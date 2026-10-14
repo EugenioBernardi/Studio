@@ -1,0 +1,252 @@
+---
+title: "Tau fold accessibility — figures"
+author: "Eugenio Bernardi"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    fig_width: 10
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, warning = TRUE, message = FALSE,
+  dev = c("png", "pdf"), dpi = 150, fig.path = "figures/"
+)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(forcats)
+```
+
+Inputs come from `scripts/03_accessibility.py`. Nothing is recomputed here.
+
+```{r load}
+DATA <- "../data"
+
+core <- read_csv(file.path(DATA, "core_matrix_long.csv"), show_col_types = FALSE)
+sasa <- read_csv(file.path(DATA, "residue_sasa.csv"), show_col_types = FALSE)
+motif <- read_csv(file.path(DATA, "motif_exposure.csv"), show_col_types = FALSE)
+prov <- jsonlite::read_json(file.path(DATA, "provenance.json"))
+
+sprintf(
+  "%d folds, generated %s, n_trim=%d per end, biopython %s",
+  n_distinct(core$pdb_id), prov$generated_utc,
+  prov$parameters$n_trim_per_end, prov$biopython
+)
+```
+
+## The three-state encoding
+
+`core_state` is deliberately not binary. Carrying `NA` through to the figures
+is the point: a residue absent from an isoform is not an exposed residue, and
+a reader must be able to see which is which.
+
+```{r states}
+core |>
+  count(reason, core_state) |>
+  arrange(desc(n))
+```
+
+If `not_encoded_3R_lacks_exon10` has zero rows, check that the 3R folds really
+are labelled `3R` in `data/folds.csv` — a mislabelled isoform silently turns
+absent residues into exposed ones.
+
+## Figure 1 — ordered core vs fuzzy coat
+
+```{r fig1, fig.height=5}
+fold_order <- core |>
+  distinct(pdb_id, disease, fold_label, isoform) |>
+  arrange(disease, fold_label) |>
+  mutate(label = sprintf("%s %s (%s)", disease, fold_label, isoform))
+
+fig1_dat <- core |>
+  left_join(fold_order, by = c("pdb_id", "disease", "fold_label", "isoform")) |>
+  mutate(
+    label = fct_rev(factor(label, levels = fold_order$label)),
+    state = case_when(
+      core_state == 1 ~ "ordered core",
+      core_state == 0 ~ "fuzzy coat",
+      TRUE            ~ "not in this isoform"
+    )
+  )
+
+motif_marks <- motif |>
+  filter(motif %in% c("PHF6*_VQIINK", "PHF6_VQIVYK")) |>
+  distinct(motif, start, end)
+
+fig1 <- ggplot(fig1_dat, aes(resno, label, fill = state)) +
+  geom_tile() +
+  geom_vline(
+    data = motif_marks, aes(xintercept = start),
+    linetype = 2, linewidth = 0.3, inherit.aes = FALSE
+  ) +
+  geom_vline(
+    data = motif_marks, aes(xintercept = end),
+    linetype = 2, linewidth = 0.3, inherit.aes = FALSE
+  ) +
+  scale_fill_manual(
+    values = c(
+      "ordered core"        = "#2b3a67",
+      "fuzzy coat"          = "#d9dce3",
+      "not in this isoform" = "#f4a259"
+    ),
+    name = NULL
+  ) +
+  scale_x_continuous(expand = c(0, 0), breaks = seq(0, 441, 50)) +
+  labs(
+    x = "tau residue (2N4R numbering)", y = NULL,
+    title = "Ordered core vs fuzzy coat across tauopathy folds",
+    subtitle = paste(
+      "Dashed lines: PHF6* (275-280) and PHF6 (306-311).",
+      "Orange marks residues the isoform does not encode -- absent, not exposed."
+    )
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid = element_blank(), legend.position = "top")
+
+fig1
+```
+
+## Figure 2 — motif accessibility fingerprint
+
+`frac_buried` is the fraction of a motif's *defined* residues in the ordered
+core. Motifs with no defined residues in a fold are `NA` and stay `NA`.
+
+```{r fig2-matrix}
+fp <- motif |>
+  mutate(label = sprintf("%s %s (%s)", disease, fold_label, isoform)) |>
+  select(label, motif, frac_buried) |>
+  pivot_wider(names_from = motif, values_from = frac_buried) |>
+  tibble::column_to_rownames("label") |>
+  as.matrix()
+
+cat(sprintf("%d x %d matrix, %d NA cells\n", nrow(fp), ncol(fp), sum(is.na(fp))))
+```
+
+Clustering with `NA` present needs a decision, not a default. `dist()` returns
+`NA` for any pair sharing a missing column, which silently breaks `hclust`.
+Here distances use pairwise-complete columns and the number of columns each
+distance rests on is reported, so a cluster built on two shared motifs is not
+mistaken for one built on nine.
+
+```{r fig2-dist}
+pairwise_dist <- function(m) {
+  n <- nrow(m)
+  d <- matrix(NA_real_, n, n, dimnames = list(rownames(m), rownames(m)))
+  support <- matrix(0L, n, n, dimnames = list(rownames(m), rownames(m)))
+  for (i in seq_len(n)) for (j in seq_len(n)) {
+    ok <- !is.na(m[i, ]) & !is.na(m[j, ])
+    support[i, j] <- sum(ok)
+    if (support[i, j] > 0) {
+      # Scale by the number of shared columns so distances stay comparable
+      # between pairs that share different numbers of motifs.
+      d[i, j] <- sqrt(sum((m[i, ok] - m[j, ok])^2) / support[i, j])
+    }
+  }
+  list(d = d, support = support)
+}
+
+pd <- pairwise_dist(fp)
+cat(sprintf(
+  "distances rest on %d-%d shared motifs (median %d of %d)\n",
+  min(pd$support), max(pd$support),
+  median(pd$support[upper.tri(pd$support)]), ncol(fp)
+))
+
+if (anyNA(pd$d)) {
+  warning("some fold pairs share no motif; clustering omitted")
+  ord <- rownames(fp)
+} else {
+  hc <- hclust(as.dist(pd$d), method = "average")
+  ord <- rownames(fp)[hc$order]
+}
+```
+
+```{r fig2, fig.height=5}
+fig2_dat <- motif |>
+  mutate(
+    label = factor(
+      sprintf("%s %s (%s)", disease, fold_label, isoform), levels = ord
+    ),
+    motif = factor(motif, levels = colnames(fp))
+  )
+
+fig2 <- ggplot(fig2_dat, aes(motif, label, fill = frac_buried)) +
+  geom_tile(colour = "white", linewidth = 0.4) +
+  geom_text(
+    data = ~ dplyr::filter(.x, is.na(frac_buried)),
+    aes(label = "n/a"), size = 2.6, colour = "grey30"
+  ) +
+  scale_fill_viridis_c(
+    option = "mako", direction = -1, limits = c(0, 1),
+    na.value = "grey94", name = "fraction\nburied"
+  ) +
+  labs(
+    x = NULL, y = NULL,
+    title = "Fraction of each motif buried in the fibril core",
+    subtitle = "n/a = motif not encoded by this fold's isoform"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid = element_blank()
+  )
+
+fig2
+```
+
+## Quantitative accessibility, for comparison with the binary split
+
+The binary core/coat call and the continuous relative SASA should broadly
+agree. Where they disagree is interesting: a residue inside the ordered core
+can still be surface-exposed on the outer face of the fibril, and those are
+exactly the candidate binding sites.
+
+```{r rel-sasa, fig.height=4}
+sasa_fold <- sasa |>
+  mutate(label = sprintf("%s %s (%s)", disease, fold_label, isoform))
+
+ggplot(sasa_fold, aes(resno, rel_sasa)) +
+  geom_point(size = 0.5, alpha = 0.6) +
+  geom_hline(yintercept = 0.25, linetype = 2, linewidth = 0.3) +
+  facet_wrap(~label, ncol = 3) +
+  labs(
+    x = "tau residue (2N4R numbering)", y = "relative SASA",
+    title = "Per-residue relative SASA within the ordered core",
+    subtitle = paste(
+      "Central layers only. Dashed line: a conventional 25% exposure cut.",
+      "Points above it are core residues still available at the fibril surface."
+    )
+  ) +
+  theme_minimal(base_size = 10)
+```
+
+```{r exposed-core}
+sasa_fold |>
+  filter(!is.na(rel_sasa), rel_sasa > 0.25) |>
+  count(label, name = "n_exposed_core_residues") |>
+  arrange(desc(n_exposed_core_residues))
+```
+
+## Warnings raised during computation
+
+Read these before trusting anything above.
+
+```{r warnings}
+w <- prov$warnings
+if (length(w) == 0) {
+  cat("none\n")
+} else {
+  for (pid in names(w)) {
+    for (msg in w[[pid]]) cat(sprintf("%s: %s\n", pid, msg))
+  }
+}
+```
+
+```{r session}
+sessionInfo()
+```

@@ -1,0 +1,15 @@
+# Fetched inputs and computed outputs. folds.csv is the exception: it is
+# hand-written curation and belongs in version control as the audit trail.
+data/*
+!data/.gitkeep
+!data/folds.csv
+data/cache/
+data/structures/
+tests/fixtures/*.pdb
+__pycache__/
+*.pyc
+.Rhistory
+.RData
+analysis/figures/
+analysis/*.html
+.pytest_cache/
