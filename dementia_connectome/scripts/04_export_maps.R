@@ -33,7 +33,11 @@ out <- do.call(rbind, lapply(syn, function(s) {
     data.frame(syndrome = s, map = "epicentre_top10", parcel = 1:k, value = as.numeric(e$rank <= 10)),
     data.frame(syndrome = s, map = "recon_geometric_K20", parcel = 1:k, value = z(recon_K(G, a))),
     data.frame(syndrome = s, map = "recon_SC_K20", parcel = 1:k, value = z(recon_K(Hs, a))),
-    data.frame(syndrome = s, map = "recon_FC_K20", parcel = 1:k, value = z(recon_K(Hf, a)))
+    data.frame(syndrome = s, map = "recon_FC_K20", parcel = 1:k, value = z(recon_K(Hf, a))),
+    # homotopic asymmetry: atrophy at the parcel minus atrophy at its exact mirror location
+    # (mirrored voxel map, same parcel geometry), in SD units; shown on left-hemisphere parcels
+    data.frame(syndrome = s, map = "asym_LminusR", parcel = 1:k,
+               value = ifelse(d$info$hemi == "LH", (a - cc$flipped[, s]) / sd(a), NA))
   )
 }))
 # correlations shown in figure titles

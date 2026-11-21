@@ -1,5 +1,6 @@
 ---
 title: "Connectome-constrained atrophy in AD and FTD syndromes"
+pagetitle: "Dementia atrophy networks"
 subtitle: "Schaefer 100/200/400; HCP SC and FC; communication models vs distance; five null models"
 date: "`r format(Sys.Date())`"
 output:
@@ -44,6 +45,11 @@ DLB map exists in the two Zenodo records; none was substituted.**
 
 1. **No communication model beats distance.** A distance-only kernel exp(−d/λ) predicts
    each region's atrophy from other regions' atrophy best in every syndrome (r = 0.57–0.83).
+   Its fitted length scale is ~3.6 mm, so it measures how *smooth* the map is (a parcel
+   resembles its immediate neighbours); it does not mean that disease spreads only locally.
+   The AD pattern is distributed (40 most atrophic parcels in 22 separate clusters). In AD,
+   bvFTD and pooled FTD the best single predictor of a parcel's atrophy is the atrophy at its
+   mirror location in the other hemisphere (r = 0.81, 0.81, 0.85).
    The best SC models (one-step SC, search information, heat kernel) reach r = 0.44–0.72.
    Zero of 49 model-vs-distance comparisons favour a model at FDR < 0.05 at any
    resolution; giving each model one fitted exponent only produces ties (Δr ≤ 0.04, n.s.).
@@ -76,16 +82,23 @@ DLB map exists in the two Zenodo records; none was substituted.**
 7. **Eigenmodes.** Geometric (cortical-surface) eigenmodes reconstruct AD and MCI atrophy
    better than spatially matched surrogates; FC harmonics do so for bvFTD and pooled FTD. SC
    harmonics beat degree-rewired SCs but not geometry-rewired ones (except in nfvPPA).
-8. **Laterality.** The apparent left peak in bvFTD is an atlas artefact: at voxel level
-   bvFTD is near-symmetric (laterality index −0.06), while svPPA and nfvPPA are
-   left-lateralised (+0.11).
-9. **Similarity.** AD resembles MCI (r = 0.80) and, less, svPPA (0.48) and bvFTD (0.31); all
+8. **Asymmetry.** Comparing each left region with the identical mirrored right region,
+   AD, MCI and bvFTD are symmetric; svPPA (84% of the most atrophic locations
+   left-dominant, sign test p < 0.001) and nfvPPA (67%, p = 0.008) are left-lateralised.
+   The left anterior-insula peaks in the raw bvFTD (and, partly, AD) maps are largely an
+   atlas artefact.
+9. **MCI** has the AD topography (r = 0.80) at about two-thirds of its amplitude, with
+   medial temporal and posterior cingulate/precuneus epicentres; network effects follow AD
+   but are weaker and do not survive the stricter nulls.
+10. **Similarity.** AD resembles MCI (r = 0.80) and, less, svPPA (0.48) and bvFTD (0.31); all
    FTD maps are mutually similar (spin FDR < 0.05; inflated by a shared NIFD control group);
    PD is unrelated to the others. Highly FC-connected hubs are *less* atrophic in bvFTD and
    pooled FTD (ρ ≈ −0.62, FDR q = 0.007); SC strength shows no association that survives FDR.
 
-**Interpretation.** At group level, AD atrophy is explained by spatial proximity: no
-structural route or functional network adds much. bvFTD (and pooled FTD, svPPA) additionally
+**Interpretation.** At group level, the AD map is captured by its own spatial smoothness
+and bilateral symmetry; neither structural routes nor functional networks add much beyond
+that in this cortical-only analysis (the hippocampus, which links the medial temporal and
+posterior cingulate clusters, is not included). bvFTD (and pooled FTD, svPPA) additionally
 follow long-range *functional* networks, with a smaller structural-topology effect in bvFTD.
 Because degree-only rewiring and spin nulls overstate network effects, claims of
 "connectome-shaped atrophy" need geometry-aware nulls and a distance baseline.
@@ -362,7 +375,10 @@ because all of them use correlations, ranks or weighted averages.
   across patients; every test is across parcels.
 - **Young-adult connectome.** HCP SC and FC come from healthy adults aged about 22–35.
 - **Cortex only.** The Schaefer parcellation omits the hippocampus, amygdala and
-  subcortex. For AD (hippocampus) and bvFTD and svPPA (amygdala, striatum, thalamus) the
+  subcortex. ENIGMA provides HCP subcortical SC and FC for 14 structures (accumbens,
+  amygdala, caudate, hippocampus, pallidum, putamen, thalamus, both sides) linked to
+  Schaefer-400; adding them needs a matching volumetric subcortical atlas and the
+  variogram or Moran nulls (spins do not apply to subcortex). For AD (hippocampus) and bvFTD and svPPA (amygdala, striatum, thalamus) the
   likely epicentres sit outside the parcellated cortex; cortical "epicentres" here are at
   best cortical entry points.
 - **DBM signal.** DBM measures local volume change of the deformation, not grey matter;

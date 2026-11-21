@@ -223,6 +223,34 @@ best_by_syn <- E_tab %>% filter(model != "distance") %>% group_by(syndrome) %>% 
 best_by_syn
 ```
 
+**What the distance baseline measures.** The fitted length scale is about 3.6 mm, so
+about 60% of each parcel's prediction weight comes from parcels within 15 mm (the median
+nearest-parcel distance is 11 mm). The distance kernel therefore measures how *smooth*
+the map is (a parcel resembles its immediate neighbours), not whether disease spreads
+locally. The AD pattern itself is distributed: its 40 most atrophic parcels form 22
+separate clusters (medial temporal, posterior cingulate/precuneus, lateral temporal, insula
+on both sides). Linking these distant clusters is what the network models should add, and
+that is tested directly in "Distance-censored prediction" (only parcels > R mm away may be
+used) and "Unique contribution beyond distance".
+
+```{r E-distance-meaning}
+K36 <- comm_distance(d4$Dist, 3.6); same_h <- outer(d4$info$hemi, d4$info$hemi, "==")
+Kw <- K36; Kw[!same_h] <- 0; Ka <- K36; Ka[same_h] <- 0
+data.frame(syndrome = syn,
+           r_distance_all = sapply(syn, function(s) cor(d4$A[, s], predict_from_model(K36, d4$A[, s]))),
+           r_distance_same_hemisphere = sapply(syn, function(s) cor(d4$A[, s], predict_from_model(Kw, d4$A[, s]))),
+           r_distance_other_hemisphere = sapply(syn, function(s) cor(d4$A[, s], predict_from_model(Ka, d4$A[, s]))),
+           r_mirror_location = sapply(syn, function(s) cor(d4$A[, s], c4$flipped[, s]))) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
+```
+
+In AD, bvFTD and pooled FTD the single best predictor of a parcel's atrophy is the atrophy
+at its **mirror location in the other hemisphere** (`r_mirror_location`; r = 0.81, 0.81,
+0.85, above the distance kernel): these patterns are largely bilateral and symmetric, which
+neither a short-range kernel nor the HCP SC (964 interhemispheric edges at 400 parcels)
+captures well. In the left-lateralised language variants the mirror location predicts less
+well (svPPA 0.82, nfvPPA 0.44).
+
 **Sensitivity: one fitted exponent for every communication model (M^γ).** This gives the
 communication models the same single free parameter the distance kernel has.
 
@@ -393,17 +421,57 @@ sm <- data.frame(syndrome = syn, energy = sm_obs,
 sm %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
 ```
 
-## Laterality and the atlas
+## Hemispheric asymmetry
+
+Comparing a left parcel with a right parcel is biased because Schaefer parcels are not
+mirror pairs (sizes and positions differ). Here each left parcel is compared with the
+*identical region mirrored to the right*: the voxel map is mirrored on the symmetric
+template and parcellated with the same atlas, so both values come from the same geometry.
+Asymmetry = (left − right) / SD of the map; summarised over all left parcels and over the
+most atrophic 20% of locations (either side), with a sign test.
 
 ```{r X-laterality}
 lat <- voxel_laterality(400)
-flip_r <- sapply(syn, function(s) cor(d4$A[, s], c4$flipped[, s]))
-hemi_diff <- function(a, info) mean(a[info$hemi == "LH"]) - mean(a[info$hemi == "RH"])
-lat$parcel_LminusR <- sapply(syn, function(s) hemi_diff(d4$A[, s], d4$info))
-lat$parcel_LminusR_mirrored <- sapply(syn, function(s) hemi_diff(c4$flipped[, s], d4$info))
-lat$r_original_vs_mirrored_parcels <- flip_r
-lat %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+lh4 <- d4$info$hemi == "LH"
+asy <- do.call(rbind, lapply(syn, function(s) {
+  a <- d4$A[, s]; f <- c4$flipped[, s]; thr <- quantile(a, 0.8); sel <- lh4 & (a >= thr | f >= thr)
+  data.frame(syndrome = s, voxel_mirror_r = lat$mirror_r[lat$syndrome == s], voxel_LI = lat$LI_positive_atrophy[lat$syndrome == s],
+             mean_LminusR_SD = mean(a[lh4] - f[lh4]) / sd(a), top20_LminusR_SD = mean(a[sel] - f[sel]) / sd(a),
+             top20_left_greater = mean(a[sel] > f[sel]), sign_test_p = binom.test(sum(a[sel] > f[sel]), sum(sel))$p.value,
+             most_left_biased = short_label(d4$info$label[lh4][which.max(a[lh4] - f[lh4])]))
+}))
+asy %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
 ```
+
+**AD, MCI and bvFTD are symmetric** (about half of the most atrophic locations are
+left-dominant; sign tests n.s.). **svPPA (84% left-dominant, 0.54 SD) and nfvPPA (67%,
+0.39 SD) are left-lateralised**, and the pooled FTD map inherits a leftward bias from the
+language variants. The left anterior-insula peaks visible in the raw bvFTD map come from the
+atlas: when the same parcel samples the mirrored map, the peak stays (`rank_mirrored` in
+"D. Epicentres"). In AD the effect is partial (the left insular parcels drop from rank 4–6
+to 8–18 when mirrored).
+
+## MCI
+
+```{r X-mci}
+zd <- as.numeric(scale(d4$A[, "MCI"]) - scale(d4$A[, "AD"]))
+net_mci <- aggregate(cbind(AD = d4$A[, "AD"], MCI = d4$A[, "MCI"]) ~ network, data = data.frame(network = d4$info$network, d4$A), FUN = mean)
+list(similarity = c(r_MCI_AD = round(cor(d4$A[, "MCI"], d4$A[, "AD"]), 3),
+                    slope_MCI_on_AD = round(unname(coef(lm(d4$A[, "MCI"] ~ d4$A[, "AD"]))[2]), 3)),
+     relatively_more_in_MCI = short_label(d4$info$label[order(-zd)[1:6]]),
+     relatively_less_in_MCI = short_label(d4$info$label[order(zd)[1:6]]),
+     network_means = net_mci %>% mutate(MCI_over_AD = MCI / AD) %>% mutate(across(where(is.numeric), ~ round(.x, 2))))
+```
+
+The MCI map has the AD topography (r = 0.80) at about two-thirds of its amplitude. Its
+epicentres are medial temporal and posterior cingulate/precuneus parcels (table in
+"D. Epicentres"); relative to AD it is weaker in visual, lateral temporal and parietal
+cortex and relatively stronger in posterior cingulate/precuneus, somatomotor, salience and
+control parcels.
+Network results follow AD but are weaker: SC-neighbour r = 0.53 (spin p = 0.03, not
+significant under variogram or geometry-preserving nulls), no FC contribution beyond
+distance, and no long-range predictability (r ≤ 0.12 when only parcels > 30 mm away are used). ADNI MCI was not
+selected on amyloid status, so the map mixes prodromal AD with other causes.
 
 ## Robustness across resolutions
 

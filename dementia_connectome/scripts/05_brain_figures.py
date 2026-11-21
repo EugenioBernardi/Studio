@@ -212,6 +212,27 @@ for part, sl in (("AD_bvFTD", slice(0, 8)), ("svPPA_nfvPPA", slice(8, 16))):
     grid(rows[sl], "Atrophy reconstructed from the first 20 eigenmodes of each basis (least squares)",
          f"brain_eigen_recon_{part}.png", note="Geometric = Laplace–Beltrami modes of the cortical surface (fsaverage5, medial wall removed), averaged within parcels; SC/FC harmonics = eigenvectors of the normalised graph Laplacian.")
 
+# ---------------------------------------------------------------- 5b. homotopic asymmetry
+asym_syn = ["AD", "MCI", "bvFTD", "svPPA", "nfvPPA"]
+fig = plt.figure(figsize=(9.5, 2.5 * len(asym_syn) + 1.2))
+vmax = max(np.nanpercentile(np.abs(get(s, "asym_LminusR")), 99) for s in asym_syn)
+for i, s in enumerate(asym_syn):
+    vals = get(s, "asym_LminusR")
+    for j, view in enumerate(["lateral", "medial"]):
+        ax = fig.add_subplot(len(asym_syn), 3, i * 3 + j + 1, projection="3d")
+        draw(ax, vals, "left", view, DIV, -vmax, vmax)
+        if i == 0: ax.set_title(f"Left hemisphere, {view}", fontsize=10, color="#52514e")
+    ax = fig.add_subplot(len(asym_syn), 3, i * 3 + 3); ax.axis("off")
+    ax.text(0, 0.6, s, fontsize=11, fontweight="bold", va="center")
+cax = fig.add_axes([0.66, 0.062, 0.28, 0.013])
+cb = fig.colorbar(plt.cm.ScalarMappable(cmap=DIV, norm=plt.Normalize(-vmax, vmax)), cax=cax, orientation="horizontal")
+cb.set_label("left − right atrophy at the mirror location (SD units)", fontsize=8); cb.ax.tick_params(labelsize=8); cb.outline.set_visible(False)
+fig.suptitle("Homotopic asymmetry: red = left more atrophic than the mirror-image right location", fontsize=12, x=0.02, y=0.995, ha="left", va="top")
+fig.text(0.02, 0.005, "Each left parcel is compared with the identical region mirrored to the right (symmetric template), so atlas non-homotopy cannot create asymmetry.", fontsize=8, color="#52514e")
+fig.subplots_adjust(left=0, right=0.99, top=0.95, bottom=0.07, wspace=-0.05, hspace=0.0)
+fig.savefig("figures/brain_asymmetry.png", dpi=130, facecolor="#fcfcfb"); plt.close(fig)
+print("wrote brain_asymmetry.png")
+
 # ---------------------------------------------------------------- 6. the bases themselves
 G = pd.read_csv("data/eigenmodes/geometric_modes_schaefer400.csv")
 ev = pd.read_csv("data/eigenmodes/geometric_eigenvalues.csv")
@@ -220,4 +241,12 @@ Gm = G.values[:, order_cols]
 rows = [(f"geometric mode {i}", Gm[:, i]) for i in (2, 3, 4, 5)]
 grid(rows, "First non-constant geometric eigenmodes (parcel averages)", "brain_geometric_modes.png",
      cbar_label="mode amplitude", note="Modes are computed per hemisphere and ordered by eigenvalue across hemispheres.")
+from PIL import Image
+os.makedirs("figures/web", exist_ok=True)
+for f in sorted(os.listdir("figures")):
+    if f.endswith(".png"):
+        im = Image.open(f"figures/{f}").convert("RGB")
+        if im.width > 1500:
+            im = im.resize((1500, round(im.height * 1500 / im.width)), Image.LANCZOS)
+        im.save(f"figures/web/{f[:-4]}.jpg", quality=85, optimize=True)
 print("done")

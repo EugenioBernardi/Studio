@@ -6,7 +6,7 @@ same Schaefer-400 parcels and ENIGMA annotations as the analysis; rendered by
 ENIGMA `fsa5_*.gii` surface is the pial surface (identical to nilearn's fsaverage5 pial).
 
 ```{r brain-figs, echo = FALSE, out.width = "100%"}
-fig <- function(f) knitr::include_graphics(file.path("figures", f))
+fig <- function(f) knitr::include_graphics(file.path("figures", "web", sub("\\.png$", ".jpg", f)))
 ```
 
 **The atlas as used.** Schaefer-400, 7 networks, CBIG colours; and the volumetric atlas
@@ -28,6 +28,13 @@ top-10 parcels per syndrome (tables in "D. Epicentres").
 
 ```{r brain-epicentres, echo = FALSE, out.width = "100%"}
 fig("brain_epicentres.png"); fig("brain_epicentres_top10.png")
+```
+
+**Homotopic asymmetry.** Each left parcel compared with the identical region mirrored to
+the right (see "Hemispheric asymmetry").
+
+```{r brain-asym, echo = FALSE, out.width = "75%"}
+fig("brain_asymmetry.png")
 ```
 
 **Reconstruction from other regions.** Observed atrophy, its prediction from SC
