@@ -313,6 +313,27 @@ ggplot(nl %>% filter(!is.na(p)), aes(-log10(p), model, colour = null)) +
 nl %>% filter(!is.na(p)) %>% group_by(R, null) %>% summarise(tests = n(), significant_p05 = sum(p < 0.05), median_p = median(p), .groups = "drop")
 ```
 
+**Why the spatial nulls disagree.** A null for neighbour-based statistics must
+reproduce the map's *short-range* autocorrelation. The table compares, for each null,
+the surrogates' variogram in the five shortest distance bins (ratio to the empirical
+variogram; 1 = preserved, > 1 = rougher than the real map) and the correlation between
+each parcel and its nearest neighbour (200 surrogates per syndrome).
+
+```{r X-null-diagnostic}
+vs4 <- variogram_setup(d4$Dist)
+nn4 <- apply(d4$Dist + diag(Inf, nrow(d4$Dist)), 1, which.min)
+nd <- do.call(rbind, lapply(seq_along(syn), function(i) {
+  x <- d4$A[, i]; g <- drop(variogram(x, vs4))
+  sets <- list(Spin = spin_maps(x, c4$perms[, 1:200]), Variogram = sur_v[[i]][, 1:200], Moran = sur_m[[i]][, 1:200])
+  data.frame(syndrome = syn[i], null = names(sets),
+             short_range_variogram_ratio = sapply(sets, function(X) mean(rowMeans(variogram(X, vs4))[1:5] / g[1:5])),
+             nn_corr_null_median = sapply(sets, function(X) median(colcor(X, X[nn4, , drop = FALSE]))),
+             nn_corr_observed = cor(x, x[nn4]))
+}))
+rownames(nd) <- NULL
+nd %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(syndrome, null) %>% mutate(across(where(is.numeric), ~ round(.x, 2)))
+```
+
 ## Geometric vs connectome eigenmodes
 
 Each atrophy map is reconstructed from the first K eigenmodes of three bases:
