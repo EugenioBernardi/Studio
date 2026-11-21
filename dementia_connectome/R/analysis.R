@@ -71,11 +71,13 @@ heat_kernel <- function(modes, beta) {
 #' @param modes Laplacian modes of the SC used (for the heat kernel)
 #' @param tuned also fit M^gamma for the SC communication models
 #' @return data.frame(R, model, col, r, param); for raw models param = nodes dropped
-fit_all <- function(models, modes, Dist, A, tuned = TRUE) {
+fit_all <- function(models, modes, Dist, A, tuned = TRUE, Dist_kernel = Dist) {
+  # Dist: Euclidean distances, used for censoring (exclusion radius) in every model;
+  # Dist_kernel: distances for the distance-only kernel (Euclidean or geodesic).
   out <- list()
   add <- function(R, model, r, param = NA) out[[length(out) + 1]] <<- data.frame(R = R, model = model, col = seq_along(r), r = r, param = param)
   heat <- lapply(beta_grid, function(b) heat_kernel(modes, b))
-  dk <- lapply(lambda_grid, function(l) comm_distance(Dist, l))
+  dk <- lapply(lambda_grid, function(l) comm_distance(Dist_kernel, l))
   for (R in exclusion_radii) {
     for (m in names(models)) { r <- model_r(censor(models[[m]], Dist, R), A); add(R, m, r, attr(r, "n_dropped")) }
     f <- family_r(lapply(dk, censor, Dist = Dist, R = R), A); add(R, "distance", f$r, lambda_grid[f$param])

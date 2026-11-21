@@ -1,0 +1,58 @@
+{
+  "intensity_r_before": 0.7422726152867564,
+  "intensity_r_after": 0.9115261690334375,
+  "brainmask_dice_before": 0.9681043788173667,
+  "brainmask_dice_after": 0.9753540488221446,
+  "tian_to_enigma": {
+    "HIP-rh": "Rhippo",
+    "AMY-rh": "Ramyg",
+    "pTHA-rh": "Rthal",
+    "aTHA-rh": "Rthal",
+    "NAc-rh": "Raccumb",
+    "GP-rh": "Rpal",
+    "PUT-rh": "Rput",
+    "CAU-rh": "Rcaud",
+    "HIP-lh": "Lhippo",
+    "AMY-lh": "Lamyg",
+    "pTHA-lh": "Lthal",
+    "aTHA-lh": "Lthal",
+    "NAc-lh": "Laccumb",
+    "GP-lh": "Lpal",
+    "PUT-lh": "Lput",
+    "CAU-lh": "Lcaud"
+  },
+  "subcortex_voxels": {
+    "Laccumb": 1836,
+    "Lamyg": 2947,
+    "Lcaud": 4369,
+    "Lhippo": 5529,
+    "Lpal": 1654,
+    "Lput": 7747,
+    "Lthal": 10837,
+    "Raccumb": 1807,
+    "Ramyg": 2789,
+    "Rcaud": 4096,
+    "Rhippo": 5623,
+    "Rpal": 1704,
+    "Rput": 7852,
+    "Rthal": 11088
+  },
+  "schaefer100": {
+    "labels_surviving": 100,
+    "voxel_agreement_warped_vs_worldNN": 0.7629878448735293,
+    "cortex_in_dbm_mask_frac": 0.9885495530907662,
+    "subcortex_voxels_overlapping_cortex_labels": 1117
+  },
+  "schaefer200": {
+    "labels_surviving": 200,
+    "voxel_agreement_warped_vs_worldNN": 0.733566195219583,
+    "cortex_in_dbm_mask_frac": 0.9885862684278584,
+    "subcortex_voxels_overlapping_cortex_labels": 1114
+  },
+  "schaefer400": {
+    "labels_surviving": 400,
+    "voxel_agreement_warped_vs_worldNN": 0.6959664643889201,
+    "cortex_in_dbm_mask_frac": 0.9886689378006972,
+    "subcortex_voxels_overlapping_cortex_labels": 1111
+  }
+}

@@ -17,3 +17,12 @@ pkg/*.tar.gz
 pkg/*.Rcheck/
 pkg/netcomm/src/*.o
 pkg/netcomm/src/*.so
+data/atlas_warped/fsl2icbm_1Warp.nii.gz
+data/atlas_warped/fsl2icbm_1InverseWarp.nii.gz
+data/atlas_warped/fsl2icbm_0GenericAffine.mat
+data/atlas_warped/dist_to_csf_mm.nii.gz
+data/atlas_warped/icbm2009csym_brain.nii.gz
+data/atlas_warped/fsl_t1_in_icbm2009csym.nii.gz
+output/cache_v2/
+output/maps_v2/
+output/v2_run_log*.txt
