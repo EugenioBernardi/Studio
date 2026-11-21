@@ -1,0 +1,47 @@
+# Brain maps
+
+Parcel results drawn on the fsaverage5 inflated surface (sulcal depth in grey), using the
+same Schaefer-400 parcels and ENIGMA annotations as the analysis; rendered by
+`scripts/05_brain_figures.py` from values exported by `scripts/04_export_maps.R`. The
+ENIGMA `fsa5_*.gii` surface is the pial surface (identical to nilearn's fsaverage5 pial).
+
+```{r brain-figs, echo = FALSE, out.width = "100%"}
+fig <- function(f) knitr::include_graphics(file.path("figures", f))
+```
+
+**The atlas as used.** Schaefer-400, 7 networks, CBIG colours; and the volumetric atlas
+after nearest-neighbour resampling to the ICBM152 2009c grid of the atrophy maps.
+
+```{r brain-atlas, echo = FALSE, out.width = "100%"}
+fig("brain_atlas_schaefer400.png"); fig("brain_atlas_volume.png")
+```
+
+**Atrophy.** Colour scale set per syndrome because the FTD-variant maps are on a smaller
+scale. Below: the same parcel values painted back into the atlas volume.
+
+```{r brain-atrophy, echo = FALSE, out.width = "100%"}
+fig("brain_atrophy_all.png"); fig("brain_atrophy_volume.png")
+```
+
+**Epicentres.** Epicentre score (mean rank of atrophy and SC-neighbour atrophy) and the
+top-10 parcels per syndrome (tables in "D. Epicentres").
+
+```{r brain-epicentres, echo = FALSE, out.width = "100%"}
+fig("brain_epicentres.png"); fig("brain_epicentres_top10.png")
+```
+
+**Reconstruction from other regions.** Observed atrophy, its prediction from SC
+neighbours, FC neighbours and the distance kernel, and what is left after distance (and
+after distance + FC). In bvFTD the residual after distance still has frontal-insular
+structure that FC partly absorbs; in AD the distance prediction already captures most of
+the temporal–parietal pattern.
+
+```{r brain-models, echo = FALSE, out.width = "100%"}
+fig("brain_models_AD.png"); fig("brain_models_bvFTD.png"); fig("brain_models_svPPA.png"); fig("brain_models_nfvPPA.png")
+```
+
+**Eigenmode reconstructions (K = 20)** and the first geometric eigenmodes themselves.
+
+```{r brain-eigen, echo = FALSE, out.width = "100%"}
+fig("brain_eigen_recon_AD_bvFTD.png"); fig("brain_eigen_recon_svPPA_nfvPPA.png"); fig("brain_geometric_modes.png")
+```

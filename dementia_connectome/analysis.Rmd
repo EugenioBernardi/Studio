@@ -343,6 +343,9 @@ because all of them use correlations, ranks or weighted averages.
 ```{r child = "rmd/step2.Rmd"}
 ```
 
+```{r child = "rmd/brain_maps.Rmd"}
+```
+
 ```{r child = "rmd/novelty.Rmd"}
 ```
 

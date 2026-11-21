@@ -338,7 +338,7 @@ nd %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(syndrome, null) %>% muta
 
 Each atrophy map is reconstructed from the first K eigenmodes of three bases:
 Laplace–Beltrami eigenmodes of the cortical surface (geometric, Pang et al. 2023;
-fsaverage5, medial wall removed, averaged within parcels), eigenvectors of the
+fsaverage5 pial surface, medial wall removed, averaged within parcels), eigenvectors of the
 normalised SC Laplacian (connectome harmonics), and of the FC Laplacian. Accuracy =
 r(a, â_K) by least squares; null: 1,000 spun maps reconstructed with the same basis.
 
