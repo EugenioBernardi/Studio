@@ -1,8 +1,8 @@
 "quantity","reference","max_abs_diff","max_rel_diff","offdiag_nonfinite_pattern_identical","navigation_success_ratio"
 "shortest-path length (L = 1/W)","bct.distance_wei",2.22044604925031e-16,4.23089094332948e-16,TRUE,NA
-"weighted communicability","netneurotools.metrics.communicability_wei",4.85722573273506e-16,8.15808015675644e-15,TRUE,NA
+"weighted communicability","netneurotools.metrics.communicability_wei",1.11022302462516e-16,2.69526810951774e-15,TRUE,NA
 "search information (bits)","bct.search_information(transform='inv')",7.105427357601e-15,3.91660753658426e-16,TRUE,NA
 "navigation path length (sum 1/w)","bct.navigation_wu",0,0,TRUE,0.939624060150376
 "navigation hops","bct.navigation_wu",0,0,TRUE,0.939624060150376
-"mean first passage time","bct.mean_first_passage_time",4.7975845518522e-11,6.44701434758587e-14,TRUE,NA
-"diffusion efficiency (1/MFPT)","bct.diffusion_efficiency",2.55004350968591e-16,6.44974489421894e-14,TRUE,NA
+"mean first passage time","bct.mean_first_passage_time",4.97948349220678e-11,6.29405287039512e-14,TRUE,NA
+"diffusion efficiency (1/MFPT)","bct.diffusion_efficiency",2.68014777038417e-16,6.30092575969213e-14,TRUE,NA

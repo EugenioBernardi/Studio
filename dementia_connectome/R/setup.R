@@ -1,7 +1,11 @@
-# Load project code: R helpers + compiled C++ kernels.
-suppressPackageStartupMessages({ library(Rcpp) })
-Rcpp::sourceCpp("src/netcpp.cpp", cacheDir = "output/cache/rcpp")
-for (f in c("R/parcellate.R", "R/step1.R", "R/communication.R", "R/nulls.R", "R/spatial_nulls.R")) source(f)
+# Load project code. The network functions live in the netcomm package
+# (pkg/netcomm; written to be merged into connectomeR as R/communication.R).
+suppressPackageStartupMessages({
+  if (!requireNamespace("netcomm", quietly = TRUE) || utils::packageVersion("netcomm") < "0.1.0")
+    install.packages("pkg/netcomm", repos = NULL, type = "source")
+  library(netcomm)
+})
+for (f in c("R/parcellate.R", "R/step1.R")) source(f)
 
 load_connectome <- function(k, type = c("SC", "FC")) {
   type <- match.arg(type)

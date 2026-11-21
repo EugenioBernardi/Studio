@@ -1,6 +1,6 @@
 ---
 title: "Connectome-constrained atrophy in AD and FTD syndromes"
-subtitle: "Step 1 (data, label checks, parcellation). Step 2 not run: connectomeR 0.2.0 was not supplied"
+subtitle: "Schaefer 100/200/400; HCP SC and FC; communication models vs distance; five null models"
 date: "`r format(Sys.Date())`"
 output:
   html_document:
@@ -47,7 +47,7 @@ Two things in Step 1 need your attention:
 2. **The three FTD-variant maps have an unusual scale.** The NIFD variant maps
    (bvFTD, svPPA, nfvPPA) span only about ±1.5–2.0, against −16 to +14 for the pooled
    FTD map from the same cohort. The MINC copies on Zenodo have the same range, so this
-   is not a conversion error. The spatial patterns are anatomically sensible (Section 5),
+   is not a conversion error. The spatial patterns are anatomically sensible (see "Sanity checks"),
    and every planned analysis is scale-invariant (correlations, ranks, weighted
    neighbour means). So this does not block the analysis, but these values should not
    be read as t-statistics until the authors confirm what was deposited.
@@ -159,8 +159,8 @@ mat_tab
 
 The SC matrices contain `r paste(mat_tab$negative_edges[mat_tab$matrix == "SC"], collapse = ", ")`
 negative edges (unique, upper triangle; twice as many entries in the full matrix) at
-100, 200 and 400 parcels. In Step 2 they will be set to 0 with
-`connectomeR::handle_negative()`. The FC matrices have no negative values; their minimum
+100, 200 and 400 parcels. In Step 2 they are set to 0 (`zero_negative()` in
+`R/setup.R`, a stand-in for `connectomeR::handle_negative()`). The FC matrices have no negative values; their minimum
 is 0, so they appear to have been thresholded upstream.
 
 ## Sphere centroids for the spin test
@@ -171,8 +171,9 @@ note the annot files are under `enigmatoolbox/permutation_testing/`, not
 `datasets/permutation_testing/`). Because `connectomeR/inst/validation/annot_centroids.py`
 was not available, `scripts/annot_centroids.py` reimplements the usual method (Vasa et
 al. 2018): the mean of each parcel's sphere vertices, snapped to the nearest vertex. The
-snapped vertex was the nearest vertex overall for 400/400 parcels. **Compare this file
-with the package script before Step 2.**
+snapped vertex was the nearest vertex overall for 400/400 parcels. The spins built on
+these centroids were validated against neuromaps (see "Validation of the new functions"); the file should still be
+compared with the package script.
 
 # Parcellation and coverage
 
@@ -286,67 +287,47 @@ effect sizes or t-values divided by a constant, rather than t-statistics; that i
 and should be checked with the authors. It does not affect any planned analysis,
 because all of them use correlations, ranks or weighted averages.
 
-# Similarity between syndromes (descriptive)
-
-```{r similarity, fig.width = 6, fig.height = 5}
-R <- cor(a400[, syn], use = "pairwise.complete.obs")
-Rl <- as.data.frame(as.table(R)) %>% setNames(c("a", "b", "r")) %>%
-  mutate(a = factor(a, syn), b = factor(b, rev(syn)))
-ggplot(Rl, aes(a, b, fill = r)) +
-  geom_tile(colour = "#fcfcfb", linewidth = 1) +
-  geom_text(aes(label = sprintf("%.2f", r)), size = 3.2, colour = "#0b0b0b") +
-  scale_fill_gradient2(low = pal_div[["low"]], mid = pal_div[["mid"]], high = pal_div[["high"]],
-                       midpoint = 0, limits = c(-1, 1), name = "Pearson r") +
-  labs(x = NULL, y = NULL, subtitle = "Schaefer-400. Spin-test p-values pending (need connectomeR::spin_test)") +
-  coord_equal() + theme(panel.grid = element_blank())
+```{r child = "rmd/step2.Rmd"}
 ```
 
-These are plain Pearson correlations, without inference. AD resembles MCI (r = 0.80) more
-than any FTD map; the pooled FTD map is closest to bvFTD (0.90) and svPPA (0.77); PD is
-unrelated to the rest. Spin-test p-values (analysis A) need `spin_test()` from
-connectomeR.
+```{r child = "rmd/novelty.Rmd"}
+```
 
-# Step 2: not run
-
-Analyses A (spin-test p-values), B (hub susceptibility), C (network-constrained
-atrophy with spin and rewiring nulls), D (epicentres) and E (communication models,
-including the new `R/communication.R` functions, their bctpy validation and the 0.3.0
-version bump) are **not run**. They need the `connectomeR_0.2.0.tar.gz` source package.
-Everything they need is in place:
-
-- parcellated atrophy at three resolutions (`data/`), all parcels included;
-- verified label order across atlas, matrices, centroid table and annotation;
-- fsaverage5 sphere centroids (`data/sphere_centroids_schaefer*.csv`);
-- the SC negative-edge counts to report after `handle_negative()`;
-- CBIG MNI centroids for the Euclidean distances (navigation and distance baseline);
-- bctpy `r sub("bctpy==", "", grep("^bctpy", readLines("output/pip_freeze.txt"), value = TRUE))`
-  installed for the validation.
-
-# Limitations (for the full analysis)
+# Limitations
 
 - **Different cohorts and pipelines.** AD/MCI come from ADNI, PD from PPMI, and FTD and
   its variants from NIFD. Scanner, acquisition, age, disease stage and control group all
   differ between maps, so cohort effects are mixed with disease effects in any
-  between-syndrome comparison. The FTD-variant maps also come from a later deposit with
-  a different value scale.
-- **Group-level maps.** One map per syndrome means no individual variability and no
-  inference across patients; every test is across parcels.
-- **Young-adult connectome.** The HCP SC and FC come from healthy adults aged roughly
-  22–35, not from older adults or patients.
+  between-syndrome comparison. The three FTD-variant maps very likely share one NIFD
+  control group, which inflates their mutual similarity (analysis A); spatial nulls do
+  not correct for that. The variant maps also come from a later deposit with a different
+  value scale.
+- **Group-level maps.** One map per syndrome: no individual variability, no inference
+  across patients; every test is across parcels.
+- **Young-adult connectome.** HCP SC and FC come from healthy adults aged about 22–35.
 - **Cortex only.** The Schaefer parcellation omits the hippocampus, amygdala and
   subcortex. For AD (hippocampus) and bvFTD and svPPA (amygdala, striatum, thalamus) the
   likely epicentres sit outside the parcellated cortex; cortical "epicentres" here are at
-  best the cortical entry points.
-- **DBM signal.** DBM measures local volume change of the deformation, not grey matter.
-  Parcel means near CSF can include ventricular or sulcal expansion (positive t). Mean
-  t within a parcel also depends on the smoothing used upstream.
-- **Template mismatch.** Atlas (FSL MNI152) and maps (ICBM 2009c sym) are on slightly
-  different MNI templates; no transform was applied.
-- **Spin test.** The parcel-level spin test can be liberal with smooth maps and
-  reassigns medial-wall parcels unevenly (Markello & Misic 2021, NeuroImage), so
-  degree-preserving rewiring is used as a second null.
-- **No DLB.** No DLB map exists in the two records, so Lewy body disease cannot be
-  compared.
+  best cortical entry points.
+- **DBM signal.** DBM measures local volume change of the deformation, not grey matter;
+  parcel means near CSF can include sulcal expansion, and depend on upstream smoothing.
+- **Template mismatch and atlas asymmetry.** Atlas (FSL MNI152, asymmetric) and maps
+  (ICBM 2009c, symmetric) differ, and Schaefer parcels are not left–right homotopic;
+  "Laterality and the atlas" shows this creates spurious left-sided peaks.
+- **Spatial nulls disagree.** Spin, variogram and Moran nulls give different p-values
+  for the same statistic (see "Comparing null models"); the spin test can be liberal for smooth maps
+  (Markello & Misic 2021). Conclusions rest on effects that survive the stricter nulls.
+- **Geometry-preserving rewiring saturates** at about 50% edge turnover, so that null is
+  closer to the empirical SC than the degree-preserving one by construction.
+- **One fitted parameter for distance.** The distance kernel and heat kernel choose
+  their parameter in-sample; refitting inside every null controls the inference, and
+  the tuned-exponent sensitivity analysis gives the communication models the same
+  freedom.
+- **connectomeR not used.** The functions are project-level reimplementations validated
+  against bctpy, netneurotools and neuromaps, not the package's own (validated)
+  versions. They should be cross-checked against `spin_test()`, `rotate_parcellation()`
+  and `rewire_degree()` once the 0.2.0 source is available.
+- **No DLB.** No DLB map exists in the two records, so Lewy body disease is not covered.
 
 # Reproducibility
 

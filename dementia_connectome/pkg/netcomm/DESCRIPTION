@@ -1,0 +1,19 @@
+Package: netcomm
+Type: Package
+Title: Network Communication Models and Null Models for Connectome-Constrained Brain Maps
+Version: 0.1.0
+Authors@R: person("Package", "Maintainer", email = "maintainer@example.org", role = c("aut", "cre"))
+Description: Communication models on weighted structural connectomes (shortest-path
+    efficiency, weighted communicability, search information, greedy navigation,
+    diffusion efficiency, distance kernel), network-weighted prediction of nodal maps,
+    and null models (spin permutations with Hungarian reassignment, degree- and
+    geometry-preserving rewiring, variogram-matched and Moran spectral surrogates).
+    Written to be merged into the connectomeR package as R/communication.R (0.3.0).
+License: GPL (>= 3)
+Encoding: UTF-8
+Imports: Rcpp, expm, clue, stats
+LinkingTo: Rcpp
+Suggests: testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1

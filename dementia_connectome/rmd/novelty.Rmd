@@ -20,7 +20,7 @@ spatial and rewiring nulls.** The closest work:
 | Brown et al. 2019, *Neuron*, doi:10.1016/j.neuron.2019.08.037 | bvFTD, svPPA: patient-tailored forecasts from FC shortest-path distance and neighbour atrophy | Functional connectome only |
 | Zhou et al. 2012, *Neuron*, doi:10.1016/j.neuron.2012.03.004 | Five syndromes; FC epicentres; shorter functional paths to the epicentre predict vulnerability | No structural communication models; no nulls of the current kind |
 
-Less-applied methods used in Section 9 and their status in this literature:
+Less-applied methods used in the Extensions and their status in this literature:
 
 - **Distance-censored prediction** (models allowed only to use parcels > R mm away): not
   found in the atrophy literature.

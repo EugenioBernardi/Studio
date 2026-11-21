@@ -13,18 +13,20 @@ syn_lab <- function(x) factor(x, levels = syn)
 fmt_p <- function(p) ifelse(is.na(p), "", ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
 ```
 
-**Inputs.** Atrophy a_i = −mean t per parcel (Section 4), seven maps. HCP SC with its
+**Inputs.** Atrophy a_i = −mean t per parcel (see "Parcellation and coverage"), seven maps. HCP SC with its
 `r paste(sapply(D, "[[", "n_negative_sc"), collapse = "/")` negative edges (100/200/400
 parcels) set to 0; FC used as given (all entries ≥ 0). Euclidean distances between CBIG
 parcel centroids (MNI mm). Schaefer-400 is primary; 100 and 200 repeat everything.
 
 **connectomeR.** The package tarball was not available. Following your instruction to go
-on, every function the analysis needs was written in this project and validated
-before use (Section 6.1): communication models in `R/communication.R` (+ C++ kernels in
-`src/netcpp.cpp`), spin permutations and rewiring in `R/nulls.R`, all with roxygen
-headers and testthat tests (`tests/testthat/`, 35 expectations, all passing), written
-so they can move into connectomeR as `R/communication.R` for version 0.3.0. The 0.3.0
-package build and `R CMD check` could not be done without the 0.2.0 source.
+on, every function the analysis needs was written and validated before use (see
+"Validation of the new functions"). The network functions form a small R package,
+`pkg/netcomm` (communication models with C++ kernels, spin permutations, rewiring,
+variogram and Moran surrogates; roxygen documentation; 42 testthat expectations).
+`R CMD check --no-manual` on it returns **Status: OK (0 errors, 0 warnings, 0 notes)**;
+the PDF manual was skipped because the container has no LaTeX. The files are written to
+be merged into connectomeR as `R/communication.R` for version 0.3.0. That merge, the
+version bump and the check of connectomeR itself need the 0.2.0 source.
 
 **Prediction rule.** For a model matrix M, P_i = Σ_{j≠i} M_ij a_j / Σ_{j≠i} M_ij and the
 statistic is r(a, P). With M = SC (or FC) this is the neighbour atrophy N_i of
@@ -114,15 +116,17 @@ Spearman correlation between node strength and atrophy; spin p, FDR across 2 mat
 ```{r C-neighbour}
 mt4 <- model_table(c4)
 C_tab <- mt4 %>% filter(R == 0, model %in% c("SC_direct", "FC")) %>%
-  select(syndrome, model, r, p_spin, q_spin, p_rew_deg, q_rew_deg, p_rew_geo, p_variogram, p_moran)
+  mutate(q_spin = p.adjust(p_spin, "BH"), q_variogram = p.adjust(p_variogram, "BH")) %>%
+  group_by(model) %>% mutate(q_rew_deg = p.adjust(p_rew_deg, "BH"), q_rew_geo = p.adjust(p_rew_geo, "BH")) %>% ungroup() %>%
+  select(syndrome, model, r, p_spin, q_spin, p_variogram, q_variogram, p_moran, p_rew_deg, q_rew_deg, p_rew_geo, q_rew_geo)
 dSF <- difference_table(c4, ref = "FC", models = "SC_direct") %>% filter(R == 0) %>%
   select(syndrome, r_SC = r, r_FC = r_ref, diff, p_spin, q_spin, p_variogram)
 C_tab %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(syndrome, model) %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
 dSF %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(syndrome) %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
 ```
 
-The rewiring nulls apply only to the SC (FC is a dense correlation matrix). The
-FDR for C uses the 7 syndromes × 2 matrices.
+The rewiring nulls apply only to the SC (FC is a dense correlation matrix). FDR for the
+spatial nulls covers 7 syndromes × 2 matrices; for the rewiring nulls, the 7 syndromes.
 
 ```{r C-scatter, fig.height = 5.4}
 nb <- do.call(rbind, lapply(primary, function(s) rbind(
@@ -151,7 +155,7 @@ top_ep %>% filter(syndrome %in% primary)
 
 `rank_mirrored` is the parcel's epicentre rank when the voxel map is mirrored left–right
 before parcellation (so a left parcel then samples right-hemisphere data). An epicentre
-that keeps its rank under mirroring is not specific to its hemisphere; see Section 9.6.
+that keeps its rank under mirroring is not specific to its hemisphere; see "Laterality and the atlas".
 
 ```{r D-insula}
 ins <- ep %>% filter(syndrome == "bvFTD", grepl("FrOperIns|PFCv|Ins", label)) %>% arrange(rank) %>%
@@ -173,6 +177,22 @@ E_tab %>% select(syndrome, model, r, param, p_spin, q_spin, p_rew_deg, q_rew_deg
 `param` is the fitted λ (mm) for the distance kernel and β for the heat kernel. FDR
 covers the 7 tested SC/distance models (SPE, communicability, search information,
 navigation, diffusion, heat kernel, distance) × 7 syndromes.
+
+Reading the p-values: they are one-sided (is the observed r larger than the null r?).
+Diffusion efficiency gives **negative** r, yet small rewiring p-values, because rewired
+networks give even more negative r. That is not evidence of a network constraint. On
+large graphs, 1/MFPT is dominated by the target node's stationary probability, i.e. its
+strength (von Luxburg et al. 2014, JMLR 15:1751), so the "prediction" collapses to a
+function of node strength:
+
+```{r E-diffusion}
+P_diff <- predict_from_model(communication_models(d4$SC, d4$Dist)$diffusion, d4$A)
+round(sapply(syn, function(s) cor(P_diff[, s], rowSums(d4$SC))), 2)
+```
+
+The heat kernel's fitted β is at or near the lowest grid value for most syndromes; as
+β → 0 the kernel converges to one-step, degree-normalised SC, so the best-fitting
+"diffusion" is no diffusion beyond direct neighbours.
 
 ```{r E-plot, fig.height = 6.2, fig.width = 9}
 spin_band <- c4$spin %>% filter(R == 0, model %in% E_models) %>% group_by(model, syndrome) %>%
@@ -264,7 +284,7 @@ part <- do.call(rbind, lapply(c(0, 30), function(R) do.call(rbind, lapply(pm, fu
   data.frame(R = R, model = m, syndrome = syn, partial_r = obs,
              p_spin = sapply(seq_along(syn), function(i) p_upper(obs[i], nul[, i])))
 }))))
-part$q_spin <- ave(part$p_spin, part$R, FUN = function(p) p.adjust(p, "BH"))
+part$q_spin <- ave(part$p_spin, part$R, FUN = function(p) p.adjust(p, "BH")); rownames(part) <- NULL
 part %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(R, syndrome, desc(partial_r)) %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
 ```
 
@@ -332,7 +352,7 @@ rec_obs <- recon_curve(laplacian_modes(d4$SC)$vectors, d4$A, harmonic_Ks)
 rr <- do.call(rbind, lapply(c("rew_deg", "rew_geo"), function(nm) {
   x <- c4[[nm]]$recon # syndromes x K x B
   do.call(rbind, lapply(seq_along(syn), function(i) data.frame(null = nm, syndrome = syn[i], K = harmonic_Ks, r_obs = rec_obs[i, ],
-    null_median = apply(x[i, , ], 1, median), p = sapply(seq_along(harmonic_Ks), function(k) p_upper(rec_obs[i, k], x[i, k, ]))))
+    null_median = apply(x[i, , ], 1, median), p = sapply(seq_along(harmonic_Ks), function(k) p_upper(rec_obs[i, k], x[i, k, ])))))
 }))
 rr %>% filter(K %in% c(10, 20, 50)) %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(null, K, syndrome) %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
 ```
