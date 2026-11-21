@@ -5,3 +5,11 @@ output/cache/
 .Rhistory
 .RData
 venv/
+output/cache/
+output/devtest/
+output/validation/W400.csv
+output/validation/D400.csv
+output/validation/bct_*.csv
+output/validation/nnt_*.csv
+output/validation/neuromaps_spins400.csv
+output/*_log*.txt

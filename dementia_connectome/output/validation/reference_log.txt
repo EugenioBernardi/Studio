@@ -1,0 +1,7 @@
+distance_wei 4.7 s
+communicability_wei 0.2 s
+mfpt 0.1 s
+diffusion_efficiency 0.1 s
+search_information 3.7 s
+navigation_wu 2.7 s, success 0.9396240601503759
+exit 0

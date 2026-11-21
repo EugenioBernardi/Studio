@@ -1,0 +1,40 @@
+# Novelty check
+
+Searched on 2026-11-21: PubMed, Consensus (Semantic Scholar/OpenAlex/PubMed), a
+web search, and an Undermind deep search (102 papers ranked; workspace
+"Connectome-constrained atrophy: AD vs FTD (communication models)"). The closest papers
+were then read in full text.
+
+**No study found compares structural-connectome communication models (shortest paths,
+communicability, search information, navigation, diffusion) head-to-head as predictors
+of atrophy in AD and the FTD variants, against a fitted distance-only baseline, with
+spatial and rewiring nulls.** The closest work:
+
+| Study | What it did | What it did not do |
+|---|---|---|
+| Shafiei et al. 2023, *Brain*, doi:10.1093/brain/awac069 | bvFTD (NIFD: 70 patients, 123 controls, DBM; plus GENFI); SC and FC neighbour atrophy (r = 0.69 and 0.65 at 1,000 Cammoun regions, spin p = 0.0001); anterior-insula epicentre; spin null; geometry-preserving rewiring only for its SIR simulation; 70-subject DSI/fMRI connectome | No communication models; no AD, svPPA, nfvPPA; no distance baseline. Our bvFTD neighbour analysis replicates it with an independent connectome (HCP) and parcellation (Schaefer) |
+| Bougacha et al. 2024, *Brain Commun*, doi:10.1093/braincomms/fcae459 | AD (ADNI): ridge regression of atrophy, tau, amyloid, metabolism on SC, FC and cortical-distance predictors (strength, diffusion mode, shortest-path proximity to epicentres), relative importance | No pairwise communication models; distance as covariate, not baseline; no spin or rewiring nulls; no FTD |
+| Thompson et al. 2024, *Imaging Neurosci*, doi:10.1162/imag_a_00089 | AD: network diffusion model on five connectomes incl. inverse geodesic distance; FC (r = 0.75) beat distance (0.67) for atrophy; 100 degree-preserving rewired nulls | No communication models; no spatial nulls; no FTD |
+| Agosta et al. 2024, *Brain*, doi:10.1093/brain/awae391 | FTD spectrum (bvFTD, svPPA, nfvPPA, sbvFTD): network diffusion model, longitudinal; compared ICVF vs FA connectomes | No communication models; no distance baseline; no AD |
+| Garbarino et al. 2019, *eLife*, doi:10.7554/eLife.49298 | AD, MS, ageing: progression profiles combining centrality, shortest-path and spatial proximity to the epicentre | No pairwise communication models; no FTD |
+| Brown et al. 2019, *Neuron*, doi:10.1016/j.neuron.2019.08.037 | bvFTD, svPPA: patient-tailored forecasts from FC shortest-path distance and neighbour atrophy | Functional connectome only |
+| Zhou et al. 2012, *Neuron*, doi:10.1016/j.neuron.2012.03.004 | Five syndromes; FC epicentres; shorter functional paths to the epicentre predict vulnerability | No structural communication models; no nulls of the current kind |
+
+Less-applied methods used in Section 9 and their status in this literature:
+
+- **Distance-censored prediction** (models allowed only to use parcels > R mm away): not
+  found in the atrophy literature.
+- **Comparison of five nulls** (spin, variogram-matched, Moran spectral, degree- and
+  geometry-preserving rewiring) for network-constrained atrophy: the null-model
+  literature compares spatial nulls for map-to-map correlations (Markello & Misic 2021,
+  *NeuroImage*; Burt et al. 2020, *NeuroImage*), not for network-constrained atrophy.
+  Shafiei et al. 2023 used a geometry-preserving rewired null, but only for a spreading
+  simulation, not for the neighbour correlations or epicentres.
+- **Geometric vs connectome eigenmodes for atrophy:** geometric eigenmodes have been used
+  descriptively in GRN-related FTD ("mode-based morphometry", *NeuroImage: Clinical*
+  2026); a head-to-head comparison with connectome harmonics across dementia syndromes
+  was not found.
+- **Atlas-induced laterality (mirror test):** not found.
+
+Caveat: a search can miss work, especially recent preprints and conference abstracts.
+The claim is "not found in a systematic search", not "does not exist".

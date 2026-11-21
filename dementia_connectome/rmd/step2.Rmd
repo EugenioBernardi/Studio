@@ -1,0 +1,382 @@
+# Step 2: methods
+
+```{r step2-setup}
+source("R/setup.R"); source("R/analysis.R"); source("R/results.R")
+source("R/spatial_nulls.R"); source("R/extensions.R")
+res_k <- setNames(resolutions, resolutions)
+D <- lapply(res_k, prep_resolution)
+CC <- lapply(res_k, load_caches)
+d4 <- D[["400"]]; c4 <- CC[["400"]]
+syn <- colnames(d4$A)
+primary <- c("AD", "bvFTD", "svPPA", "nfvPPA")
+syn_lab <- function(x) factor(x, levels = syn)
+fmt_p <- function(p) ifelse(is.na(p), "", ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
+```
+
+**Inputs.** Atrophy a_i = −mean t per parcel (Section 4), seven maps. HCP SC with its
+`r paste(sapply(D, "[[", "n_negative_sc"), collapse = "/")` negative edges (100/200/400
+parcels) set to 0; FC used as given (all entries ≥ 0). Euclidean distances between CBIG
+parcel centroids (MNI mm). Schaefer-400 is primary; 100 and 200 repeat everything.
+
+**connectomeR.** The package tarball was not available. Following your instruction to go
+on, every function the analysis needs was written in this project and validated
+before use (Section 6.1): communication models in `R/communication.R` (+ C++ kernels in
+`src/netcpp.cpp`), spin permutations and rewiring in `R/nulls.R`, all with roxygen
+headers and testthat tests (`tests/testthat/`, 35 expectations, all passing), written
+so they can move into connectomeR as `R/communication.R` for version 0.3.0. The 0.3.0
+package build and `R CMD check` could not be done without the 0.2.0 source.
+
+**Prediction rule.** For a model matrix M, P_i = Σ_{j≠i} M_ij a_j / Σ_{j≠i} M_ij and the
+statistic is r(a, P). With M = SC (or FC) this is the neighbour atrophy N_i of
+Zeighami et al. (2015) and Shafiei et al. (2023).
+
+**Models on the SC.** Shortest-path efficiency (1/weighted path length, lengths 1/w);
+weighted communicability expm(S^-1/2 W S^-1/2) (Crofts & Higham 2009); search
+information (Goñi et al. 2014), used as the shortest-path probability 2^−SI; navigation
+efficiency with Euclidean greedy routing (Seguin et al. 2018); diffusion efficiency
+1/MFPT (Goñi et al. 2013). Asymmetric measures were symmetrised as (M + Mᵀ)/2. Two
+models with one fitted parameter: the distance-only kernel exp(−d/λ) (λ over 40 values,
+2–200 mm), and, added here, the network diffusion (heat) kernel expm(−βL) of Raj et al.
+(2012), with L the normalised Laplacian of the SC (β over 25 values). Fitted parameters
+were chosen to maximise r and **refitted inside every null surrogate and every rewired
+network**, so the nulls account for the fitting.
+
+**Nulls (1,000 each).** (1) Spin: Hungarian-reassigned rotations of fsaverage5 parcel
+centroids (Vasa/Markello method), atrophy permuted, all predictions recomputed.
+(2) Degree-preserving rewiring of the SC (Maslov–Sneppen, 10 swaps per edge, weights
+travel with edges), all models recomputed on each rewired network, atrophy unchanged.
+Extensions add (3) geometry-preserving rewiring, (4) variogram-matched surrogates and
+(5) Moran spectral randomisation. p-values are one-sided (null r ≥ observed r) for model
+fits and two-sided for paired differences. FDR (Benjamini–Hochberg) is applied across
+syndromes × models within each null.
+
+## Validation of the new functions
+
+```{r validation}
+val <- read.csv("output/validation/communication_validation.csv")
+val[, c("quantity", "reference", "max_abs_diff", "max_rel_diff", "offdiag_nonfinite_pattern_identical")]
+spv <- read.csv("output/validation/spin_validation.csv")
+data.frame(check = c("spin p-values, R vs neuromaps (21 map pairs): max |difference|",
+                     "spin p-values: correlation", "null SD ratio R / neuromaps (range)",
+                     "KS test of null distributions: min p"),
+           value = c(sprintf("%.3f", max(abs(spv$p_spin_R - spv$p_spin_neuromaps))),
+                     sprintf("%.4f", cor(spv$p_spin_R, spv$p_spin_neuromaps)),
+                     sprintf("%.2f-%.2f", min(spv$null_sd_R / spv$null_sd_neuromaps), max(spv$null_sd_R / spv$null_sd_neuromaps)),
+                     sprintf("%.2f", min(spv$ks_p_null))))
+rw <- read.csv("output/validation/rewiring_validation.csv")
+aggregate(cbind(edge_turnover, mean_edge_length, ks_D_edge_length, weight_length_rho, interhemispheric_edges) ~ null, rw, function(v) round(mean(v), 3))
+```
+
+Every communication model matches bctpy 0.6.1 or netneurotools 0.3.0 on the Schaefer-400
+SC to floating-point precision. Two notes: bctpy's `search_information` fails under
+NumPy 2, so the reference keeps bctpy's own Floyd–Warshall and path retrieval and only
+flattens the returned path; navigation agrees exactly, including which pairs fail
+(`r sprintf("%.1f%%", 100 * c4$nav_success)` of pairs succeed at 400 parcels). Spins
+match neuromaps' Hungarian implementation in distribution. Degree-preserving rewiring
+moves 92% of edges and doubles the mean edge length; geometry-preserving rewiring keeps
+edge lengths and the weight–length relation but saturates at about 50% turnover.
+
+# A. Similarity between syndromes
+
+```{r A-similarity, fig.width = 6.2, fig.height = 5.2}
+simA <- analysis_similarity(d4, c4$perms)
+sur_v <- readRDS("output/cache/surrogates_variogram_k400.rds"); names(sur_v) <- syn
+sur_m <- readRDS("output/cache/surrogates_moran_k400.rds"); names(sur_m) <- syn
+simA$p_variogram <- mapply(function(a, b) p_two(cor(d4$A[, a], d4$A[, b]), colcor(sur_v[[a]], matrix(d4$A[, b], 400, ncol(sur_v[[a]])))), simA$map1, simA$map2)
+simA$p_moran <- mapply(function(a, b) p_two(cor(d4$A[, a], d4$A[, b]), colcor(sur_m[[a]], matrix(d4$A[, b], 400, ncol(sur_m[[a]])))), simA$map1, simA$map2)
+simA$q_variogram <- p.adjust(simA$p_variogram, "BH")
+simA %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+Rm <- cor(d4$A)
+Rl <- as.data.frame(as.table(Rm)) %>% setNames(c("a", "b", "r")) %>%
+  left_join(bind_rows(simA %>% select(a = map1, b = map2, q = p_fdr), simA %>% select(a = map2, b = map1, q = p_fdr)), by = c("a", "b")) %>%
+  mutate(lab = ifelse(a == b, "", paste0(sprintf("%.2f", r), ifelse(!is.na(q) & q < 0.05, "*", ""))),
+         a = factor(a, syn), b = factor(b, rev(syn)))
+ggplot(Rl, aes(a, b, fill = r)) +
+  geom_tile(colour = "#fcfcfb", linewidth = 1) +
+  geom_text(aes(label = lab), size = 3.1, colour = "#0b0b0b") +
+  scale_fill_gradient2(low = pal_div[["low"]], mid = pal_div[["mid"]], high = pal_div[["high"]], midpoint = 0, limits = c(-1, 1), name = "Pearson r") +
+  labs(x = NULL, y = NULL, subtitle = "Schaefer-400; * spin-test FDR q < 0.05") +
+  coord_equal() + theme(panel.grid = element_blank())
+```
+
+# B. Hub susceptibility
+
+```{r B-hubs}
+hubB <- analysis_hubs(d4, c4$perms)
+hubB %>% mutate(across(where(is.numeric), ~ round(.x, 3))) %>% arrange(matrix, syndrome)
+```
+
+Spearman correlation between node strength and atrophy; spin p, FDR across 2 matrices ×
+7 syndromes.
+
+# C. Network-constrained atrophy: SC vs FC
+
+```{r C-neighbour}
+mt4 <- model_table(c4)
+C_tab <- mt4 %>% filter(R == 0, model %in% c("SC_direct", "FC")) %>%
+  select(syndrome, model, r, p_spin, q_spin, p_rew_deg, q_rew_deg, p_rew_geo, p_variogram, p_moran)
+dSF <- difference_table(c4, ref = "FC", models = "SC_direct") %>% filter(R == 0) %>%
+  select(syndrome, r_SC = r, r_FC = r_ref, diff, p_spin, q_spin, p_variogram)
+C_tab %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(syndrome, model) %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+dSF %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(syndrome) %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+```
+
+The rewiring nulls apply only to the SC (FC is a dense correlation matrix). The
+FDR for C uses the 7 syndromes × 2 matrices.
+
+```{r C-scatter, fig.height = 5.4}
+nb <- do.call(rbind, lapply(primary, function(s) rbind(
+  data.frame(syndrome = s, matrix = "SC neighbours", a = d4$A[, s], N = predict_from_model(d4$SC, d4$A[, s])),
+  data.frame(syndrome = s, matrix = "FC neighbours", a = d4$A[, s], N = predict_from_model(d4$FC, d4$A[, s])))))
+nb$syndrome <- factor(nb$syndrome, primary)
+ggplot(nb, aes(N, a)) + geom_point(colour = col_main, alpha = 0.45, size = 1.1) +
+  geom_smooth(method = "lm", se = FALSE, colour = "#52514e", linewidth = 0.6) +
+  facet_grid(matrix ~ syndrome, scales = "free") +
+  labs(x = "Neighbour atrophy N_i", y = "Node atrophy a_i")
+```
+
+# D. Epicentres
+
+```{r D-epicentres}
+ep <- epicentre_table(d4, c4)
+flipN <- c4$flipped
+ep_flip <- do.call(rbind, lapply(syn, function(s) { a <- flipN[, s]; sc <- epicentre_score(a, predict_from_model(d4$SC, a)); data.frame(syndrome = s, parcel = seq_along(a), rank_mirrored = rank(-sc, ties.method = "min")) }))
+ep_fc <- epicentre_table(d4, list(perms = c4$perms), W = d4$FC) %>% select(syndrome, parcel, rank_FC = rank)
+ep <- ep %>% left_join(ep_flip, by = c("syndrome", "parcel")) %>% left_join(ep_fc, by = c("syndrome", "parcel"))
+top_ep <- ep %>% filter(rank <= 10) %>% arrange(syndrome_order = match(syndrome, syn), rank) %>%
+  transmute(syndrome, rank, parcel = short_label(label), atrophy = round(atrophy, 3), neighbour = round(neighbour, 3),
+            p_spin = fmt_p(p_spin), p_rewire = fmt_p(p_rew_deg), rank_FC, rank_mirrored)
+top_ep %>% filter(syndrome %in% primary)
+```
+
+`rank_mirrored` is the parcel's epicentre rank when the voxel map is mirrored left–right
+before parcellation (so a left parcel then samples right-hemisphere data). An epicentre
+that keeps its rank under mirroring is not specific to its hemisphere; see Section 9.6.
+
+```{r D-insula}
+ins <- ep %>% filter(syndrome == "bvFTD", grepl("FrOperIns|PFCv|Ins", label)) %>% arrange(rank) %>%
+  transmute(parcel = short_label(label), rank, p_spin = fmt_p(p_spin), p_rewire = fmt_p(p_rew_deg), rank_mirrored) %>% head(8)
+ins
+```
+
+# E. Communication models on the SC
+
+```{r E-table}
+E_models <- c("SC_direct", "SPE", "communicability", "search_prob", "navigation", "diffusion", "heat", "distance")
+E_tab <- mt4 %>% filter(R == 0, model %in% E_models) %>%
+  mutate(syndrome = syn_lab(syndrome), model = factor(model, E_models)) %>% arrange(syndrome, model)
+E_tab %>% select(syndrome, model, r, param, p_spin, q_spin, p_rew_deg, q_rew_deg, p_rew_geo) %>%
+  mutate(param = ifelse(model %in% c("distance", "heat"), signif(param, 3), NA)) %>%
+  mutate(across(c(r, p_spin, q_spin, p_rew_deg, q_rew_deg, p_rew_geo), ~ round(.x, 3)))
+```
+
+`param` is the fitted λ (mm) for the distance kernel and β for the heat kernel. FDR
+covers the 7 tested SC/distance models (SPE, communicability, search information,
+navigation, diffusion, heat kernel, distance) × 7 syndromes.
+
+```{r E-plot, fig.height = 6.2, fig.width = 9}
+spin_band <- c4$spin %>% filter(R == 0, model %in% E_models) %>% group_by(model, syndrome) %>%
+  summarise(lo = quantile(r, 0.025, na.rm = TRUE), hi = quantile(r, 0.975, na.rm = TRUE), .groups = "drop")
+pe <- E_tab %>% mutate(model = as.character(model), syndrome = as.character(syndrome)) %>% left_join(spin_band, by = c("model", "syndrome")) %>%
+  mutate(model = factor(model_labels[model], rev(model_labels[E_models])), syndrome = syn_lab(syndrome),
+         sig = ifelse(q_spin < 0.05, "spin q < 0.05", "n.s."))
+ggplot(pe, aes(r, model)) +
+  geom_vline(xintercept = 0, colour = "#a8a79f", linewidth = 0.3) +
+  geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0, colour = "#c3c2b7", linewidth = 2.2) +
+  geom_point(aes(shape = sig), colour = col_main, fill = "#fcfcfb", size = 2.3, stroke = 0.9) +
+  scale_shape_manual(values = c("spin q < 0.05" = 16, "n.s." = 21), name = NULL) +
+  facet_wrap(~syndrome, ncol = 4) +
+  labs(x = "r(atrophy, model-predicted atrophy)", y = NULL, subtitle = "Grey bar: central 95% of the spin null (parameters refitted). Schaefer-400.") +
+  theme(legend.position = "bottom")
+```
+
+**Does any model beat the distance-only baseline?** Paired difference r_model − r_distance;
+two-sided spin p of the difference (both refitted in each spin); FDR across 7 models × 7
+syndromes.
+
+```{r E-vs-distance}
+vsD <- difference_table(c4, ref = "distance", models = setdiff(E_models, "distance")) %>% filter(R == 0) %>%
+  mutate(syndrome = syn_lab(syndrome), model = factor(model, E_models)) %>% arrange(syndrome, desc(diff))
+vsD %>% select(syndrome, model, r, r_distance = r_ref, diff, p_spin, q_spin, p_variogram, q_variogram) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3)))
+best_by_syn <- E_tab %>% filter(model != "distance") %>% group_by(syndrome) %>% slice_max(r, n = 1) %>% select(syndrome, best_model = model, r)
+best_by_syn
+```
+
+**Sensitivity: one fitted exponent for every communication model (M^γ).** This gives the
+communication models the same single free parameter the distance kernel has.
+
+```{r E-tuned}
+tuned <- difference_table(c4, ref = "distance", models = paste0(model_names, "_tuned")) %>% filter(R == 0) %>%
+  mutate(syndrome = syn_lab(syndrome)) %>% arrange(syndrome, desc(diff))
+tuned %>% select(syndrome, model, r, r_distance = r_ref, diff, p_spin, q_spin) %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+```
+
+# Extensions (less-applied methods)
+
+## Distance-censored prediction
+
+Local spatial smoothness alone can produce a high r(a, P), because neighbouring parcels
+have similar atrophy whether or not they are connected. Here each model may only use
+parcels further than R mm from the target (R = 0–60 mm), so the prediction has to come
+from distant regions. This removes most of the advantage of any purely local kernel,
+including the distance baseline, and asks which models still predict atrophy from
+long-range relationships. The spin null is recomputed at every radius.
+
+```{r X-censor, fig.height = 6.4, fig.width = 9}
+cens_models <- c("SC_direct", "communicability", "search_prob", "navigation", "heat", "distance", "FC")
+cz <- mt4 %>% filter(model %in% cens_models, syndrome %in% primary) %>%
+  mutate(model = factor(model_labels[model], model_labels[cens_models]), syndrome = factor(syndrome, primary))
+cz_band <- c4$spin %>% filter(model == "distance", syndrome %in% primary) %>% group_by(R, syndrome) %>%
+  summarise(hi = quantile(r, 0.95, na.rm = TRUE), .groups = "drop") %>% mutate(syndrome = factor(syndrome, primary))
+cat_cols <- c("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#52514e", "#6250d6")
+ggplot(cz, aes(R, r, colour = model)) +
+  geom_hline(yintercept = 0, colour = "#a8a79f", linewidth = 0.3) +
+  geom_line(linewidth = 0.8) + geom_point(size = 1.6) +
+  geom_line(data = cz_band, aes(R, hi), inherit.aes = FALSE, linetype = 2, colour = "#52514e", linewidth = 0.4) +
+  scale_colour_manual(values = setNames(cat_cols, model_labels[cens_models]), name = NULL) +
+  facet_wrap(~syndrome, ncol = 4) +
+  labs(x = "Exclusion radius R (mm): only parcels further than R are used", y = "r(atrophy, prediction)",
+       subtitle = "Dashed: 95th percentile of the spin null for the distance kernel") +
+  theme(legend.position = "bottom") + guides(colour = guide_legend(nrow = 2))
+cz_tab <- mt4 %>% filter(R == 30, model %in% cens_models) %>% select(syndrome, model, r, p_spin, q_spin, p_rew_deg, p_rew_geo) %>%
+  mutate(syndrome = syn_lab(syndrome)) %>% arrange(syndrome, desc(r))
+cz_tab %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+vsD30 <- difference_table(c4, ref = "distance", models = c("SC_direct", "communicability", "search_prob", "navigation", "heat", "FC")) %>% filter(R == 30)
+vsD30 %>% select(syndrome, model, r, r_distance = r_ref, diff, p_spin, q_spin) %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(syndrome, desc(diff)) %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+```
+
+At R = 30 mm the SC-direct model drops nodes that have no SC edge longer than 30 mm
+(`r unique(mt4$param[mt4$R == 30 & mt4$model == "SC_direct"])` of 400 at Schaefer-400).
+
+## Unique contribution beyond distance
+
+Partial correlation r(a, P_M | P_distance), with the distance kernel refitted for every
+map and spin surrogate (null: 1,000 spins).
+
+```{r X-partial}
+pm <- c("SC_direct", "communicability", "search_prob", "navigation", "FC")
+Mlist <- c(communication_models(d4$SC, d4$Dist)[setdiff(pm, "FC")], list(FC = d4$FC))
+As4 <- do.call(cbind, lapply(syn, function(s) spin_maps(d4$A[, s], c4$perms)))
+part <- do.call(rbind, lapply(c(0, 30), function(R) do.call(rbind, lapply(pm, function(m) {
+  obs <- partial_beyond_distance(Mlist[[m]], d4$A, d4$Dist, R)
+  nul <- matrix(partial_beyond_distance(Mlist[[m]], As4, d4$Dist, R), ncol = length(syn))
+  data.frame(R = R, model = m, syndrome = syn, partial_r = obs,
+             p_spin = sapply(seq_along(syn), function(i) p_upper(obs[i], nul[, i])))
+}))))
+part$q_spin <- ave(part$p_spin, part$R, FUN = function(p) p.adjust(p, "BH"))
+part %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(R, syndrome, desc(partial_r)) %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+```
+
+## Comparing null models
+
+The same tests under five nulls. Spatial nulls (spin, variogram-matched, Moran)
+preserve the map's spatial autocorrelation; rewiring nulls keep the map and replace the
+SC by degree-preserving or degree-and-geometry-preserving surrogates.
+
+```{r X-nulls, fig.height = 5.8, fig.width = 9}
+nl_models <- c("SC_direct", "communicability", "search_prob", "navigation", "heat", "distance")
+nl <- mt4 %>% filter(R %in% c(0, 30), model %in% nl_models) %>%
+  select(R, model, syndrome, p_spin, p_variogram, p_moran, p_rew_deg, p_rew_geo) %>%
+  pivot_longer(starts_with("p_"), names_to = "null", values_to = "p") %>%
+  mutate(null = factor(recode(null, p_spin = "Spin", p_variogram = "Variogram", p_moran = "Moran",
+                              p_rew_deg = "Rewired (degree)", p_rew_geo = "Rewired (degree + geometry)"),
+                       c("Spin", "Variogram", "Moran", "Rewired (degree)", "Rewired (degree + geometry)")),
+         model = factor(model_labels[model], model_labels[nl_models]), Rl = paste0("R = ", R, " mm"))
+ggplot(nl %>% filter(!is.na(p)), aes(-log10(p), model, colour = null)) +
+  geom_vline(xintercept = -log10(0.05), linetype = 2, colour = "#52514e", linewidth = 0.4) +
+  geom_point(position = position_dodge(width = 0.6), size = 1.5) +
+  scale_colour_manual(values = setNames(cat_cols[1:5], levels(nl$null)), name = NULL) +
+  facet_grid(Rl ~ syndrome) +
+  labs(x = "-log10 p (one-sided); dashed line p = 0.05. Maximum = 3 (1,000 surrogates)", y = NULL) +
+  theme(legend.position = "bottom", axis.text.x = element_text(size = 7))
+nl %>% filter(!is.na(p)) %>% group_by(R, null) %>% summarise(tests = n(), significant_p05 = sum(p < 0.05), median_p = median(p), .groups = "drop")
+```
+
+## Geometric vs connectome eigenmodes
+
+Each atrophy map is reconstructed from the first K eigenmodes of three bases:
+Laplace–Beltrami eigenmodes of the cortical surface (geometric, Pang et al. 2023;
+fsaverage5, medial wall removed, averaged within parcels), eigenvectors of the
+normalised SC Laplacian (connectome harmonics), and of the FC Laplacian. Accuracy =
+r(a, â_K) by least squares; null: 1,000 spun maps reconstructed with the same basis.
+
+```{r X-eigen, fig.height = 5.4, fig.width = 9}
+eig_K <- c(2, 5, 10, 20, 30, 50, 75, 100, 150, 200)
+bases <- list(Geometric = geometric_basis(400), `SC harmonics` = laplacian_modes(d4$SC)$vectors, `FC harmonics` = laplacian_modes(d4$FC)$vectors)
+eg <- do.call(rbind, lapply(names(bases), function(b) {
+  o <- recon_curve(bases[[b]], d4$A, eig_K)
+  nl_ <- recon_curve(bases[[b]], As4, eig_K)
+  do.call(rbind, lapply(seq_along(syn), function(i) {
+    cols <- (i - 1) * ncol(c4$perms) + seq_len(ncol(c4$perms))
+    data.frame(basis = b, syndrome = syn[i], K = eig_K, r = o[i, ],
+               null_hi = apply(nl_[cols, ], 2, quantile, 0.95), p_spin = sapply(seq_along(eig_K), function(k) p_upper(o[i, k], nl_[cols, k])))
+  }))
+}))
+ggplot(eg %>% filter(syndrome %in% primary) %>% mutate(syndrome = factor(syndrome, primary)), aes(K, r, colour = basis)) +
+  geom_line(aes(y = null_hi), linetype = 2, linewidth = 0.4) +
+  geom_line(linewidth = 0.8) + geom_point(size = 1.4) +
+  scale_x_log10() + scale_colour_manual(values = setNames(cat_cols[c(1, 2, 3)], names(bases)), name = NULL) +
+  facet_wrap(~syndrome, ncol = 4) +
+  labs(x = "Number of modes K (log scale)", y = "Reconstruction accuracy r", subtitle = "Dashed: 95th percentile of the spin null for the same basis") +
+  theme(legend.position = "bottom")
+eg %>% filter(K %in% c(10, 20, 50)) %>% select(basis, syndrome, K, r, p_spin) %>%
+  pivot_wider(names_from = basis, values_from = c(r, p_spin)) %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(K, syndrome) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3)))
+```
+
+Rewiring null for the connectome harmonics (accuracy with the harmonics of rewired SCs):
+
+```{r X-eigen-rewire}
+rec_obs <- recon_curve(laplacian_modes(d4$SC)$vectors, d4$A, harmonic_Ks)
+rr <- do.call(rbind, lapply(c("rew_deg", "rew_geo"), function(nm) {
+  x <- c4[[nm]]$recon # syndromes x K x B
+  do.call(rbind, lapply(seq_along(syn), function(i) data.frame(null = nm, syndrome = syn[i], K = harmonic_Ks, r_obs = rec_obs[i, ],
+    null_median = apply(x[i, , ], 1, median), p = sapply(seq_along(harmonic_Ks), function(k) p_upper(rec_obs[i, k], x[i, k, ]))))
+}))
+rr %>% filter(K %in% c(10, 20, 50)) %>% mutate(syndrome = syn_lab(syndrome)) %>% arrange(null, K, syndrome) %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+```
+
+## Smoothness of atrophy on the SC
+
+Normalised Dirichlet energy aᵀLa / aᵀa of the z-scored map on the SC graph (lower = atrophy
+varies less across strong connections).
+
+```{r X-smooth}
+sm_obs <- graph_smoothness(d4$SC, d4$A)
+sm_spin <- matrix(graph_smoothness(d4$SC, As4), ncol = length(syn))
+sm <- data.frame(syndrome = syn, energy = sm_obs,
+                 p_spin = sapply(seq_along(syn), function(i) (1 + sum(sm_spin[, i] <= sm_obs[i])) / (1 + nrow(sm_spin))),
+                 p_rew_deg = sapply(seq_along(syn), function(i) (1 + sum(c4$rew_deg$smooth[i, ] <= sm_obs[i])) / (1 + ncol(c4$rew_deg$smooth))),
+                 p_rew_geo = sapply(seq_along(syn), function(i) (1 + sum(c4$rew_geo$smooth[i, ] <= sm_obs[i])) / (1 + ncol(c4$rew_geo$smooth))))
+sm %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+```
+
+## Laterality and the atlas
+
+```{r X-laterality}
+lat <- voxel_laterality(400)
+flip_r <- sapply(syn, function(s) cor(d4$A[, s], c4$flipped[, s]))
+hemi_diff <- function(a, info) mean(a[info$hemi == "LH"]) - mean(a[info$hemi == "RH"])
+lat$parcel_LminusR <- sapply(syn, function(s) hemi_diff(d4$A[, s], d4$info))
+lat$parcel_LminusR_mirrored <- sapply(syn, function(s) hemi_diff(c4$flipped[, s], d4$info))
+lat$r_original_vs_mirrored_parcels <- flip_r
+lat %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+```
+
+## Robustness across resolutions
+
+```{r X-resolution}
+rob <- do.call(rbind, lapply(names(CC), function(k) {
+  mt <- model_table(CC[[k]])
+  x <- mt %>% filter(R == 0, model %in% c("SC_direct", "FC", "distance", "heat", "communicability", "search_prob")) %>% select(model, syndrome, r, q_spin, q_rew_deg)
+  x$parcels <- as.integer(k); x
+}))
+rob %>% select(parcels, syndrome, model, r) %>% pivot_wider(names_from = parcels, values_from = r, names_prefix = "r_") %>%
+  mutate(syndrome = syn_lab(syndrome)) %>% arrange(syndrome, model) %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+rob_vsD <- do.call(rbind, lapply(names(CC), function(k) {
+  x <- difference_table(CC[[k]], ref = "distance", models = setdiff(E_models, "distance"), nulls = "spin") %>% filter(R %in% c(0, 30))
+  x$parcels <- as.integer(k); x
+}))
+rob_vsD %>% group_by(parcels, R) %>% summarise(tests = n(), model_better_q05 = sum(diff > 0 & q_spin < 0.05), model_worse_q05 = sum(diff < 0 & q_spin < 0.05), .groups = "drop")
+```
