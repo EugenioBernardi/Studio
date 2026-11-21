@@ -133,7 +133,7 @@ eigen_within_hemi <- function(d, cc, Ks = c(5, 10, 20, 40), n_null = 1000) {
       a <- d$A[d$cortex, s]
       As <- matrix(a[P], nrow = length(a))[idx, , drop = FALSE]      # spins keep hemispheres
       for (b in names(bases)) {
-        o <- recon_curve(bases[[b]], cbind(a[idx]), Ks)
+        o <- matrix(recon_curve(bases[[b]], cbind(a[idx]), Ks), nrow = 1)
         nl <- recon_curve(bases[[b]], As, Ks)
         out[[length(out) + 1]] <- data.frame(hemi = h, syndrome = s, basis = b, K = Ks, r = o[1, ],
                                              p_spin = sapply(seq_along(Ks), function(i) p_upper(o[1, i], nl[, i])))

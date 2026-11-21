@@ -25,10 +25,11 @@ subcortex, and seeded network diffusion on the structural connectome was never b
 spatial spread from the same seed. When only regions more than 30 mm away were allowed,
 thresholded functional connectivity predicted atrophy in bvFTD
 (r = `r f2(rv("ctx400_euc", 30, "FC_top10", "bvFTD"))`) and FTD
-(r = `r f2(rv("ctx400_euc", 30, "FC_top10", "FTD"))`) under every null, but only weakly in AD
-(r = `r f2(rv("ctx400_euc", 30, "FC_top10", "AD"))`). Degree-preserving rewiring and spin tests
-supported most structural fits; variogram-matched and geometry-preserving nulls supported
-few or none.
+(r = `r f2(rv("ctx400_euc", 30, "FC_top10", "FTD"))`) under every null; in AD the unique
+long-range functional contribution beyond distance was about half as large (partial
+r = `r f2(part("ctx400_geo", 30, "FC_top10", "AD")$partial_r)` vs `r f2(part("ctx400_geo", 30, "FC_top10", "bvFTD")$partial_r)`).
+Degree-preserving rewiring supported every structural fit and spins about a third;
+variogram-matched surrogates supported none.
 
 **Conclusions.** Cortical atrophy in AD and FTD is organised mainly by proximity along the
 cortical sheet; structural communication models add little beyond that geometry. FTD,

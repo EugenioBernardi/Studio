@@ -18,22 +18,24 @@ DBM and group statistics.
 connections, shortest paths, communicability, search information, navigation and network
 diffusion all correlated with atrophy, but none survived a null that preserves the map's
 spatial autocorrelation (variogram-matched surrogates) or one that preserves the
-connectome's wiring geometry, and none outperformed the distance kernel, including when
+connectome's wiring geometry (with a bin-width-dependent exception for path-based models in
+bvFTD), and none outperformed the distance kernel, including when
 given the same freedom to fit. Seeded network diffusion on the SC, evaluated in its
 generative form as recommended, was never better than isotropic spread from the same seed.
 Adding the hippocampus, amygdala, thalamus and striatum did not change this in AD, although
-every AD model chose the bilateral amygdala as the seed. The only structural signal that
-survived the geometry-preserving null was in bvFTD, for path-based models. These results do
+every AD model chose the bilateral amygdala as the seed. The only structural signal beyond
+geometry was in bvFTD: path-based models survived geometry-preserving rewiring with coarse
+bins, and search information retained a small long-range contribution beyond distance. These results do
 not show that pathology does not travel along axons. They show that, at the resolution of
 group-level atrophy maps and a young-adult tractography connectome, the information in the
 structural connectome that is relevant to atrophy is largely the information in its spatial
 layout, which neighbouring cortex already carries.
 
-**Third, FTD, but much less AD, follows the long-range functional architecture.** When
+**Third, FTD follows the long-range functional architecture more strongly than AD.** When
 nearby regions were excluded, thresholded FC predicted bvFTD and pooled FTD atrophy far
 better than distance, under every spatial null and at every resolution; svPPA and nfvPPA
-showed weaker versions of the same effect. In AD and MCI the long-range functional signal
-was small, even with the subcortex included. This dissociation fits the view of bvFTD as a
+showed weaker versions of the same effect. In AD the unique long-range functional
+contribution was about half as large, and in MCI it was small. This dissociation fits the view of bvFTD as a
 disorder of a distributed salience/limbic network [1, 2, 5] whose nodes are far apart but
 functionally coupled, whereas the AD map at this group level is captured by bilateral,
 medial temporal-centred spread along the cortex. The FC effect was carried by the strongest
@@ -51,10 +53,10 @@ and one that preserves wiring geometry, while noting that geometry-preserving re
 conservative because it cannot move about half of the edges; (iii) refit every free
 parameter inside each null; (iv) count only positive fits as support; and (v) check
 hemispheric effects with homotopic comparisons, because standard parcellations are not
-left–right symmetric. Negative associations between FC strength and atrophy in FTD should
-not be read as hub sparing without accounting for susceptibility-related signal loss, which
-lowers FC strength in exactly the orbitofrontal and anterior temporal regions that FTD
-targets [35].
+left–right symmetric. The negative association between FC strength and atrophy in FTD was
+not explained by a template-based dropout proxy, but HCP-specific susceptibility loss in
+orbitofrontal and anterior temporal cortex [35] can only be excluded with the HCP's own
+signal maps, so we do not interpret it as hub sparing.
 
 **Limitations.** The maps are group averages from different cohorts and pipelines (ADNI and
 NIFD), so between-disease differences mix disease with cohort effects; the three FTD-variant

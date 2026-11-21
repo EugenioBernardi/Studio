@@ -9,7 +9,6 @@ output:
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 root <- normalizePath("..")
-knitr::opts_knit$set(root.dir = root)
 source(file.path(root, "manuscript/helpers.R"))
 ```
 
@@ -82,20 +81,24 @@ under-sampling of temporo-limbic and commissural tracts (Discussion, Limitations
 
 ## Major comment 3 — Negative FC–hub correlation in bvFTD
 
-We used the SPM12 mean EPI template as an open proxy for susceptibility-related signal loss.
-As the reviewer anticipated, regional EPI signal is lowest in orbitofrontal and temporal-pole
-parcels (limbic network `r f2(res$epi_by_network %>% filter(network == "Limbic") %>% pull(epi_signal))`
-of the cortical median) and FC strength tracks it
-(ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "AD") %>% pull(rho_strength_epi))`).
-Partialling out EPI signal changed the bvFTD association from
-ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "bvFTD") %>% pull(rho))` to
-`r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "bvFTD") %>% pull(rho_partial_epi))` (Table 1).
-We no longer interpret the association as sparing of functional hubs, and we discuss the
-dropout confound. We also added proportional thresholding of FC (strongest 20% and 10% of
-edges) throughout: thresholding strengthened the FC–atrophy relationship substantially
+We used the SPM12 mean EPI template as an open proxy for susceptibility-related signal loss
+(HCP tSNR maps require ConnectomeDB access). Regional EPI signal is lowest in orbitofrontal
+and temporal-pole parcels (limbic network `r f2(res$epi_by_network %>% filter(network == "Limbic") %>% pull(epi_signal))`
+of the cortical median), as expected. However, with this proxy we could not confirm the
+reviewer's explanation: EPI signal was only weakly related to FC strength
+(ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "AD") %>% pull(rho_strength_epi))`),
+and partialling it out left the bvFTD association essentially unchanged
+(ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "bvFTD") %>% pull(rho))` →
+`r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "bvFTD") %>% pull(rho_partial_epi))`; Table 1).
+The association also persists with thresholded FC. Because a template from another scanner
+and sequence cannot exclude HCP-specific dropout, and because low FC strength is a known
+property of limbic/orbitofrontal networks, we have removed any interpretation of hub sparing
+and report the association descriptively, with this limitation.
+
+We also added proportional thresholding of FC (strongest 20% and 10% of edges) throughout: thresholding strengthened the FC–atrophy relationship substantially
 (bvFTD, R = 30 mm: full FC r = `r f2(rv("ctx400_euc", 30, "FC", "bvFTD"))`, top 10%
 r = `r f2(rv("ctx400_euc", 30, "FC_top10", "bvFTD"))`), and the long-range FC effect in FTD is
-now a main result. HCP tSNR maps require ConnectomeDB access; we note this as a limitation.
+now a main result.
 
 ## Major comment 4 — Template mismatch and DBM-specific smoothing
 
@@ -139,10 +142,13 @@ shared-control caveat. PD has been removed.
 
 ## Minor comments
 
-- **Spin variogram ratio discrepancy.** Corrected. The Summary value (≈1.9×) referred to the
-  first distance bin only; the manuscript now reports the mean over the five shortest bins
+- **Spin variogram ratio discrepancy.** Corrected. The earlier Summary value (≈1.9×) was the
+  first distance bin of the AD map only; the revised manuscript (warped atlas) reports the
+  mean over the five shortest bins
   (`r f2(min(res$null_diag %>% filter(null == "spin") %>% pull(variogram_ratio_bins1to5)))`–`r f2(max(res$null_diag %>% filter(null == "spin") %>% pull(variogram_ratio_bins1to5)))`
-  across syndromes) and gives both in Supplementary Table S9.
+  across syndromes) and the first bin separately
+  (`r f2(min(res$null_diag %>% filter(null == "spin") %>% pull(variogram_ratio_bin1)))`–`r f2(max(res$null_diag %>% filter(null == "spin") %>% pull(variogram_ratio_bin1)))`)
+  in Supplementary Table S9.
 - **FDR for FC at R = 30 mm.** FC (full and thresholded) is now included in the FDR family
   (Supplementary Table S6).
 - **Mirrored-rank logic.** Rewritten as the two-step argument the reviewer proposes

@@ -3,7 +3,7 @@
 ## Two distinct atrophy topographies
 
 ```{r fig1, echo = FALSE, out.width = "100%", fig.cap = "**Figure 1. Atrophy topographies.** Group-level DBM atrophy (−t) on the cortex (Schaefer-400, warped to the template of the maps) and in 14 subcortical structures. Colour scale set per syndrome from the cortex; subcortical boxes print their values. *Caudate is dominated by DBM ventricular expansion."}
-knitr::include_graphics(file.path(root, "figures/v2/web/fig1_atrophy.jpg"))
+knitr::include_graphics(file.path(root, "figures/v2/web/fig1_atrophy.jpg"), rel_path = FALSE)
 ```
 
 AD and MCI atrophy involved the medial temporal lobe, the posterior cingulate/precuneus and
@@ -73,7 +73,7 @@ of the variogram null, which preserve Euclidean autocorrelation, in AD
 (p `r fp(pv("ctx400_geo", 0, "distance", "AD"))`), bvFTD (p `r fp(pv("ctx400_geo", 0, "distance", "bvFTD"))`)
 and svPPA (p `r fp(pv("ctx400_geo", 0, "distance", "svPPA"))`).
 
-## Structural communication models add nothing beyond geometry
+## Structural communication models add little beyond geometry
 
 Direct SC, shortest-path efficiency, communicability, search information, navigation and
 the network diffusion kernel all predicted atrophy (e.g. AD search information
@@ -83,7 +83,9 @@ against spins and degree-preserving rewiring. None was significant against the
 variogram-matched null in any syndrome, and none exceeded the distance baseline (Figure 2;
 Supplementary Table S6). Against geometry-preserving rewiring, only bvFTD retained an
 effect for path-based models (shortest-path efficiency q `r fp(qv("ctx400_euc", 0, "SPE", "bvFTD", "rew_geo"))`;
-navigation q `r fp(qv("ctx400_euc", 0, "navigation", "bvFTD", "rew_geo"))`). Giving each
+navigation q `r fp(qv("ctx400_euc", 0, "navigation", "bvFTD", "rew_geo"))`), and this depended on the
+bin width of the null: it held with 5–20 edge-length bins but not with 40 (Supplementary
+Table S9b). Giving each
 communication model the same single fitted parameter as the distance kernel produced at
 most ties with distance (Supplementary Table S7). Diffusion efficiency (1/mean first-passage
 time) is dominated by node strength on graphs of this size [16] and gave negative or
@@ -123,9 +125,13 @@ values were r = `r f2(rv("ctx400_euc", 30, "FC_top10", "svPPA"))` in svPPA and
 `r f2(rv("ctx400_euc", 30, "FC_top10", "MCI"))` in MCI. Beyond distance, FC added a unique
 contribution in bvFTD (partial r = `r f2(part("ctx400_geo", 30, "FC_top10", "bvFTD")$partial_r)`,
 variogram p `r fp(part("ctx400_geo", 30, "FC_top10", "bvFTD")$p_variogram)`) and pooled FTD
-(`r f2(part("ctx400_geo", 30, "FC_top10", "FTD")$partial_r)`) that was much smaller in AD
-(`r f2(part("ctx400_geo", 30, "FC_top10", "AD")$partial_r)`; Supplementary Table S8).
-Structural models carried no long-range signal beyond distance in any syndrome. Full-density
+(`r f2(part("ctx400_geo", 30, "FC_top10", "FTD")$partial_r)`) that was about half as large in AD
+(`r f2(part("ctx400_geo", 30, "FC_top10", "AD")$partial_r)`, variogram p
+`r fp(part("ctx400_geo", 30, "FC_top10", "AD")$p_variogram)`) and smaller still in MCI
+(`r f2(part("ctx400_geo", 30, "FC_top10", "MCI")$partial_r)`; Supplementary Table S8).
+Among structural models only bvFTD retained a smaller long-range contribution beyond
+distance (search information partial r = `r f2(part("ctx400_geo", 30, "search_prob", "bvFTD")$partial_r)`,
+variogram q `r fp(part("ctx400_geo", 30, "search_prob", "bvFTD")$q_variogram)`). Full-density
 FC behaved like thresholded FC but weaker (bvFTD r = `r f2(rv("ctx400_euc", 30, "FC", "bvFTD"))`).
 
 ## Generative spreading: no advantage for the structural connectome
@@ -177,15 +183,19 @@ hb <- res$hubs$ctx400 %>% filter(strength %in% c("FC", "FC_top10"), syndrome %in
 knitr::kable(hb, caption = "**Table 1. FC node strength and atrophy (Spearman), raw and controlling for regional EPI signal (dropout proxy).** Schaefer-400 cortex; p from 1,000 spins.")
 ```
 
-Regions with high full-density FC strength were less atrophic in bvFTD and pooled FTD
-(Table 1). FC strength was correlated with regional EPI signal
+Regions with high FC strength were less atrophic in bvFTD and pooled FTD, with full-density
+and with thresholded FC (Table 1), whereas SC strength was weakly positively related to
+bvFTD atrophy (ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "SC", syndrome == "bvFTD") %>% pull(rho))`).
+Regional EPI signal, our proxy for susceptibility dropout, was lowest in orbitofrontal and
+anterior temporal cortex (limbic network `r f2(res$epi_by_network %>% filter(network == "Limbic") %>% pull(epi_signal))`
+of the cortical median), but it was only weakly related to FC strength
 (ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "AD") %>% pull(rho_strength_epi))`),
-which is lowest in orbitofrontal and anterior temporal cortex
-(limbic network `r f2(res$epi_by_network %>% filter(network == "Limbic") %>% pull(epi_signal))`
-of the cortical median), the regions most affected in bvFTD and svPPA. Controlling for EPI
-signal attenuated the negative association in bvFTD to
-ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "bvFTD") %>% pull(rho_partial_epi))`.
-We therefore do not interpret the negative hub association as sparing of functional hubs.
+and partialling it out left the bvFTD association unchanged
+(ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "bvFTD") %>% pull(rho))` →
+`r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "bvFTD") %>% pull(rho_partial_epi))`).
+This proxy, a template from a different scanner and sequence, cannot exclude HCP-specific
+dropout, and low FC strength is also a known property of limbic and orbitofrontal networks.
+We therefore report the association without interpreting it as sparing of functional hubs.
 
 ## The choice of null model decides significance
 
@@ -208,13 +218,14 @@ ggplot(d5, aes(n_ok / n, null, fill = family)) + geom_col(position = position_do
 Whether a structural model appeared to constrain atrophy depended mostly on the null
 (Figure 5). Degree-preserving rewiring supported almost every structural fit, because it
 roughly doubles the mean connection length and so destroys the spatial embedding that the
-real connectome shares with atrophy. Spins supported many fits, because parcel-level spins
-make surrogate maps rougher at short range than the real map (short-range variogram ratio
+real connectome shares with atrophy. Spins supported about a third of structural fits at
+R = 0, because parcel-level spins make surrogate maps rougher at short range than the real map (short-range variogram ratio
 `r f2(min(res$null_diag %>% filter(null == "spin") %>% pull(variogram_ratio_bins1to5)))`–`r f2(max(res$null_diag %>% filter(null == "spin") %>% pull(variogram_ratio_bins1to5)))`
 times the empirical value, vs `r f2(min(res$null_diag %>% filter(null == "moran") %>% pull(variogram_ratio_bins1to5)))`–`r f2(max(res$null_diag %>% filter(null == "moran") %>% pull(variogram_ratio_bins1to5)))`
-for Moran surrogates; Supplementary Table S9). Variogram-matched surrogates and
-geometry-preserving rewiring supported few or no structural fits, whereas the thresholded-FC
-result in FTD survived every spatial null.
+for Moran surrogates, which are slightly smoother than the real maps; Supplementary
+Table S9). Variogram-matched surrogates supported no structural fit and geometry-preserving
+rewiring very few, whereas the thresholded-FC result in bvFTD and FTD survived every spatial
+null.
 
 ## Eigenmodes within each hemisphere
 

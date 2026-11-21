@@ -12,7 +12,6 @@ output:
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dpi = 120)
 root <- normalizePath("..")
-knitr::opts_knit$set(root.dir = root)
 source(file.path(root, "manuscript/helpers.R"))
 kt <- function(x, cap, digits = 3) knitr::kable(x, caption = cap, digits = digits)
 syn_f <- function(x) factor(x, syn_order)
@@ -38,7 +37,7 @@ kt(res$warp_vs_old %>% filter(syndrome %in% syn_order), "Correlation between par
 ```
 
 ```{r figS1, out.width = "100%", fig.cap = "**Figure S1.** FSL MNI152 brain edges (red) on the ICBM 2009c symmetric brain before and after registration; warped Schaefer-400 + Tian-14 atlas."}
-knitr::include_graphics(file.path(root, "figures/v2/web/figS1_registration.jpg"))
+knitr::include_graphics(file.path(root, "figures/v2/web/figS1_registration.jpg"), rel_path = FALSE)
 ```
 
 # S2–S4. Validation of the network functions and nulls
@@ -141,9 +140,9 @@ kt(res$eigen %>% mutate(syndrome = syn_f(syndrome)) %>% arrange(hemi, syndrome, 
 ```
 
 ```{r figS2, out.width = "80%", fig.cap = "**Figure S2. Homotopic asymmetry.** Each left parcel minus the identical region mirrored to the right (SD units)."}
-knitr::include_graphics(file.path(root, "figures/v2/web/fig_asymmetry.jpg"))
+knitr::include_graphics(file.path(root, "figures/v2/web/fig_asymmetry.jpg"), rel_path = FALSE)
 ```
 
 ```{r figS3, out.width = "100%", fig.cap = "**Figure S3. Best seeds of the generative models** (cortex + subcortex)."}
-knitr::include_graphics(file.path(root, "figures/v2/web/fig_seeds.jpg"))
+knitr::include_graphics(file.path(root, "figures/v2/web/fig_seeds.jpg"), rel_path = FALSE)
 ```

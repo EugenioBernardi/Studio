@@ -15,7 +15,6 @@ output:
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dpi = 130, fig.align = "center")
 root <- normalizePath("..")
-knitr::opts_knit$set(root.dir = root)
 source(file.path(root, "manuscript/helpers.R"))
 ```
 
