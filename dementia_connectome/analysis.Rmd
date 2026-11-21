@@ -12,6 +12,7 @@ output:
 ---
 
 ```{r setup, include = FALSE}
+knitr::opts_knit$set(root.dir = normalizePath("."))  # child documents run from the project root
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
                       fig.width = 8, fig.height = 5, dpi = 110)
 set.seed(20261121)
@@ -29,28 +30,80 @@ theme_set(theme_minimal(base_size = 11) +
                   strip.text = element_text(face = "bold", hjust = 0)))
 ```
 
-# Status
+# Summary
 
-This report covers **Step 1 only**: data download and checks, label verification,
-parcellation, coverage and sanity checks. **Step 2 (analyses A–E) was not run.**
-Those analyses depend on `connectomeR_0.2.0.tar.gz` (`spin_test()`,
-`rotate_parcellation()`, `rewire_degree()`, `node_strength()`, `handle_negative()`, and
-the package that the new `R/communication.R` should extend). The tarball was not in the
-working folder, the repository, any branch, or anywhere on disk. I did not rewrite the
-package from its description, because that would mean inventing code you already have
-and validated against the BCT.
+**Question.** Does cortical atrophy in AD and the FTD syndromes follow the connectome,
+or is it explained by spatial proximity? Which communication model on the structural
+connectome (SC) predicts it best, and does any beat a distance-only baseline?
 
-Two things in Step 1 need your attention:
+**Data.** Seven group-level DBM atrophy maps (AD, MCI from ADNI; PD from PPMI; pooled FTD,
+bvFTD, svPPA, nfvPPA from NIFD); HCP SC and FC; Schaefer 100/200/400 (400 primary). **No
+DLB map exists in the two Zenodo records; none was substituted.**
 
-1. **No DLB map.** Neither Zenodo record contains a DLB map, links to one or mentions
-   Lewy body disease. DLB is left out; no other data were substituted.
-2. **The three FTD-variant maps have an unusual scale.** The NIFD variant maps
-   (bvFTD, svPPA, nfvPPA) span only about ±1.5–2.0, against −16 to +14 for the pooled
-   FTD map from the same cohort. The MINC copies on Zenodo have the same range, so this
-   is not a conversion error. The spatial patterns are anatomically sensible (see "Sanity checks"),
-   and every planned analysis is scale-invariant (correlations, ranks, weighted
-   neighbour means). So this does not block the analysis, but these values should not
-   be read as t-statistics until the authors confirm what was deposited.
+**Main findings (Schaefer-400; all hold at 100 and 200 unless stated).**
+
+1. **No communication model beats distance.** A distance-only kernel exp(−d/λ) predicts
+   each region's atrophy from other regions' atrophy best in every syndrome (r = 0.57–0.83).
+   The best SC models (one-step SC, search information, heat kernel) reach r = 0.44–0.72.
+   Zero of 49 model-vs-distance comparisons favour a model at FDR < 0.05 at any
+   resolution; giving each model one fitted exponent only produces ties (Δr ≤ 0.04, n.s.).
+2. **The best "diffusion" is one step.** The network diffusion kernel's fitted β sits at
+   the low end of its grid, i.e. it collapses to direct neighbours. Diffusion efficiency
+   (1/MFPT) is dominated by node strength and gives negative or near-zero r; it should not
+   be read as a spreading model.
+3. **SC effects are mostly geometry.** Degree-preserving rewiring makes every SC model look
+   significant (35/35 tests); geometry-preserving rewiring makes almost none significant
+   (2/35). The exception is **bvFTD**, where path-based SC models (shortest-path
+   efficiency, navigation) and long-range heat/communicability beat the geometry-preserving
+   null. Atrophy in bvFTD and AD is also smoother on the real SC than on geometry-matched
+   rewired SCs (graph Dirichlet energy, p = 0.001).
+4. **FC carries signal beyond distance, mainly in FTD.** FC's partial correlation with
+   atrophy beyond the distance kernel: bvFTD 0.23, pooled FTD 0.18, svPPA 0.13, AD 0.11 (spin
+   p ≤ 0.017). Using only connections longer than 30 mm, FC predicts bvFTD (r = 0.51), FTD
+   (0.44) and svPPA (0.29) atrophy, significant under all three spatial nulls at 400
+   parcels and under the variogram null at 100, 200 and 400; in AD the long-range FC signal
+   is weak (r ≈ 0.09).
+5. **Epicentres.** AD: left and right medial/anterior temporal parcels. bvFTD: orbitofrontal
+   cortex and **anterior insula** (bilateral Cont_PFCv_1 and LH FrOperIns_3 in the top 5;
+   the expected check passes). svPPA: left temporal pole. nfvPPA: left frontal operculum,
+   FEF/premotor and SMA. When the voxel map is mirrored left–right, nfvPPA's epicentres and
+   most of svPPA's lose rank (left-specific), whereas bvFTD's and AD's keep it (not
+   hemisphere-specific).
+6. **Null models decide significance.** Parcel-level spins make maps rougher at short range
+   than the real map (short-range variogram ≈ 1.9× empirical), so they flag 27/42 model
+   fits as significant; variogram-matched surrogates flag 3/42 and Moran spectral
+   randomisation 11/42. Conclusions above rest on effects that survive the stricter nulls.
+7. **Eigenmodes.** Geometric (cortical-surface) eigenmodes reconstruct AD and MCI atrophy
+   better than spatially matched surrogates; FC harmonics do so for bvFTD and pooled FTD. SC
+   harmonics beat degree-rewired SCs but not geometry-rewired ones (except in nfvPPA).
+8. **Laterality.** The apparent left peak in bvFTD is an atlas artefact: at voxel level
+   bvFTD is near-symmetric (laterality index −0.06), while svPPA and nfvPPA are
+   left-lateralised (+0.11).
+9. **Similarity.** AD resembles MCI (r = 0.80) and, less, svPPA (0.48) and bvFTD (0.31); all
+   FTD maps are mutually similar (spin FDR < 0.05; inflated by a shared NIFD control group);
+   PD is unrelated to the others. Highly FC-connected hubs are *less* atrophic in bvFTD and
+   pooled FTD (ρ ≈ −0.62, FDR q = 0.007); SC strength shows no association that survives FDR.
+
+**Interpretation.** At group level, AD atrophy is explained by spatial proximity: no
+structural route or functional network adds much. bvFTD (and pooled FTD, svPPA) additionally
+follow long-range *functional* networks, with a smaller structural-topology effect in bvFTD.
+Because degree-only rewiring and spin nulls overstate network effects, claims of
+"connectome-shaped atrophy" need geometry-aware nulls and a distance baseline.
+
+**Novelty.** A systematic search found no prior head-to-head comparison of SC communication
+models against a distance baseline across AD and the FTD variants with spatial and rewiring
+nulls (see "Novelty check"). The bvFTD neighbour-atrophy result replicates Shafiei et al.
+2023 with an independent connectome and atlas.
+
+**connectomeR.** The 0.2.0 tarball was never supplied. All needed functions were written
+and validated against bctpy, netneurotools and neuromaps; the network functions form the
+package `pkg/netcomm`, which passes `R CMD check` (0 errors, 0 warnings, 0 notes) and is
+ready to merge into connectomeR 0.3.0. connectomeR itself could not be updated or checked.
+
+**Two data caveats.** The three FTD-variant maps are on an unusual scale (about ±1.5, vs
+±16 for pooled FTD; the MINC copies agree); all analyses are scale-invariant, but the
+values should not be read as t until the authors confirm what was deposited. The template
+and atlas differ (ICBM 2009c symmetric vs FSL MNI152), see Limitations.
 
 # Data
 

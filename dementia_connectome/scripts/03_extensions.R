@@ -6,7 +6,7 @@
 # Usage: Rscript scripts/03_extensions.R <k> [n_surrogates]
 args <- commandArgs(TRUE)
 k <- as.integer(args[1]); n_sur <- as.integer(if (length(args) > 1) args[2] else 1000)
-source("R/setup.R"); source("R/analysis.R"); source("R/spatial_nulls.R")
+source("R/setup.R"); source("R/analysis.R")
 f <- function(x) sprintf("output/cache/%s_k%d.rds", x, k)
 log <- function(...) cat(format(Sys.time(), "%H:%M:%S"), sprintf(...), "\n")
 d <- prep_resolution(k)

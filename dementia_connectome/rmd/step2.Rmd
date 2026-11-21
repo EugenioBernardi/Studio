@@ -2,7 +2,7 @@
 
 ```{r step2-setup}
 source("R/setup.R"); source("R/analysis.R"); source("R/results.R")
-source("R/spatial_nulls.R"); source("R/extensions.R")
+source("R/extensions.R")
 res_k <- setNames(resolutions, resolutions)
 D <- lapply(res_k, prep_resolution)
 CC <- lapply(res_k, load_caches)
@@ -175,8 +175,8 @@ E_tab %>% select(syndrome, model, r, param, p_spin, q_spin, p_rew_deg, q_rew_deg
 ```
 
 `param` is the fitted λ (mm) for the distance kernel and β for the heat kernel. FDR
-covers the 7 tested SC/distance models (SPE, communicability, search information,
-navigation, diffusion, heat kernel, distance) × 7 syndromes.
+covers the 8 SC/distance models (SC direct, SPE, communicability, search information,
+navigation, diffusion, heat kernel, distance) × 7 syndromes, separately for each null.
 
 Reading the p-values: they are one-sided (is the observed r larger than the null r?).
 Diffusion efficiency gives **negative** r, yet small rewiring p-values, because rewired

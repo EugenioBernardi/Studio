@@ -22,7 +22,7 @@ load_caches <- function(k) {
   out[, c("R", "model", "syndrome", col)]
 }
 
-model_table <- function(cc, fdr_models = c("SPE", "communicability", "search_prob", "navigation", "diffusion", "heat", "distance")) {
+model_table <- function(cc, fdr_models = c("SC_direct", "SPE", "communicability", "search_prob", "navigation", "diffusion", "heat", "distance")) {
   obs <- cc$observed
   tab <- obs[, c("R", "model", "syndrome", "r", "param")]
   for (nm in c("spin", "variogram", "moran")) if (!is.null(cc[[nm]])) tab <- merge(tab, .p_tab(obs, cc[[nm]], paste0("p_", nm)), all.x = TRUE)
