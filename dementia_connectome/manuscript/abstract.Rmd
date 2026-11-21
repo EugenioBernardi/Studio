@@ -1,0 +1,39 @@
+<div class="abstract">
+
+**Background.** Atrophy in neurodegenerative dementias is often said to follow the
+connectome, but connectomes and atrophy maps are both organised by distance, and the null
+models used to test network effects differ in what they preserve. We asked whether any
+structural communication model explains atrophy beyond spatial proximity in Alzheimer's
+disease (AD) and frontotemporal dementia (FTD), two cortical diseases with distinct
+topographies.
+
+**Methods.** Open group-level deformation-based morphometry maps of AD, MCI, FTD and its
+behavioural (bvFTD), semantic (svPPA) and non-fluent (nfvPPA) variants were parcellated into
+400 cortical regions (100 and 200 for robustness) and 14 subcortical structures with atlases
+nonlinearly registered to the maps' template. We predicted each region's atrophy from all
+other regions using the Human Connectome Project structural connectome (direct connections,
+shortest paths, communicability, search information, navigation, diffusion), functional
+connectivity, generative network diffusion from seeds, and Euclidean and geodesic spatial
+kernels, with five null models (spin, variogram-matched, Moran spectral randomisation,
+degree- and geometry-preserving rewiring) and all parameters refitted inside every null.
+
+**Results.** A geodesic spatial kernel predicted atrophy best in every syndrome (AD
+r = `r f2(rv("ctx400_geo", 0, "distance", "AD"))`, bvFTD r = `r f2(rv("ctx400_geo", 0, "distance", "bvFTD"))`)
+and outperformed the Euclidean kernel. No structural communication model exceeded the spatial
+baselines or survived the variogram-matched null in any syndrome, including after adding the
+subcortex, and seeded network diffusion on the structural connectome was never better than
+spatial spread from the same seed. When only regions more than 30 mm away were allowed,
+thresholded functional connectivity predicted atrophy in bvFTD
+(r = `r f2(rv("ctx400_euc", 30, "FC_top10", "bvFTD"))`) and FTD
+(r = `r f2(rv("ctx400_euc", 30, "FC_top10", "FTD"))`) under every null, but only weakly in AD
+(r = `r f2(rv("ctx400_euc", 30, "FC_top10", "AD"))`). Degree-preserving rewiring and spin tests
+supported most structural fits; variogram-matched and geometry-preserving nulls supported
+few or none.
+
+**Conclusions.** Cortical atrophy in AD and FTD is organised mainly by proximity along the
+cortical sheet; structural communication models add little beyond that geometry. FTD,
+particularly bvFTD, additionally follows the long-range functional architecture. Network
+claims about atrophy should be tested against fitted spatial baselines and
+geometry-preserving nulls.
+
+</div>

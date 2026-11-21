@@ -1,0 +1,149 @@
+---
+title: "Supplementary material"
+subtitle: "Cortical proximity, not structural communication, organises atrophy in Alzheimer's disease and frontotemporal dementia"
+pagetitle: "Atrophy networks: supplement"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    self_contained: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dpi = 120)
+root <- normalizePath("..")
+knitr::opts_knit$set(root.dir = root)
+source(file.path(root, "manuscript/helpers.R"))
+kt <- function(x, cap, digits = 3) knitr::kable(x, caption = cap, digits = digits)
+syn_f <- function(x) factor(x, syn_order)
+```
+
+```{css, echo = FALSE}
+body { font-family: "Inter", "Helvetica Neue", Arial, sans-serif; font-size: 14px; background: #fcfcfb; color: #0b0b0b; }
+.main-container { max-width: 980px; } table { font-size: 0.82em; } p.caption, .caption { font-size: 0.88em; color: #3a3a37; }
+```
+
+# S1. Template registration
+
+```{r s1}
+rg <- res$registration
+kt(data.frame(measure = c("Template intensity correlation, before (world-coordinate resampling)", "after (ANTs SyN)",
+                          "Brain-mask Dice, before", "after",
+                          "Schaefer-400 voxels whose parcel changed (warped vs world-coordinate)", "Schaefer-200", "Schaefer-100"),
+              value = c(rg$intensity_r_before, rg$intensity_r_after, rg$brainmask_dice_before, rg$brainmask_dice_after,
+                        1 - rg$schaefer400$voxel_agreement_warped_vs_worldNN, 1 - rg$schaefer200$voxel_agreement_warped_vs_worldNN,
+                        1 - rg$schaefer100$voxel_agreement_warped_vs_worldNN)),
+   "**Table S1. Registration of FSL MNI152 (atlas space) to ICBM 2009c symmetric (map space).**")
+kt(res$warp_vs_old %>% filter(syndrome %in% syn_order), "Correlation between parcel atrophy with the warped atlas and with the earlier world-coordinate resampling (Schaefer-400).")
+```
+
+```{r figS1, out.width = "100%", fig.cap = "**Figure S1.** FSL MNI152 brain edges (red) on the ICBM 2009c symmetric brain before and after registration; warped Schaefer-400 + Tian-14 atlas."}
+knitr::include_graphics(file.path(root, "figures/v2/web/figS1_registration.jpg"))
+```
+
+# S2–S4. Validation of the network functions and nulls
+
+```{r s2}
+kt(read.csv(file.path(root, "output/validation/communication_validation.csv"))[, c("quantity", "reference", "max_abs_diff", "max_rel_diff", "offdiag_nonfinite_pattern_identical")],
+   "**Table S2. Communication models vs bctpy 0.6.1 / netneurotools 0.3.0** (HCP Schaefer-400 SC).", digits = 20)
+sv <- read.csv(file.path(root, "output/validation/spin_validation.csv"))
+kt(data.frame(check = c("max |p difference| (21 map pairs)", "correlation of p-values", "null SD ratio (range)", "min KS p of null distributions"),
+              value = c(f2(max(abs(sv$p_spin_R - sv$p_spin_neuromaps))), formatC(cor(sv$p_spin_R, sv$p_spin_neuromaps), digits = 4, format = "f"),
+                        paste(f2(min(sv$null_sd_R / sv$null_sd_neuromaps)), f2(max(sv$null_sd_R / sv$null_sd_neuromaps)), sep = "–"), f2(min(sv$ks_p_null)))),
+   "**Table S3. Spin permutations vs neuromaps 0.0.7 (Hungarian).**")
+rw <- read.csv(file.path(root, "output/validation/rewiring_validation.csv"))
+kt(aggregate(cbind(edge_turnover, mean_edge_length, ks_D_edge_length, weight_length_rho, interhemispheric_edges) ~ null, rw, mean),
+   "**Table S4. Properties of the rewiring nulls** (HCP Schaefer-400 SC; mean of 5 networks).")
+```
+
+# S5. Similarity between syndromes
+
+```{r s5}
+kt(res$similarity$sub414 %>% select(map1, map2, r, p_spin, q_spin, p_variogram, q_variogram, p_moran),
+   "**Table S5. Pearson correlation between atrophy maps** (cortex + subcortex, 414 nodes). Spin: cortex rotated, subcortex permuted. The FTD-variant maps probably share a control group, which inflates their mutual similarity; these values are descriptive.")
+```
+
+# S6. All model fits (Schaefer-400 cortex)
+
+```{r s6}
+mods <- c("SC_direct", "SPE", "communicability", "search_prob", "navigation", "diffusion", "heat", "FC", "FC_top20", "FC_top10", "distance")
+x <- bind_rows(res$models$ctx400_euc %>% filter(model %in% mods), res$models$ctx400_geo %>% filter(model == "distance") %>% mutate(model = "distance_geo")) %>%
+  filter(R %in% c(0, 30)) %>% mutate(syndrome = syn_f(syndrome), model = model_lab[model]) %>%
+  select(R, syndrome, model, r, param, p_spin, q_spin, p_variogram, q_variogram, p_moran, q_moran, p_rew_deg, q_rew_deg, p_rew_geo, q_rew_geo) %>% arrange(R, syndrome, desc(r))
+kt(x, "**Table S6. Model fits at R = 0 and 30 mm.** One-sided p (null ≥ observed); q: Benjamini–Hochberg across syndromes × models within each null and radius. `param`: fitted λ (mm) for distance kernels, β for the diffusion kernel; for SC (direct) at R = 30, the number of nodes without edges beyond 30 mm (dropped). Rewiring p is not defined for FC or distance. Geodesic distance (distance_geo) has no rewiring null.")
+```
+
+# S7. Communication models with one fitted exponent
+
+```{r s7}
+kt(res$vs_distance$ctx400_euc %>% filter(R == 0) %>% mutate(syndrome = syn_f(syndrome)) %>% select(syndrome, model, r, r_distance = r_ref, diff, p_spin, p_variogram, q_variogram) %>% arrange(syndrome, desc(diff)),
+   "**Table S7a. Each model minus the Euclidean distance kernel (R = 0).** Two-sided p of the paired difference; distance λ refitted in every surrogate.")
+tun <- res$models$ctx400_euc %>% filter(R == 0, grepl("_tuned$", model)) %>% left_join(res$models$ctx400_euc %>% filter(R == 0, model == "distance") %>% select(syndrome, r_distance = r), by = "syndrome") %>%
+  mutate(syndrome = syn_f(syndrome), diff = r - r_distance) %>% select(syndrome, model, r, param, r_distance, diff, p_variogram) %>% arrange(syndrome, desc(diff))
+kt(tun, "**Table S7b. Communication models with one fitted exponent (M^γ; `param` = γ).**")
+```
+
+# S8. Unique contribution beyond distance
+
+```{r s8}
+kt(bind_rows(res$partial$ctx400_euc %>% mutate(kernel = "Euclidean"), res$partial$ctx400_geo %>% mutate(kernel = "geodesic"), res$partial$sub414_euc %>% mutate(kernel = "Euclidean, + subcortex")) %>%
+     mutate(syndrome = syn_f(syndrome)) %>% arrange(kernel, R, syndrome, model),
+   "**Table S8. Partial correlation r(atrophy, model prediction | distance prediction).** λ refitted for every map and surrogate; one-sided p against 1,000 spins and 1,000 variogram surrogates.")
+```
+
+# S9. Null-model diagnostics
+
+```{r s9}
+kt(res$null_diag %>% mutate(syndrome = syn_f(syndrome)) %>% arrange(syndrome, null),
+   "**Table S9. How well each spatial null reproduces the map's short-range structure** (Schaefer-400, 200 surrogates per syndrome). Variogram ratio = surrogate / empirical semivariance in the five shortest distance bins (1 = preserved; > 1 = rougher). nn_corr: correlation between each parcel and its nearest neighbour.")
+if (!is.null(res$geometry_bins))
+  kt(res$geometry_bins %>% filter(syndrome %in% c("AD", "bvFTD", "svPPA")) %>% mutate(syndrome = syn_f(syndrome)) %>% arrange(R, syndrome, model, nbins),
+     "**Table S9b. Geometry-preserving rewiring: dependence on the number of edge-length bins** (300 networks per setting). Fewer bins move more edges (higher turnover) and give a less conservative null.")
+```
+
+# S10. Robustness across resolutions
+
+```{r s10}
+rb <- bind_rows(lapply(c("ctx100_euc", "ctx200_euc", "ctx400_euc"), function(cfg) res$models[[cfg]] %>% filter(R %in% c(0, 30), model %in% c("distance", "search_prob", "SC_direct", "FC_top10")) %>% mutate(parcels = as.integer(sub("ctx([0-9]+)_.*", "\\1", cfg))))) %>%
+  mutate(syndrome = syn_f(syndrome)) %>% select(parcels, R, syndrome, model, r, p_variogram, supported_variogram) %>% arrange(R, syndrome, model, parcels)
+kt(rb, "**Table S10. Key fits at 100, 200 and 400 parcels** (warped atlas). supported = r > 0 and variogram FDR q < 0.05.")
+vb <- bind_rows(lapply(c("ctx100_euc", "ctx200_euc", "ctx400_euc", "ctx400_geo", "sub414_euc"), function(cfg) res$vs_distance[[cfg]] %>% mutate(config = cfg))) %>%
+  filter(model %in% c("SC_direct", "SPE", "communicability", "search_prob", "navigation", "heat")) %>%
+  group_by(config, R) %>% summarise(tests = n(), model_better_q05 = sum(diff > 0 & q_variogram < 0.05, na.rm = TRUE), model_worse_q05 = sum(diff < 0 & q_variogram < 0.05, na.rm = TRUE), .groups = "drop")
+kt(vb, "**Table S10b. Structural models vs the distance kernel, all configurations** (paired difference, variogram null, FDR).")
+```
+
+# S11. Epicentres (cortex + subcortex)
+
+```{r s11}
+kt(res$epicentres$sub414 %>% filter(rank <= 10) %>% mutate(syndrome = syn_f(syndrome), label = sub("^7Networks_", "", label)) %>% arrange(syndrome, rank) %>%
+     select(syndrome, rank, label, structure, atrophy, p_spin, p_rewire),
+   "**Table S11. Top-10 data-driven epicentres** (mean rank of atrophy and SC-neighbour atrophy), with spin (cortex rotated, subcortex permuted) and degree-preserving rewiring p-values.")
+```
+
+# S12. Hubs, signal dropout and generative models
+
+```{r s12}
+kt(bind_rows(res$hubs$ctx400 %>% mutate(space = "cortex"), res$hubs$sub414 %>% mutate(space = "cortex + subcortex")) %>% mutate(syndrome = syn_f(syndrome)) %>% arrange(space, strength, syndrome),
+   "**Table S12a. Node strength vs atrophy (Spearman), raw and partialling out regional EPI signal.**")
+kt(res$epi_by_network, "**Table S12b. Regional EPI signal (SPM12 mean EPI template) by network, relative to the cortical median.**")
+kt(bind_rows(lapply(names(res$generative), function(cfg) res$generative[[cfg]]$fits %>% mutate(config = cfg))) %>% mutate(syndrome = syn_f(syndrome), seed_label = sub("^7Networks_", "", seed_label)) %>%
+     select(config, syndrome, model, r, seed_label, bilateral, p_spin, p_variogram, p_moran, p_rew_deg, p_rew_geo) %>% arrange(config, syndrome, desc(r)),
+   "**Table S12c. Generative models: best seed and fit.** Seed and parameter refitted in every surrogate; rewiring nulls apply to SC diffusion only.")
+kt(bind_rows(lapply(names(res$generative), function(cfg) res$generative[[cfg]]$differences %>% mutate(config = cfg))) %>% mutate(syndrome = syn_f(syndrome)) %>% arrange(config, reference, model, syndrome),
+   "**Table S12d. Network diffusion minus spatial spread (paired; two-sided p).**")
+```
+
+# S13. Eigenmodes within each hemisphere
+
+```{r s13}
+kt(res$eigen %>% mutate(syndrome = syn_f(syndrome)) %>% arrange(hemi, syndrome, K, basis), "**Table S13. Reconstruction accuracy per hemisphere**, with one-sided spin p (spins stay within hemisphere).")
+```
+
+```{r figS2, out.width = "80%", fig.cap = "**Figure S2. Homotopic asymmetry.** Each left parcel minus the identical region mirrored to the right (SD units)."}
+knitr::include_graphics(file.path(root, "figures/v2/web/fig_asymmetry.jpg"))
+```
+
+```{r figS3, out.width = "100%", fig.cap = "**Figure S3. Best seeds of the generative models** (cortex + subcortex)."}
+knitr::include_graphics(file.path(root, "figures/v2/web/fig_seeds.jpg"))
+```

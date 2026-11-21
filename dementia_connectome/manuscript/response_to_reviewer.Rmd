@@ -1,0 +1,155 @@
+---
+title: "Response to the reviewer"
+pagetitle: "Response to reviewer"
+output:
+  html_document:
+    self_contained: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+root <- normalizePath("..")
+knitr::opts_knit$set(root.dir = root)
+source(file.path(root, "manuscript/helpers.R"))
+```
+
+```{css, echo = FALSE}
+body { font-family: "Inter", "Helvetica Neue", Arial, sans-serif; font-size: 15px; line-height: 1.55; background: #fcfcfb; color: #0b0b0b; }
+.main-container { max-width: 860px; } blockquote { font-size: 0.95em; color: #3a3a37; border-left: 3px solid #c3c2b7; }
+```
+
+We thank the reviewer for a careful and constructive report. We have restructured the work
+as a manuscript (code and validation moved to the Supplement and the repository), narrowed it
+to Alzheimer's disease (AD), mild cognitive impairment (MCI) and the frontotemporal dementia
+(FTD) syndromes (Parkinson's disease removed), and framed it as a comparison of network
+measures across two spatially distinct cortical neurodegenerative diseases. Every comment
+led to new analyses. Below, reviewer text is quoted, followed by our response and the changes.
+All numbers are computed from the same cached results as the manuscript.
+
+## Major comment 1 — Spatial interpolation, Euclidean distance and the NDM
+
+> *Euclidean distance is used rather than geodesic cortical distance … Re-running the
+> distance baseline and distance-censoring with surface geodesic distance … is essential.*
+
+We computed geodesic distances along the fsaverage5 midthickness surface (medial wall
+removed) with the heat method, validated against the analytic geodesic on the sphere (312 vs
+314 mm; plain Dijkstra on the same mesh gave 664 mm and was rejected). Contrary to the
+concern, **the geodesic kernel predicts atrophy better than the Euclidean kernel**, not worse
+(AD r = `r f2(rv("ctx400_geo", 0, "distance", "AD"))` vs `r f2(rv("ctx400_euc", 0, "distance", "AD"))`;
+bvFTD `r f2(rv("ctx400_geo", 0, "distance", "bvFTD"))` vs `r f2(rv("ctx400_euc", 0, "distance", "bvFTD"))`;
+svPPA `r f2(rv("ctx400_geo", 0, "distance", "svPPA"))` vs `r f2(rv("ctx400_euc", 0, "distance", "svPPA"))`),
+and it retains more predictive power when nearby regions are excluded. The spatial
+organisation of atrophy therefore follows the cortical sheet; Euclidean distance does not
+inflate the baseline by bridging fissures. For censoring we kept Euclidean distance because
+volumetric smoothing of DBM maps acts in Euclidean space and Euclidean censoring is the
+stricter choice (geodesic ≥ Euclidean within a hemisphere). All structural communication
+models still fail to exceed either baseline (Figure 2; Supplementary Tables S6–S7).
+
+> *The network diffusion model is mis-specified … it should be run generatively from
+> candidate epicentres and compared against a generative isotropic/geodesic diffusion model
+> from the same epicentres.*
+
+We agree and have added exactly this analysis (Methods, "Generative spreading from seeds";
+Figure 4). Network diffusion x(t) = e^{−Lt}x₀ on the SC (and on the FC) was seeded at every
+node and every bilateral homologue pair, and compared with isotropic Euclidean and geodesic
+spread from the same seeds; seed and parameter were refitted in every surrogate. SC
+diffusion was never better than spatial spread. In AD, geodesic spread from bilateral anterior
+temporal seeds outperformed SC diffusion (r = `r f2(gen("ctx400_geo", "spread_geodesic", "AD")$r)` vs
+`r f2(gen("ctx400_geo", "NDM_SC", "AD")$r)`; paired variogram p
+`r fp(gdiff("ctx400_geo", "NDM_SC", "spread_geodesic", "AD")$p_variogram)`). We have removed the
+statement that "the best diffusion is one step"; we now describe the static heat-kernel
+result only as what it is (a smoothing filter applied to an already smooth map) and base our
+conclusions about spreading on the generative analysis.
+
+## Major comment 2 — Cortex-only parcellation
+
+We added 14 subcortical structures (Tian S1, mapped to the 14 ENIGMA structures and linked to
+the HCP SC and FC provided with Schaefer-400). Because DBM spreads ventricular expansion into
+neighbouring tissue, we sampled the core of each structure (≥ 3 mm from template CSF): this
+doubled the AD hippocampal value (mean −t 1.6 → 3.0) and left the caudate dominated by
+ventricular expansion, which we flag. The 414-node analyses use variogram, Moran and rewiring
+nulls (spins rotate the cortex and permute the subcortex).
+
+With the subcortex included, **the structural models still did not survive the variogram
+null in AD** (search information r = `r f2(rv("sub414_euc", 0, "search_prob", "AD"))`,
+p `r fp(pv("sub414_euc", 0, "search_prob", "AD"))`), and seeded SC diffusion and spatial spread
+were indistinguishable; all AD models selected the bilateral amygdala as the seed. Thresholded
+FC gained a modest long-range contribution in AD (R = 30 mm: r = `r f2(rv("sub414_euc", 30, "FC_top10", "AD"))`,
+variogram p `r fp(pv("sub414_euc", 30, "FC_top10", "AD"))`). We have revised the
+interpretation accordingly: our negative conclusion concerns the information in a young-adult
+tractography connectome at group level, not axonal spread as such, and we discuss the
+under-sampling of temporo-limbic and commissural tracts (Discussion, Limitations).
+
+## Major comment 3 — Negative FC–hub correlation in bvFTD
+
+We used the SPM12 mean EPI template as an open proxy for susceptibility-related signal loss.
+As the reviewer anticipated, regional EPI signal is lowest in orbitofrontal and temporal-pole
+parcels (limbic network `r f2(res$epi_by_network %>% filter(network == "Limbic") %>% pull(epi_signal))`
+of the cortical median) and FC strength tracks it
+(ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "AD") %>% pull(rho_strength_epi))`).
+Partialling out EPI signal changed the bvFTD association from
+ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "bvFTD") %>% pull(rho))` to
+`r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "bvFTD") %>% pull(rho_partial_epi))` (Table 1).
+We no longer interpret the association as sparing of functional hubs, and we discuss the
+dropout confound. We also added proportional thresholding of FC (strongest 20% and 10% of
+edges) throughout: thresholding strengthened the FC–atrophy relationship substantially
+(bvFTD, R = 30 mm: full FC r = `r f2(rv("ctx400_euc", 30, "FC", "bvFTD"))`, top 10%
+r = `r f2(rv("ctx400_euc", 30, "FC_top10", "bvFTD"))`), and the long-range FC effect in FTD is
+now a main result. HCP tSNR maps require ConnectomeDB access; we note this as a limitation.
+
+## Major comment 4 — Template mismatch and DBM-specific smoothing
+
+We registered the FSL MNI152 brain to the ICBM 2009c symmetric brain with ANTs SyN and warped
+the Schaefer and Tian atlases with nearest-label interpolation. Registration raised the
+template intensity correlation from `r f2(res$registration$intensity_r_before)` to
+`r f2(res$registration$intensity_r_after)`; `r round(100 * (1 - res$registration$schaefer400$voxel_agreement_warped_vs_worldNN))`%
+of cortical voxels changed parcel at 400 parcels (Supplementary Table S1, Figure S1). Parcel
+values correlated r = `r f2(min(res$warp_vs_old$r_warped_vs_worldNN))`–`r f2(max(res$warp_vs_old$r_warped_vs_worldNN))`
+with the earlier ones, and all analyses were re-run with the warped atlas. We were not able
+to test a surface-based cortical-thickness dataset: the ENIGMA summary statistics do not
+include AD or FTD, and we did not substitute other data. We state this in the Limitations,
+together with the DBM-specific issues (ventricular spill-over, upstream smoothing).
+
+## Major comment 5 — Null-model asymmetry and negative-r p-values
+
+We now count a test as evidence of a positive network constraint only if r > 0 and FDR
+q < 0.05 (Methods, "Null models and inference"; Figure 5). This removes the negative-r
+"hits" the reviewer identified (navigation at R = 30 mm in AD and nfvPPA, and diffusion
+efficiency throughout). We discuss explicitly that degree-preserving rewiring is
+anticonservative (it roughly doubles the mean edge length) and that geometry-preserving
+rewiring is conservative (about half of the edges cannot move), and we report how the
+geometry-preserving null depends on the bin width (5–40 bins; Supplementary Table S9b).
+Our conclusions rest on effects that survive the variogram null, which is independent of
+the connectome.
+
+## Major comment 6 — Asymmetric eigenmode bases
+
+We now compute all three bases within each hemisphere: Laplace–Beltrami modes of that
+hemisphere's surface and harmonics of that hemisphere's SC and FC graphs, and reconstruct
+each hemisphere separately (Table 2, Supplementary Table S13).
+
+## Major comment 7 — Map units and cross-cohort confounds
+
+We have written to the authors of the maps asking for the statistic in the FTD-variant maps,
+sample sizes, whether the variant maps share controls, model covariates and smoothing; we
+will report their answer. In the meantime the manuscript states that the variant maps may not
+be t-statistics and that all analyses are invariant to linear rescaling. Between-syndrome
+similarity is now reported only descriptively in the Supplement (Table S5), with the
+shared-control caveat. PD has been removed.
+
+## Minor comments
+
+- **Spin variogram ratio discrepancy.** Corrected. The Summary value (≈1.9×) referred to the
+  first distance bin only; the manuscript now reports the mean over the five shortest bins
+  (`r f2(min(res$null_diag %>% filter(null == "spin") %>% pull(variogram_ratio_bins1to5)))`–`r f2(max(res$null_diag %>% filter(null == "spin") %>% pull(variogram_ratio_bins1to5)))`
+  across syndromes) and gives both in Supplementary Table S9.
+- **FDR for FC at R = 30 mm.** FC (full and thresholded) is now included in the FDR family
+  (Supplementary Table S6).
+- **Mirrored-rank logic.** Rewritten as the two-step argument the reviewer proposes
+  (Results, "Two distinct atrophy topographies"): the raw left parcel exceeds the raw right
+  parcel, but sampling the mirrored map with the same left parcel does not reduce its value,
+  so the raw difference reflects parcel geometry, not a hemispheric difference in disease.
+- **Formatting and figures.** The work is now an IMRaD manuscript with a separate Supplement;
+  code, package notes and validation logs are in the repository. Figures were redrawn: the
+  scatter grid was removed, parcel lists are no longer clipped, and figures are sized to fit
+  a page.
