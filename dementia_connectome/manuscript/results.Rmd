@@ -1,0 +1,236 @@
+# Results
+
+## Two distinct atrophy topographies
+
+```{r fig1, echo = FALSE, out.width = "100%", fig.cap = "**Figure 1. Atrophy topographies.** Group-level DBM atrophy (−t) on the cortex (Schaefer-400, warped to the template of the maps) and in 14 subcortical structures. Colour scale set per syndrome from the cortex; subcortical boxes print their values. *Caudate is dominated by DBM ventricular expansion."}
+knitr::include_graphics(file.path(root, "figures/v2/web/fig1_atrophy.jpg"))
+```
+
+AD and MCI atrophy involved the medial temporal lobe, the posterior cingulate/precuneus and
+lateral temporoparietal cortex; in the subcortex the amygdala was the most affected structure
+(AD: `r f2(res$epicentres$sub414 %>% filter(syndrome == "AD", label == "Lamyg") %>% pull(atrophy))`
+left, `r f2(res$epicentres$sub414 %>% filter(syndrome == "AD", label == "Ramyg") %>% pull(atrophy))`
+right), followed by the thalamus and hippocampus. bvFTD involved orbitofrontal, anterior
+insular, anterior cingulate and dorsomedial prefrontal cortex with diffuse striatal and
+thalamic involvement; svPPA the anterior temporal lobe and nfvPPA the posterior frontal,
+opercular and supplementary motor cortex (Figure 1). AD and bvFTD maps were only moderately
+similar (r = `r f2(res$similarity$sub414 %>% filter(map1 == "AD", map2 == "bvFTD") %>% pull(r))`),
+whereas AD and MCI were strongly similar (r = `r f2(res$similarity$sub414 %>% filter(map1 == "AD", map2 == "MCI") %>% pull(r))`;
+Supplementary Table S5).
+
+**Asymmetry.** Comparing each left region with the identical mirrored right region, AD, MCI
+and bvFTD were symmetric (proportion of the most atrophic locations that were left-dominant:
+AD `r f2(res$asymmetry %>% filter(syndrome == "AD") %>% pull(top20_left_greater))`, bvFTD
+`r f2(res$asymmetry %>% filter(syndrome == "bvFTD") %>% pull(top20_left_greater))`; sign tests
+p `r fp(res$asymmetry %>% filter(syndrome == "AD") %>% pull(sign_test_p))` and
+p `r fp(res$asymmetry %>% filter(syndrome == "bvFTD") %>% pull(sign_test_p))`), whereas svPPA
+(`r f2(res$asymmetry %>% filter(syndrome == "svPPA") %>% pull(top20_left_greater))`, p
+`r fp(res$asymmetry %>% filter(syndrome == "svPPA") %>% pull(sign_test_p))`) and nfvPPA
+(`r f2(res$asymmetry %>% filter(syndrome == "nfvPPA") %>% pull(top20_left_greater))`, p
+`r fp(res$asymmetry %>% filter(syndrome == "nfvPPA") %>% pull(sign_test_p))`) were
+left-lateralised. The left-dominant anterior insula seen in the raw bvFTD parcellation arises
+in two steps: Schaefer's left and right ventral prefrontal/insular parcels differ in size and
+position, so the raw left parcel is more atrophic than the raw right parcel; but when the same
+left parcel samples the mirrored map, its value does not drop, so the difference is not a
+hemispheric difference in the disease (Supplementary Figure S2).
+
+## Atrophy is organised along the cortical sheet
+
+```{r fig2, echo = FALSE, fig.width = 9.5, fig.height = 6.4, fig.cap = "**Figure 2. Predicting each region's atrophy from all other regions (Schaefer-400 cortex).** Dots: r(atrophy, prediction). Filled dots: significant against the variogram-matched null (FDR q < 0.05, r > 0). Grey bars: central 95% of the variogram null for each model (parameters refitted). The two spatial baselines (bottom) use Euclidean or geodesic distance; network models use the structural (SC) or functional (FC) connectome."}
+E_models <- c("SC_direct", "SPE", "communicability", "search_prob", "navigation", "heat", "FC", "FC_top10", "distance")
+mk <- function(cfg) res$models[[cfg]] %>% filter(R == 0, model %in% E_models) %>% mutate(config = cfg)
+d2 <- bind_rows(mk("ctx400_euc"), mk("ctx400_geo") %>% filter(model == "distance") %>% mutate(model = "distance_geo"))
+band <- function(cfg, ms, rename = NULL) {
+  nl <- readRDS(file.path(root, sprintf("output/cache_v2/null_variogram_%s.rds", cfg)))$fits
+  b <- nl %>% filter(R == 0, model %in% ms) %>% group_by(model, syndrome) %>% summarise(lo = quantile(r, .025, na.rm = TRUE), hi = quantile(r, .975, na.rm = TRUE), .groups = "drop")
+  if (!is.null(rename)) b$model <- rename
+  b
+}
+bb <- bind_rows(band("ctx400_euc", E_models), band("ctx400_geo", "distance", "distance_geo"))
+d2 <- d2 %>% left_join(bb, by = c("model", "syndrome")) %>%
+  mutate(sig = ifelse(!is.na(q_variogram) & q_variogram < 0.05 & r > 0, "q < 0.05", "n.s."),
+         model = factor(model_lab[model], rev(model_lab[c(E_models[-length(E_models)], "distance", "distance_geo")])),
+         syndrome = factor(syndrome, syn_order))
+ggplot(d2, aes(r, model)) +
+  geom_vline(xintercept = 0, colour = "#a8a79f", linewidth = 0.3) +
+  geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0, colour = "#d6d5ce", linewidth = 2.4) +
+  geom_point(aes(shape = sig), colour = pal[["blue"]], fill = pal[["bg"]], size = 2.3, stroke = 0.9) +
+  scale_shape_manual(values = c("q < 0.05" = 16, "n.s." = 21), name = "Variogram null") +
+  facet_wrap(~syndrome, ncol = 3) + scale_x_continuous(breaks = c(0, 0.4, 0.8)) +
+  labs(x = "r(atrophy, predicted atrophy)", y = NULL) + theme_ms
+```
+
+A purely spatial kernel predicted each region's atrophy from the atrophy of other regions
+better than any network model in every syndrome (Figure 2). The geodesic kernel performed
+better than the Euclidean kernel (AD r = `r f2(rv("ctx400_geo", 0, "distance", "AD"))` vs
+`r f2(rv("ctx400_euc", 0, "distance", "AD"))`; bvFTD `r f2(rv("ctx400_geo", 0, "distance", "bvFTD"))`
+vs `r f2(rv("ctx400_euc", 0, "distance", "bvFTD"))`; svPPA `r f2(rv("ctx400_geo", 0, "distance", "svPPA"))`
+vs `r f2(rv("ctx400_euc", 0, "distance", "svPPA"))`), with fitted length scales of
+`r f2(min(mrow("ctx400_geo", 0, "distance", "AD")$param, mrow("ctx400_geo", 0, "distance", "bvFTD")$param))`–`r f2(max(res$models$ctx400_geo %>% filter(R == 0, model == "distance") %>% pull(param)))` mm.
+Thus Euclidean distance does not inflate the spatial baseline by bridging sulci; proximity
+along the cortex is the better description. The geodesic kernel also exceeded the surrogates
+of the variogram null, which preserve Euclidean autocorrelation, in AD
+(p `r fp(pv("ctx400_geo", 0, "distance", "AD"))`), bvFTD (p `r fp(pv("ctx400_geo", 0, "distance", "bvFTD"))`)
+and svPPA (p `r fp(pv("ctx400_geo", 0, "distance", "svPPA"))`).
+
+## Structural communication models add nothing beyond geometry
+
+Direct SC, shortest-path efficiency, communicability, search information, navigation and
+the network diffusion kernel all predicted atrophy (e.g. AD search information
+r = `r f2(rv("ctx400_euc", 0, "search_prob", "AD"))`; bvFTD
+r = `r f2(rv("ctx400_euc", 0, "search_prob", "bvFTD"))`), and these fits were significant
+against spins and degree-preserving rewiring. None was significant against the
+variogram-matched null in any syndrome, and none exceeded the distance baseline (Figure 2;
+Supplementary Table S6). Against geometry-preserving rewiring, only bvFTD retained an
+effect for path-based models (shortest-path efficiency q `r fp(qv("ctx400_euc", 0, "SPE", "bvFTD", "rew_geo"))`;
+navigation q `r fp(qv("ctx400_euc", 0, "navigation", "bvFTD", "rew_geo"))`). Giving each
+communication model the same single fitted parameter as the distance kernel produced at
+most ties with distance (Supplementary Table S7). Diffusion efficiency (1/mean first-passage
+time) is dominated by node strength on graphs of this size [16] and gave negative or
+near-zero fits; the network diffusion kernel's best fit collapsed to one step (β at the low
+end of its range).
+
+## A long-range functional component specific to frontotemporal dementia
+
+```{r fig3, echo = FALSE, fig.width = 9.5, fig.height = 4.2, fig.cap = "**Figure 3. Distance-censored prediction.** Each model may use only regions further than R mm (Euclidean) from the target. Lines: r(atrophy, prediction) at each radius. Dashed: 95th percentile of the variogram null for thresholded FC (top 10%)."}
+cm <- c("SC_direct", "search_prob", "heat", "FC_top10", "distance")
+d3 <- bind_rows(res$models$ctx400_euc %>% filter(model %in% cm), res$models$ctx400_geo %>% filter(model == "distance") %>% mutate(model = "distance_geo")) %>%
+  filter(syndrome %in% c("AD", "MCI", "bvFTD", "svPPA", "nfvPPA")) %>%
+  mutate(model = factor(model_lab[model], model_lab[c(cm, "distance_geo")]), syndrome = factor(syndrome, syn_order))
+nlv <- readRDS(file.path(root, "output/cache_v2/null_variogram_ctx400_euc.rds"))$fits %>% filter(model == "FC_top10") %>%
+  group_by(R, syndrome) %>% summarise(hi = quantile(r, .95, na.rm = TRUE), .groups = "drop") %>% filter(syndrome %in% levels(d3$syndrome)) %>%
+  mutate(syndrome = factor(syndrome, syn_order))
+cols3 <- setNames(c(pal[["blue"]], pal[["aqua"]], pal[["violet"]], pal[["orange"]], pal[["muted"]], pal[["ink"]]), model_lab[c(cm, "distance_geo")])
+ggplot(d3, aes(R, r, colour = model)) +
+  geom_hline(yintercept = 0, colour = "#a8a79f", linewidth = 0.3) +
+  geom_line(data = nlv, aes(R, hi), inherit.aes = FALSE, linetype = 2, colour = pal[["orange"]], linewidth = 0.4) +
+  geom_line(linewidth = 0.8) + geom_point(size = 1.3) +
+  scale_colour_manual(values = cols3, name = NULL) + facet_wrap(~syndrome, nrow = 1) +
+  scale_x_continuous(breaks = c(0, 30, 60)) +
+  labs(x = "Exclusion radius R (mm)", y = "r") + theme_ms + guides(colour = guide_legend(nrow = 1))
+```
+
+When nearby regions were excluded, the picture separated by disease (Figure 3). With only
+regions more than 30 mm away, thresholded FC predicted bvFTD atrophy at
+r = `r f2(rv("ctx400_euc", 30, "FC_top10", "bvFTD"))` and pooled FTD at
+r = `r f2(rv("ctx400_euc", 30, "FC_top10", "FTD"))` (variogram q
+`r fp(qv("ctx400_euc", 30, "FC_top10", "bvFTD"))` and `r fp(qv("ctx400_euc", 30, "FC_top10", "FTD"))`;
+also significant against spins and Moran surrogates), far above both distance kernels
+(bvFTD geodesic r = `r f2(rv("ctx400_geo", 30, "distance", "bvFTD"))`). The corresponding
+values were r = `r f2(rv("ctx400_euc", 30, "FC_top10", "svPPA"))` in svPPA and
+`r f2(rv("ctx400_euc", 30, "FC_top10", "nfvPPA"))` in nfvPPA, but only
+`r f2(rv("ctx400_euc", 30, "FC_top10", "AD"))` in AD and
+`r f2(rv("ctx400_euc", 30, "FC_top10", "MCI"))` in MCI. Beyond distance, FC added a unique
+contribution in bvFTD (partial r = `r f2(part("ctx400_geo", 30, "FC_top10", "bvFTD")$partial_r)`,
+variogram p `r fp(part("ctx400_geo", 30, "FC_top10", "bvFTD")$p_variogram)`) and pooled FTD
+(`r f2(part("ctx400_geo", 30, "FC_top10", "FTD")$partial_r)`) that was much smaller in AD
+(`r f2(part("ctx400_geo", 30, "FC_top10", "AD")$partial_r)`; Supplementary Table S8).
+Structural models carried no long-range signal beyond distance in any syndrome. Full-density
+FC behaved like thresholded FC but weaker (bvFTD r = `r f2(rv("ctx400_euc", 30, "FC", "bvFTD"))`).
+
+## Generative spreading: no advantage for the structural connectome
+
+```{r fig4, echo = FALSE, fig.width = 9.5, fig.height = 3.6, fig.cap = "**Figure 4. Generative models seeded at the best node (or bilateral pair).** Network diffusion on the SC or FC versus isotropic spatial spread (Euclidean or geodesic) from the seed, cortex only (left) and with subcortex (right). Seed and parameter refitted in every null surrogate."}
+gm <- bind_rows(res$generative$ctx400_geo$fits %>% mutate(space = "Cortex (400)"), res$generative$sub414_euc$fits %>% mutate(space = "Cortex + subcortex (414)")) %>%
+  mutate(model = recode(model, NDM_SC = "Network diffusion (SC)", NDM_FC = "Network diffusion (FC)", spread_euclid = "Spatial spread (Euclidean)", spread_geodesic = "Spatial spread (geodesic)"),
+         syndrome = factor(syndrome, syn_order))
+cols4 <- c("Network diffusion (SC)" = pal[["blue"]], "Network diffusion (FC)" = pal[["orange"]], "Spatial spread (Euclidean)" = pal[["muted"]], "Spatial spread (geodesic)" = pal[["ink"]])
+ggplot(gm, aes(syndrome, r, colour = model)) +
+  geom_point(position = position_dodge(width = 0.6), size = 2.2) +
+  scale_colour_manual(values = cols4, name = NULL) + facet_wrap(~space) + ylim(0, 0.8) +
+  labs(x = NULL, y = "r(atrophy, generated map)") + theme_ms + guides(colour = guide_legend(nrow = 1))
+```
+
+Seeded network diffusion on the SC was never better than isotropic spatial spread from the
+same seed (Figure 4). In AD, the best cortical seeds were bilateral anterior/medial temporal
+parcels, and geodesic spread from them explained the map better than diffusion along the SC
+(r = `r f2(gen("ctx400_geo", "spread_geodesic", "AD")$r)` vs
+`r f2(gen("ctx400_geo", "NDM_SC", "AD")$r)`; difference variogram p
+`r fp(gdiff("ctx400_geo", "NDM_SC", "spread_geodesic", "AD")$p_variogram)`). With the subcortex
+included, every model chose the bilateral amygdala as the AD seed, and SC diffusion
+(r = `r f2(gen("sub414_euc", "NDM_SC", "AD")$r)`) and spatial spread
+(r = `r f2(gen("sub414_euc", "spread_euclid", "AD")$r)`) were indistinguishable. In bvFTD, SC
+diffusion from a left ventrolateral prefrontal seed and spatial spread performed equally
+(r = `r f2(gen("ctx400_geo", "NDM_SC", "bvFTD")$r)` and `r f2(gen("ctx400_geo", "spread_geodesic", "bvFTD")$r)`).
+FC-based diffusion from a single seed performed poorly in every syndrome, in contrast to the
+static FC-neighbour models above: the FC signal in FTD reflects the distributed functional
+network rather than spread from one focus.
+
+## Adding the subcortex does not rescue the structural connectome in AD
+
+With 14 subcortical structures added (414 nodes), the structural models still failed the
+variogram null in AD (search information r = `r f2(rv("sub414_euc", 0, "search_prob", "AD"))`,
+p `r fp(pv("sub414_euc", 0, "search_prob", "AD"))`) and carried no long-range signal
+(R = 30 mm: r = `r f2(rv("sub414_euc", 30, "search_prob", "AD"))`). Thresholded FC gained a
+modest long-range contribution in AD (r = `r f2(rv("sub414_euc", 30, "FC_top10", "AD"))`,
+variogram p `r fp(pv("sub414_euc", 30, "FC_top10", "AD"))`), still well below bvFTD
+(r = `r f2(rv("sub414_euc", 30, "FC_top10", "bvFTD"))`) and pooled FTD
+(r = `r f2(rv("sub414_euc", 30, "FC_top10", "FTD"))`).
+
+## Functional hubs and signal dropout
+
+```{r hubs, echo = FALSE}
+hb <- res$hubs$ctx400 %>% filter(strength %in% c("FC", "FC_top10"), syndrome %in% syn_order) %>%
+  transmute(Strength = recode(strength, FC = "FC (full)", FC_top10 = "FC (top 10%)"), Syndrome = factor(syndrome, syn_order),
+            rho = f2(rho), `p (spin)` = fp(p_spin), `rho | EPI signal` = f2(rho_partial_epi), `p (spin) | EPI` = fp(p_spin_partial),
+            `rho(strength, EPI)` = f2(rho_strength_epi)) %>% arrange(Strength, Syndrome)
+knitr::kable(hb, caption = "**Table 1. FC node strength and atrophy (Spearman), raw and controlling for regional EPI signal (dropout proxy).** Schaefer-400 cortex; p from 1,000 spins.")
+```
+
+Regions with high full-density FC strength were less atrophic in bvFTD and pooled FTD
+(Table 1). FC strength was correlated with regional EPI signal
+(ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "AD") %>% pull(rho_strength_epi))`),
+which is lowest in orbitofrontal and anterior temporal cortex
+(limbic network `r f2(res$epi_by_network %>% filter(network == "Limbic") %>% pull(epi_signal))`
+of the cortical median), the regions most affected in bvFTD and svPPA. Controlling for EPI
+signal attenuated the negative association in bvFTD to
+ρ = `r f2(res$hubs$ctx400 %>% filter(strength == "FC", syndrome == "bvFTD") %>% pull(rho_partial_epi))`.
+We therefore do not interpret the negative hub association as sparing of functional hubs.
+
+## The choice of null model decides significance
+
+```{r fig5, echo = FALSE, fig.width = 9.5, fig.height = 3.4, fig.cap = "**Figure 5. Number of model fits with a positive network constraint (r > 0, FDR q < 0.05) under each null.** Schaefer-400 cortex; SC models (direct, shortest-path, communicability, search information, navigation, diffusion kernel) and thresholded FC, six syndromes, at R = 0 and 30 mm."}
+nm5 <- c("SC_direct", "SPE", "communicability", "search_prob", "navigation", "heat", "FC_top10")
+d5 <- res$models$ctx400_euc %>% filter(R %in% c(0, 30), model %in% nm5) %>%
+  select(R, model, syndrome, starts_with("supported_")) %>% pivot_longer(starts_with("supported_"), names_to = "null", values_to = "ok") %>%
+  mutate(null = recode(sub("supported_", "", null), spin = "Spin", variogram = "Variogram", moran = "Moran", rew_deg = "Rewired (degree)", rew_geo = "Rewired (degree + geometry)"),
+         family = ifelse(model == "FC_top10", "FC (top 10%)", "SC models")) %>%
+  filter(!(family == "FC (top 10%)" & grepl("Rewired", null))) %>%
+  group_by(R, family, null) %>% summarise(n_ok = sum(ok), n = n(), .groups = "drop") %>%
+  mutate(null = factor(null, c("Spin", "Variogram", "Moran", "Rewired (degree)", "Rewired (degree + geometry)")), Rl = paste0("R = ", R, " mm"))
+ggplot(d5, aes(n_ok / n, null, fill = family)) + geom_col(position = position_dodge(width = 0.75), width = 0.7) +
+  geom_text(aes(label = paste0(n_ok, "/", n)), position = position_dodge(width = 0.75), hjust = -0.15, size = 2.8, colour = pal[["ink"]]) +
+  scale_fill_manual(values = c("SC models" = pal[["blue"]], "FC (top 10%)" = pal[["orange"]]), name = NULL) +
+  scale_x_continuous(labels = scales::percent, limits = c(0, 1.15), breaks = c(0, .5, 1)) +
+  facet_wrap(~Rl) + labs(x = "Share of fits supported", y = NULL) + theme_ms
+```
+
+Whether a structural model appeared to constrain atrophy depended mostly on the null
+(Figure 5). Degree-preserving rewiring supported almost every structural fit, because it
+roughly doubles the mean connection length and so destroys the spatial embedding that the
+real connectome shares with atrophy. Spins supported many fits, because parcel-level spins
+make surrogate maps rougher at short range than the real map (short-range variogram ratio
+`r f2(min(res$null_diag %>% filter(null == "spin") %>% pull(variogram_ratio_bins1to5)))`–`r f2(max(res$null_diag %>% filter(null == "spin") %>% pull(variogram_ratio_bins1to5)))`
+times the empirical value, vs `r f2(min(res$null_diag %>% filter(null == "moran") %>% pull(variogram_ratio_bins1to5)))`–`r f2(max(res$null_diag %>% filter(null == "moran") %>% pull(variogram_ratio_bins1to5)))`
+for Moran surrogates; Supplementary Table S9). Variogram-matched surrogates and
+geometry-preserving rewiring supported few or no structural fits, whereas the thresholded-FC
+result in FTD survived every spatial null.
+
+## Eigenmodes within each hemisphere
+
+```{r eig, echo = FALSE}
+eg <- res$eigen %>% filter(K %in% c(10, 20)) %>% group_by(syndrome, basis, K) %>% summarise(r = mean(r), .groups = "drop") %>%
+  pivot_wider(names_from = basis, values_from = r) %>% mutate(syndrome = factor(syndrome, syn_order)) %>% arrange(K, syndrome) %>%
+  mutate(across(where(is.numeric) & !K, f2))
+knitr::kable(eg, caption = "**Table 2. Reconstruction of atrophy from the first K eigenmodes, computed within each hemisphere** (mean r of the two hemispheres). Geometric = Laplace–Beltrami modes of the hemisphere's cortical surface; SC/FC = harmonics of that hemisphere's SC or FC graph.")
+```
+
+When all bases were computed within each hemisphere, geometric eigenmodes reconstructed AD
+and MCI atrophy at least as well as connectome harmonics, whereas FC harmonics reconstructed
+bvFTD best at low K (Table 2), in line with the static and censored analyses.
+
+## Robustness
+
+The main results were unchanged at 200 and 100 parcels (Supplementary Table S10): no
+structural model exceeded the distance baseline, and the long-range FC effect in bvFTD and
+pooled FTD remained significant against the variogram null.

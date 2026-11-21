@@ -1,0 +1,34 @@
+# Introduction
+
+Alzheimer's disease (AD) and frontotemporal dementia (FTD) are both cortical
+neurodegenerative diseases, but their atrophy follows very different spatial patterns. AD
+involves the medial temporal lobe, the posterior cingulate/precuneus and lateral
+temporoparietal cortex; behavioural-variant FTD involves orbitofrontal, anterior cingulate
+and anterior insular cortex; the language variants of FTD are left-lateralised, in the
+anterior temporal lobe (semantic variant) or the posterior frontal and insular cortex
+(non-fluent variant). The network-degeneration hypothesis proposes that these patterns are
+shaped by the brain's connectivity: atrophy maps resemble intrinsic connectivity networks
+[1], regions connected to an epicentre are more affected [2, 5], and network spreading
+models reproduce group and individual patterns [3, 6, 7, 10].
+
+Two methodological issues limit how much these findings say about networks. First, atrophy
+maps and connectomes are both spatially smooth and both organised by distance: nearby
+regions tend to be connected and tend to have similar atrophy. A network model can therefore
+predict atrophy well simply because connections are short [13, 23]. Few studies compare
+network models with a purely spatial model that has the same freedom [8, 9, 11]. Second,
+the null models used to test network effects differ in what they preserve. Spatial
+permutation ("spin") tests preserve the map's spatial autocorrelation only approximately
+[19], and degree-preserving rewiring of the connectome destroys its geometry, so that almost
+any spatially smooth map looks network-constrained.
+
+The structural connectome supports many candidate routes of communication, from direct
+connections and shortest paths to diffusion, search-information and navigation models
+[12–15]. Which of these, if any, best explains atrophy, and whether the answer differs
+between diseases with different spatial patterns, has not been tested. Here we compared these
+communication models, functional connectivity and generative spreading models with Euclidean
+and along-the-cortex (geodesic) spatial baselines, in AD, MCI and the FTD syndromes, using
+openly shared atrophy maps, cortical and subcortical parcellations registered to the
+templates of the maps, and five null models with all parameters refitted inside every null.
+We asked three questions: does any network model explain atrophy beyond spatial proximity;
+is the answer different for AD and FTD; and how much do conclusions depend on the null
+model.

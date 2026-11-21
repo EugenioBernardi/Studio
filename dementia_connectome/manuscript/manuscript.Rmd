@@ -1,0 +1,55 @@
+---
+title: "Cortical proximity, not structural communication, organises atrophy in Alzheimer's disease and frontotemporal dementia"
+subtitle: "with a long-range functional component specific to frontotemporal dementia"
+pagetitle: "Atrophy, proximity and networks"
+author: "[Authors]"
+date: "Revised manuscript — `r format(Sys.Date(), '%d %B %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: false
+    self_contained: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, dpi = 130, fig.align = "center")
+root <- normalizePath("..")
+knitr::opts_knit$set(root.dir = root)
+source(file.path(root, "manuscript/helpers.R"))
+```
+
+```{css, echo = FALSE}
+body { font-family: "Inter", "Helvetica Neue", Arial, sans-serif; font-size: 15px; line-height: 1.55; background: #fcfcfb; color: #0b0b0b; }
+.main-container { max-width: 880px; }
+h1 { font-size: 1.55em; margin-top: 1.6em; } h2 { font-size: 1.2em; margin-top: 1.3em; }
+h1.title { font-size: 1.9em; } h3.subtitle { color: #52514e; font-size: 1.15em; }
+p.caption, .caption { font-size: 0.88em; color: #3a3a37; }
+table { font-size: 0.86em; } .abstract { background: #f3f2ee; padding: 14px 18px; border-radius: 6px; }
+```
+
+```{r child = "abstract.Rmd"}
+```
+
+```{r child = "introduction.Rmd"}
+```
+
+```{r child = "methods.Rmd"}
+```
+
+```{r child = "results.Rmd"}
+```
+
+```{r child = "discussion.Rmd"}
+```
+
+# Data and code availability
+
+Atrophy maps: Zenodo 10.5281/zenodo.7392621 and 10.5281/zenodo.10383493 (CC-BY-4.0).
+Connectomes: ENIGMA toolbox (commit b08974b). Atlases: Schaefer 2018 (CBIG, commit 634f676)
+and Tian S1 (commit dcad934). Code, parcellated data, validation reports and the network
+package (`netcomm`, `R CMD check` passing) are in the project repository; every number in this
+manuscript is computed from cached results by `scripts/15_manuscript_results.R`.
+
+```{r child = "references.md"}
+```

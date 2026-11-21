@@ -1,0 +1,76 @@
+# Discussion
+
+We asked whether the structural connectome, through any of its candidate communication
+routes, explains cortical atrophy in AD and FTD beyond spatial proximity, and whether the
+answer differs between these two spatially distinct diseases. Three findings stand out.
+
+**First, proximity along the cortex explains most of the atrophy topography in both
+diseases.** A single-parameter spatial kernel predicted each region's atrophy from other
+regions better than any structural communication model, and geodesic distance did better
+than Euclidean distance. This argues against the concern that a Euclidean baseline is
+inflated by bridging sulci and fissures: the smoothness of atrophy follows the cortical sheet.
+This is compatible with several mechanisms that our data cannot separate, including
+spread between neighbouring cortical columns, shared vulnerability of neighbouring regions
+with similar cytoarchitecture and gene expression, and the spatial smoothing inherent in
+DBM and group statistics.
+
+**Second, the structural connectome adds little beyond its own geometry.** Direct
+connections, shortest paths, communicability, search information, navigation and network
+diffusion all correlated with atrophy, but none survived a null that preserves the map's
+spatial autocorrelation (variogram-matched surrogates) or one that preserves the
+connectome's wiring geometry, and none outperformed the distance kernel, including when
+given the same freedom to fit. Seeded network diffusion on the SC, evaluated in its
+generative form as recommended, was never better than isotropic spread from the same seed.
+Adding the hippocampus, amygdala, thalamus and striatum did not change this in AD, although
+every AD model chose the bilateral amygdala as the seed. The only structural signal that
+survived the geometry-preserving null was in bvFTD, for path-based models. These results do
+not show that pathology does not travel along axons. They show that, at the resolution of
+group-level atrophy maps and a young-adult tractography connectome, the information in the
+structural connectome that is relevant to atrophy is largely the information in its spatial
+layout, which neighbouring cortex already carries.
+
+**Third, FTD, but much less AD, follows the long-range functional architecture.** When
+nearby regions were excluded, thresholded FC predicted bvFTD and pooled FTD atrophy far
+better than distance, under every spatial null and at every resolution; svPPA and nfvPPA
+showed weaker versions of the same effect. In AD and MCI the long-range functional signal
+was small, even with the subcortex included. This dissociation fits the view of bvFTD as a
+disorder of a distributed salience/limbic network [1, 2, 5] whose nodes are far apart but
+functionally coupled, whereas the AD map at this group level is captured by bilateral,
+medial temporal-centred spread along the cortex. The FC effect was carried by the strongest
+functional connections: proportional thresholding raised it substantially, as expected if
+weak, globally shared correlations add noise rather than signal.
+
+**Methodological implications.** The conclusion about the structural connectome depends
+almost entirely on the null model. Degree-preserving rewiring roughly doubles the mean
+connection length and makes any spatially smooth map look network-constrained. Parcel-level
+spins make surrogates rougher at short range than real maps and are liberal for statistics
+based on neighbours, as anticipated by Markello and Mišić [19]. We recommend that studies of
+network-constrained atrophy (i) report a fitted spatial baseline, preferably geodesic;
+(ii) use at least one null that preserves short-range autocorrelation (variogram or Moran)
+and one that preserves wiring geometry, while noting that geometry-preserving rewiring is
+conservative because it cannot move about half of the edges; (iii) refit every free
+parameter inside each null; (iv) count only positive fits as support; and (v) check
+hemispheric effects with homotopic comparisons, because standard parcellations are not
+left–right symmetric. Negative associations between FC strength and atrophy in FTD should
+not be read as hub sparing without accounting for susceptibility-related signal loss, which
+lowers FC strength in exactly the orbitofrontal and anterior temporal regions that FTD
+targets [35].
+
+**Limitations.** The maps are group averages from different cohorts and pipelines (ADNI and
+NIFD), so between-disease differences mix disease with cohort effects; the three FTD-variant
+maps probably share controls and are on an unconfirmed scale (we have asked the authors).
+The connectomes come from young healthy adults, tractography under-samples some
+temporo-limbic and commissural tracts, and FC is affected by signal dropout. DBM measures
+volume change of the deformation, which includes ventricular expansion; we mitigated this for
+subcortical structures by sampling their core, but the caudate remains unreliable. Only the
+cortex has geodesic distances; the subcortical analyses use Euclidean distances and spins
+cannot be applied to the subcortex, so we relied on variogram and Moran nulls there. No
+cortical-thickness maps for these diseases were available to test whether the results depend
+on DBM; individual-level and longitudinal data are needed to move from group topography to
+spreading dynamics.
+
+**Conclusion.** Across AD and FTD, cortical atrophy is organised mainly by proximity along
+the cortical sheet, and structural communication models do not explain it beyond that
+geometry. A long-range functional-network component is clearly present in bvFTD and FTD and
+weak in AD. Claims of connectome-constrained atrophy should be tested against fitted spatial
+baselines and geometry-aware nulls.

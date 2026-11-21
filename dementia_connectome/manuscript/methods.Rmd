@@ -1,0 +1,121 @@
+# Methods
+
+## Atrophy maps
+
+We used openly shared, group-level deformation-based morphometry (DBM) maps comparing
+patients with matched controls on the ICBM152 2009c nonlinear symmetric template (1 mm)
+[29, 30, 32]: Alzheimer's disease (AD) and mild cognitive impairment (MCI) from ADNI, and
+frontotemporal dementia (FTD; pooled) and its clinical variants (behavioural-variant FTD,
+bvFTD; semantic-variant primary progressive aphasia, svPPA; non-fluent variant, nfvPPA)
+from NIFD/FTLDNI (Zenodo 10.5281/zenodo.7392621 and 10.5281/zenodo.10383493, CC-BY-4.0).
+The source study reports 212 AD, 551 MCI and 125 FTD patients and 571 controls across
+cohorts, modelled with mixed-effects models [29]; sample sizes for the variant maps were not
+reported in the record. The variant maps span a much smaller numerical range (about ±1.5)
+than the pooled FTD map (about ±16) and may therefore not be t-statistics; all analyses
+below are invariant to linear rescaling. We define atrophy as −t, so that larger values mean
+more volume loss. The three variant maps are likely to share one control group, which
+inflates their mutual similarity; between-syndrome similarity is therefore reported only
+descriptively. Parkinson's disease, available in the same record, was not analysed. No map
+of dementia with Lewy bodies was available.
+
+## Parcellation and template registration
+
+Cortex was parcellated with the Schaefer 2018 atlas (7 networks; 400 parcels primary, 200
+and 100 for robustness) [25]; subcortex with the Tian S1 atlas [26], whose 16 regions were
+mapped onto the 14 structures of the ENIGMA connectomes (accumbens, amygdala, caudate,
+hippocampus, pallidum, putamen and thalamus per hemisphere; anterior and posterior thalamus
+merged) [27]. Both atlases are defined on FSL MNI152 (MNI152NLin6Asym), whereas the atrophy
+maps are on ICBM152 2009c symmetric. We therefore registered the FSL MNI152 1 mm brain to the
+ICBM 2009c symmetric brain (skull-stripped with the DBM brain mask) with ANTs symmetric
+normalisation (SyN) [31] and warped both atlases with nearest-label interpolation onto the
+grid of the maps. Registration raised the intensity correlation between the two templates
+from 0.74 (world-coordinate resampling) to 0.91; 30% of cortical voxels changed parcel at
+400 parcels (Supplementary Table S1).
+
+Parcel values are mean −t within the parcel. Because DBM maps encode ventricular and sulcal
+expansion that spreads into neighbouring tissue through smoothing, subcortical values were
+taken from the core of each structure (voxels ≥ 3 mm from template CSF), which removed
+spill-over that made the AD hippocampus appear only mildly atrophic (mean −t 1.6 with all
+voxels, 3.0 in the core). The caudate remained dominated by ventricular expansion and is
+flagged throughout. All parcels had ≥ 86% voxel coverage.
+
+## Connectomes and distances
+
+Group-level structural (SC) and functional (FC) connectivity from the Human Connectome
+Project were taken from the ENIGMA toolbox for Schaefer-100/200/400 (cortex) and
+Schaefer-400 with the 14 subcortical structures [27, 28]; label orders were verified to match
+the atlases exactly. Negative SC weights (14 edges at 400 parcels; 20 with subcortex) were set
+to zero. FC (negative values already set to zero upstream, density 97–99%) was used in full
+and after proportional thresholding to its strongest 20% and 10% of edges.
+
+Euclidean distances were computed between parcel centroids in ICBM 2009c space. Geodesic
+distances along the cortical midthickness surface (fsaverage5, medial wall removed) were
+computed between parcel centroid vertices with the heat method [33] (validated against the
+analytic pole-to-pole distance on the sphere: 312 vs 314 mm); pairs in different hemispheres
+have no cortical path.
+
+## Predicting atrophy from other regions
+
+For a weighting matrix M, the predicted atrophy of node i is the weighted mean of all other
+nodes, P_i = Σ_{j≠i} M_ij a_j / Σ_{j≠i} M_ij, and the fit is r(a, P). With M = SC or FC this
+is the neighbour atrophy of Zeighami et al. and Shafiei et al. [4, 5]. We compared:
+(i) direct SC; (ii) five communication models on the SC [13]: shortest-path efficiency,
+weighted communicability [15], search information (as the shortest-path probability 2^−SI)
+[14], navigation efficiency with Euclidean greedy routing [12] and diffusion efficiency
+(1/mean first-passage time); (iii) the network diffusion (heat) kernel e^{−βL} [3], β fitted;
+(iv) FC (full, top 20%, top 10%); and two spatial baselines, (v) a Euclidean and (vi) a
+geodesic distance kernel e^{−d/λ}, λ fitted. As a sensitivity analysis every communication
+model received one fitted exponent (M^γ), matching the single parameter of the baselines.
+
+Because a short-range kernel applied to a smooth map acts as spatial interpolation, we also
+evaluated **distance-censored prediction**: all pairs closer than R mm (Euclidean; R = 10–60
+mm) were removed from every model, so that a node's atrophy must be predicted from distant
+nodes. Euclidean censoring is the conservative choice because volumetric smoothing acts in
+Euclidean space and geodesic distances always exceed it within a hemisphere. The **unique
+contribution** of a model beyond distance was measured as the partial correlation
+r(a, P_M | P_distance), with λ refitted for every map and surrogate.
+
+## Generative spreading from seeds
+
+To evaluate spreading models in their generative form [3, 11], we seeded each model at every
+node, alone and together with its contralateral homologue, and predicted the whole map:
+network diffusion x(t) = e^{−Lt} x₀ on the SC (NDM-SC) or on the FC (NDM-FC), with L the
+normalised graph Laplacian and t over 25 values (0.05–50), and isotropic spatial spread
+e^{−d/λ} x₀ from the same seeds, in Euclidean or geodesic distance. For each model the best
+seed and parameter were selected by maximising r(a, x).
+
+## Null models and inference
+
+Five null models were used. Three preserve the spatial autocorrelation of the map: spins of
+the cortical surface with Hungarian reassignment [17–19] (subcortical nodes permuted among
+themselves), variogram-matched surrogates [20] and Moran spectral randomisation [21]. Two
+replace the SC while keeping the map: degree-preserving rewiring [22] and degree- and
+geometry-preserving rewiring, in which swaps are accepted only within edge-length bins [23].
+Every fitted parameter (λ, β, γ, t, best seed) was refitted inside each of the 1,000
+surrogates or rewired networks per null. p-values are one-sided (null ≥ observed) for fits
+and two-sided for paired differences between models; false discovery rate (FDR,
+Benjamini–Hochberg) was controlled across syndromes × models within each null and radius.
+A result was counted as evidence of a positive network constraint only if r > 0 and FDR
+q < 0.05. Because geometry-preserving rewiring saturates at about 50% edge turnover, we also
+report how it depends on the bin width (5–40 bins).
+
+## Additional analyses
+
+**Epicentres.** Nodes were ranked by the mean of their rank on atrophy and on SC-neighbour
+atrophy [5], with spin and rewiring p-values. **Asymmetry.** Because Schaefer parcels are not
+left–right homologous, each left parcel was compared with the identical region mirrored to
+the right: the symmetric template allows the voxel map to be mirrored and re-parcellated with
+the same atlas. **Hubs.** Node strength (SC; FC full and thresholded) was correlated with
+atrophy (Spearman), with and without controlling for regional EPI signal (SPM12 mean EPI
+template), a proxy for susceptibility dropout in orbitofrontal and anterior temporal cortex
+[35]. **Eigenmodes.** Atrophy was reconstructed from the first K eigenmodes of the cortical
+surface (Laplace–Beltrami, fsaverage5) [24] and of the SC and FC graph Laplacians, computed
+within each hemisphere so that all bases have the same structure.
+
+## Software and validation
+
+Analyses used R 4.3 and Python 3.13. Network measures were implemented in an R package with
+C++ kernels and validated against bctpy 0.6.1 and netneurotools 0.3.0 on the HCP
+Schaefer-400 SC (maximum absolute difference ≤ 5×10⁻¹¹); spin permutations were validated
+against neuromaps 0.0.7 (Supplementary Tables S2–S4). Code, intermediate data and validation
+reports are available at the project repository.
