@@ -94,10 +94,10 @@ end of its range).
 
 ## A long-range functional component specific to frontotemporal dementia
 
-```{r fig3, echo = FALSE, fig.width = 9.5, fig.height = 4.2, fig.cap = "**Figure 3. Distance-censored prediction.** Each model may use only regions further than R mm (Euclidean) from the target. Lines: r(atrophy, prediction) at each radius. Dashed: 95th percentile of the variogram null for thresholded FC (top 10%)."}
+```{r fig3, echo = FALSE, fig.width = 9, fig.height = 6, fig.cap = "**Figure 3. Distance-censored prediction.** Each model may use only regions further than R mm (Euclidean) from the target. Lines: r(atrophy, prediction) at each radius. Dashed: 95th percentile of the variogram null for thresholded FC (top 10%)."}
 cm <- c("SC_direct", "search_prob", "heat", "FC_top10", "distance")
 d3 <- bind_rows(res$models$ctx400_euc %>% filter(model %in% cm), res$models$ctx400_geo %>% filter(model == "distance") %>% mutate(model = "distance_geo")) %>%
-  filter(syndrome %in% c("AD", "MCI", "bvFTD", "svPPA", "nfvPPA")) %>%
+  filter(syndrome %in% syn_order) %>%
   mutate(model = factor(model_lab[model], model_lab[c(cm, "distance_geo")]), syndrome = factor(syndrome, syn_order))
 nlv <- readRDS(file.path(root, "output/cache_v2/null_variogram_ctx400_euc.rds"))$fits %>% filter(model == "FC_top10") %>%
   group_by(R, syndrome) %>% summarise(hi = quantile(r, .95, na.rm = TRUE), .groups = "drop") %>% filter(syndrome %in% levels(d3$syndrome)) %>%
@@ -107,16 +107,16 @@ ggplot(d3, aes(R, r, colour = model)) +
   geom_hline(yintercept = 0, colour = "#a8a79f", linewidth = 0.3) +
   geom_line(data = nlv, aes(R, hi), inherit.aes = FALSE, linetype = 2, colour = pal[["orange"]], linewidth = 0.4) +
   geom_line(linewidth = 0.8) + geom_point(size = 1.3) +
-  scale_colour_manual(values = cols3, name = NULL) + facet_wrap(~syndrome, nrow = 1) +
+  scale_colour_manual(values = cols3, name = NULL) + facet_wrap(~syndrome, nrow = 2) +
   scale_x_continuous(breaks = c(0, 30, 60)) +
-  labs(x = "Exclusion radius R (mm)", y = "r") + theme_ms + guides(colour = guide_legend(nrow = 1))
+  labs(x = "Exclusion radius R (mm)", y = "r") + theme_ms + guides(colour = guide_legend(nrow = 2))
 ```
 
 When nearby regions were excluded, the picture separated by disease (Figure 3). With only
 regions more than 30 mm away, thresholded FC predicted bvFTD atrophy at
 r = `r f2(rv("ctx400_euc", 30, "FC_top10", "bvFTD"))` and pooled FTD at
 r = `r f2(rv("ctx400_euc", 30, "FC_top10", "FTD"))` (variogram q
-`r fp(qv("ctx400_euc", 30, "FC_top10", "bvFTD"))` and `r fp(qv("ctx400_euc", 30, "FC_top10", "FTD"))`;
+`r fp(qv("ctx400_euc", 30, "FC_top10", "bvFTD"))` for bvFTD and q `r fp(qv("ctx400_euc", 30, "FC_top10", "FTD"))` for FTD;
 also significant against spins and Moran surrogates), far above both distance kernels
 (bvFTD geodesic r = `r f2(rv("ctx400_geo", 30, "distance", "bvFTD"))`). The corresponding
 values were r = `r f2(rv("ctx400_euc", 30, "FC_top10", "svPPA"))` in svPPA and

@@ -11,8 +11,11 @@ from NIFD/FTLDNI (Zenodo 10.5281/zenodo.7392621 and 10.5281/zenodo.10383493, CC-
 The source study reports 212 AD, 551 MCI and 125 FTD patients and 571 controls across
 cohorts, modelled with mixed-effects models [29]; sample sizes for the variant maps were not
 reported in the record. The variant maps span a much smaller numerical range (about ±1.5)
-than the pooled FTD map (about ±16) and may therefore not be t-statistics; all analyses
-below are invariant to linear rescaling. We define atrophy as −t, so that larger values mean
+than the pooled FTD map (about ±16) and may therefore not be t-statistics. We have asked the
+map authors to confirm the statistic, the sample sizes, whether the variant maps share
+controls, and the model covariates and smoothing. Until this is confirmed we do not interpret
+absolute values of the variant maps or compare them across maps: every analysis below is
+invariant to linear rescaling, and each map is displayed on its own colour scale. We define atrophy as −t, so that larger values mean
 more volume loss. The three variant maps are likely to share one control group, which
 inflates their mutual similarity; between-syndrome similarity is therefore reported only
 descriptively. Parkinson's disease, available in the same record, was not analysed. No map

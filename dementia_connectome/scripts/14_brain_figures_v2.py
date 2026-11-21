@@ -74,20 +74,22 @@ VIEWS = [("left", "lateral"), ("left", "medial"), ("right", "lateral"), ("right"
 VT = ["Left lateral", "Left medial", "Right lateral", "Right medial"]
 
 
-def figure_rows(rows, title, fname, cmap=DIV, symmetric=True, note=None, cb_label="", show_sub=True, scale_note=None):
+def figure_rows(rows, title, fname, cmap=DIV, symmetric=True, note=None, cb_label="", show_sub=True, scale_note=None, binary=False):
     n = len(rows)
     H = 2.15 * n + 1.1
-    fig = plt.figure(figsize=(11.5, H), facecolor=BG)
-    gs = fig.add_gridspec(n, 7, width_ratios=[0.8, 1, 1, 1, 1, 1.15, 0.38], left=0.01, right=0.99, top=1 - 0.75 / H, bottom=0.45 / H, wspace=0.03, hspace=0.05)
+    fig = plt.figure(figsize=(12.5, H), facecolor=BG)
+    gs = fig.add_gridspec(n, 7, width_ratios=[1.3, 1, 1, 1, 1, 1.25, 0.38], left=0.025, right=0.985, top=1 - 0.75 / H, bottom=0.45 / H, wspace=0.03, hspace=0.05)
     for i, (lab, vals) in enumerate(rows):
         vals = np.asarray(vals, float)
         fin = vals[:K][np.isfinite(vals[:K])]          # colour scale from cortex only
-        if symmetric:
+        if binary:
+            vmin, vmax = 0.0, 1.0
+        elif symmetric:
             vmax = np.percentile(np.abs(fin), 99); vmin = -vmax
         else:
             vmin, vmax = 0, max(fin.max(), 1e-9)
         ax = fig.add_subplot(gs[i, 0]); ax.axis("off")
-        ax.text(0.02, 0.5, lab, fontsize=10, fontweight="bold", color=INK, va="center", ha="left", wrap=True)
+        ax.text(0.04, 0.5, lab, fontsize=9.5 if "\n" in lab else 10, fontweight="bold", color=INK, va="center", ha="left", linespacing=1.3)
         for j, (side, view) in enumerate(VIEWS):
             a = fig.add_subplot(gs[i, j + 1], projection="3d")
             brain(a, vals, side, view, cmap, vmin, vmax)
@@ -96,16 +98,18 @@ def figure_rows(rows, title, fname, cmap=DIV, symmetric=True, note=None, cb_labe
         if show_sub and len(vals) > K:
             a = fig.add_subplot(gs[i, 5]); subcortex(a, vals, cmap, vmin, vmax, i == 0)
             if i == 0:
-                a.set_title("Subcortex (value printed)", fontsize=8.5, color=MUTED, pad=9)
+                a.set_title("Subcortex (value printed)", fontsize=8.5, color=MUTED, pad=9, loc="right")
         cax = fig.add_subplot(gs[i, 6]); cax.axis("off")
+        if binary:
+            continue
         ins = cax.inset_axes([0.15, 0.2, 0.18, 0.6])
         cb = fig.colorbar(plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin, vmax)), cax=ins)
         cb.ax.tick_params(labelsize=7, colors=MUTED); cb.outline.set_visible(False)
         if cb_label:
             cb.set_label(cb_label, fontsize=7, color=MUTED)
-    fig.text(0.01, 1 - 0.25 / H, title, fontsize=12.5, color=INK, ha="left", va="top")
+    fig.text(0.025, 1 - 0.25 / H, title, fontsize=12.5, color=INK, ha="left", va="top")
     if note:
-        fig.text(0.01, 0.06 / H, note, fontsize=7.5, color=MUTED, ha="left", va="bottom")
+        fig.text(0.025, 0.06 / H, note, fontsize=7.5, color=MUTED, ha="left", va="bottom")
     fig.savefig(f"figures/v2/{fname}", dpi=150, facecolor=BG)
     plt.close(fig)
     print("wrote", fname)
@@ -125,7 +129,8 @@ rows = []
 for s in ["AD", "bvFTD", "svPPA", "nfvPPA"]:
     for m, lab in (("seed_NDM_SC", "network diffusion (SC)"), ("seed_spread_euclid", "spatial spread")):
         rows.append((f"{s}\n{lab}", get(s, m)))
-figure_rows(rows, "Best seeds of the generative models (orange = seed)", "fig_seeds.png", cmap=SEEDC, symmetric=False)
+figure_rows(rows, "Best seeds of the generative models (orange = seed region; all other regions grey)", "fig_seeds.png", cmap=SEEDC, binary=True,
+            note="Seeds were chosen by best fit (cortical node, subcortical structure, or bilateral homologue pair). Seed maps are binary, so no colour scale is shown.")
 
 # individual web copies
 from PIL import Image

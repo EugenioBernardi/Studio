@@ -143,6 +143,6 @@ kt(res$eigen %>% mutate(syndrome = syn_f(syndrome)) %>% arrange(hemi, syndrome, 
 knitr::include_graphics(file.path(root, "figures/v2/web/fig_asymmetry.jpg"), rel_path = FALSE)
 ```
 
-```{r figS3, out.width = "100%", fig.cap = "**Figure S3. Best seeds of the generative models** (cortex + subcortex)."}
+```{r figS3, out.width = "100%", fig.cap = "**Figure S3. Best seeds of the generative models.** Orange: the seed region (cortical node, subcortical structure, or bilateral homologue pair) giving the best fit for structural network diffusion and for spatial spread; maps are binary."}
 knitr::include_graphics(file.path(root, "figures/v2/web/fig_seeds.jpg"), rel_path = FALSE)
 ```

@@ -526,9 +526,11 @@ separately (Table 2, Supplementary Table S13).</p>
 <h2>Major comment 7 — Map units and cross-cohort confounds</h2>
 <p>We have written to the authors of the maps asking for the statistic
 in the FTD-variant maps, sample sizes, whether the variant maps share
-controls, model covariates and smoothing; we will report their answer.
-In the meantime the manuscript states that the variant maps may not be
-t-statistics and that all analyses are invariant to linear rescaling.
+controls, model covariates and smoothing, and whether the ADNI groups
+were selected on amyloid status; we will report their answer. In the
+meantime the Methods state that the variant maps may not be
+t-statistics, that their absolute values are not interpreted or compared
+across maps, and that all analyses are invariant to linear rescaling.
 Between-syndrome similarity is now reported only descriptively in the
 Supplement (Table S5), with the shared-control caveat. PD has been
 removed.</p>
@@ -554,6 +556,31 @@ manuscript with a separate Supplement; code, package notes and
 validation logs are in the repository. Figures were redrawn: the scatter
 grid was removed, parcel lists are no longer clipped, and figures are
 sized to fit a page.</li>
+</ul>
+</div>
+<div id="second-round" class="section level2">
+<h2>Second round</h2>
+<p>We thank the reviewer for the positive assessment and for spotting
+the following.</p>
+<ul>
+<li><strong>Figure 3, FTD panel.</strong> The plotting filter for the
+model curves omitted the pooled FTD map while the variogram-null line
+included it, so the FTD panel showed only the dashed line. All six
+syndromes are now plotted (two rows of three panels); the values match
+Supplementary Table S6 (for example, thresholded FC in FTD at R = 30 mm:
+r = 0.65).</li>
+<li><strong>Figure 1 and Figure S3, label clipping.</strong> The label
+column and left margin were widened in both figures, and the two-line
+labels of Figure S3 (e.g. “network diffusion (SC)”) now fit.</li>
+<li><strong>Figure S3, colour-bar offset.</strong> The seed maps are
+binary (1 = seed). When the best seed was subcortical, the cortical
+colour range collapsed to 0–10⁻⁹, which produced the offset. The colour
+bar has been removed and replaced by the legend “orange = seed region”;
+subcortical boxes print 0 or 1.</li>
+<li><strong>Author query.</strong> The query to the map authors is
+described in the Methods (“Atrophy maps”), with the rule we follow until
+it is answered: absolute values of the FTD-variant maps are not
+interpreted or compared across maps.</li>
 </ul>
 </div>
 

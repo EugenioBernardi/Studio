@@ -60,7 +60,8 @@ signal maps, so we do not interpret it as hub sparing.
 
 **Limitations.** The maps are group averages from different cohorts and pipelines (ADNI and
 NIFD), so between-disease differences mix disease with cohort effects; the three FTD-variant
-maps probably share controls and are on an unconfirmed scale (we have asked the authors).
+maps probably share controls and are on an unconfirmed scale (confirmation has been requested
+from the map authors; see Methods).
 The connectomes come from young healthy adults, tractography under-samples some
 temporo-limbic and commissural tracts, and FC is affected by signal dropout. DBM measures
 volume change of the deformation, which includes ventricular expansion; we mitigated this for
