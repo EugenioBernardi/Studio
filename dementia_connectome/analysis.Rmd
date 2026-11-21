@@ -1,0 +1,356 @@
+---
+title: "Connectome-constrained atrophy in AD and FTD syndromes"
+subtitle: "Step 1 (data, label checks, parcellation). Step 2 not run: connectomeR 0.2.0 was not supplied"
+date: "`r format(Sys.Date())`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    df_print: kable
+    self_contained: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 5, dpi = 110)
+set.seed(20261121)
+suppressPackageStartupMessages({
+  library(ggplot2); library(dplyr); library(tidyr); library(knitr)
+})
+# Colours: categorical order and blue<->red diverging pair from the dataviz reference
+# palette (validated for colour-vision deficiency with validate_palette.js).
+pal_div <- c(low = "#2a78d6", mid = "#f0efec", high = "#e34948")
+col_main <- "#2a78d6"
+theme_set(theme_minimal(base_size = 11) +
+            theme(panel.grid.minor = element_blank(),
+                  panel.grid.major = element_line(colour = "#e6e5e0", linewidth = 0.3),
+                  plot.background = element_rect(fill = "#fcfcfb", colour = NA),
+                  strip.text = element_text(face = "bold", hjust = 0)))
+```
+
+# Status
+
+This report covers **Step 1 only**: data download and checks, label verification,
+parcellation, coverage and sanity checks. **Step 2 (analyses A–E) was not run.**
+Those analyses depend on `connectomeR_0.2.0.tar.gz` (`spin_test()`,
+`rotate_parcellation()`, `rewire_degree()`, `node_strength()`, `handle_negative()`, and
+the package that the new `R/communication.R` should extend). The tarball was not in the
+working folder, the repository, any branch, or anywhere on disk. I did not rewrite the
+package from its description, because that would mean inventing code you already have
+and validated against the BCT.
+
+Two things in Step 1 need your attention:
+
+1. **No DLB map.** Neither Zenodo record contains a DLB map, links to one or mentions
+   Lewy body disease. DLB is left out; no other data were substituted.
+2. **The three FTD-variant maps have an unusual scale.** The NIFD variant maps
+   (bvFTD, svPPA, nfvPPA) span only about ±1.5–2.0, against −16 to +14 for the pooled
+   FTD map from the same cohort. The MINC copies on Zenodo have the same range, so this
+   is not a conversion error. The spatial patterns are anatomically sensible (Section 5),
+   and every planned analysis is scale-invariant (correlations, ranks, weighted
+   neighbour means). So this does not block the analysis, but these values should not
+   be read as t-statistics until the authors confirm what was deposited.
+
+# Data
+
+```{r provenance}
+source("R/step1.R")
+rec <- lapply(c("7392621", "10383493"), function(r)
+  jsonlite::fromJSON(file.path(paths$zenodo, sprintf("record_%s.json", r))))
+files <- do.call(rbind, lapply(rec, function(d) {
+  f <- d$files
+  f <- f[grepl("Tstat.*\\.nii$", f$key), ]
+  data.frame(record = d$doi, file = f$key, md5 = sub("md5:", "", f$checksum))
+}))
+md5_local <- unname(tools::md5sum(file.path(paths$zenodo, files$file)))
+files$md5_ok <- md5_local == files$md5
+files
+stopifnot(all(files$md5_ok))
+dlb_mentioned <- vapply(rec, function(d) grepl("dlb|lewy", tolower(jsonlite::toJSON(d))), TRUE)
+dlb_mentioned
+```
+
+**Atrophy maps.** Voxel-wise deformation-based morphometry (DBM) t-maps, patients vs
+matched controls, on the ICBM152 2009c nonlinear symmetric template.
+
+- Zenodo 10.5281/zenodo.7392621 (Dadar, 2022; CC-BY-4.0): AD and MCI (ADNI), PD (PPMI),
+  pooled FTD (NIFD). The record cites: Dadar M, et al. *White matter hyperintensities
+  are associated with grey matter atrophy and cognitive decline in Alzheimer's disease
+  and frontotemporal dementia.* Neurobiol Aging 2022;111:54–63.
+- Zenodo 10.5281/zenodo.10383493 (Dadar & Metz, 2023; CC-BY-4.0): bvFTD, svPPA,
+  nfvPPA (filed as `pnfaPPA`), all NIFD. The record cites Dadar et al. 2022 (above) and
+  Metz A, et al. *Brain atrophy and white matter hyperintensities in frontotemporal
+  dementia variants and their impact on cognition.* CCNA Partners Forum and Science Days,
+  March 2024 (conference presentation).
+- Neither record has a DLB map or a link to one (`dlb_mentioned` above is `FALSE` for both).
+
+**Connectomes.** HCP group-level structural (SC) and functional (FC) matrices for
+Schaefer-100/200/400 from the ENIGMA toolbox (Larivière et al., Nat Methods 2021),
+commit `b08974b`. Only the data files were read.
+
+**Atlas.** Schaefer et al. 2018 (Cereb Cortex), 7-network order, FSL MNI152 1 mm
+volumes and label tables from CBIG, commit `634f676`.
+
+`scripts/00_get_data.sh` reproduces every download and checks the md5 sums.
+
+## Image grids
+
+```{r grids}
+s1 <- run_step1(write = TRUE)
+g <- attr(s1, "grids")
+atlas_g <- nifti_grid(file.path(paths$schaefer, "Schaefer2018_400Parcels_7Networks_order_FSLMNI152_1mm.nii.gz"))
+grid_tab <- rbind(
+  do.call(rbind, lapply(names(g), function(s) data.frame(
+    image = paste0(s, " t-map"), template = "ICBM152 2009c nlin sym",
+    dim = paste(g[[s]]$dim, collapse = "×"), voxel_mm = paste(g[[s]]$pixdim, collapse = "×"),
+    orientation = g[[s]]$orientation, origin_mm = paste(g[[s]]$affine[1:3, 4], collapse = ", ")))),
+  data.frame(image = "Schaefer atlas (all k)", template = "FSL MNI152 (nlin 6th gen)",
+             dim = paste(atlas_g$dim, collapse = "×"), voxel_mm = paste(atlas_g$pixdim, collapse = "×"),
+             orientation = atlas_g$orientation, origin_mm = paste(atlas_g$affine[1:3, 4], collapse = ", ")))
+grid_tab
+```
+
+All seven t-maps share one 1 mm grid (`all(attr(s1, "same_grid"))` =
+`r all(attr(s1, "same_grid"))`). The atlas is on a different grid and orientation (LAS vs
+RAS). It was resampled to the t-map grid by nearest neighbour through world
+coordinates; the t-maps were not resampled. The resampling code (`R/parcellate.R`)
+returns the atlas unchanged when resampled to its own grid, and gives a result identical
+voxel for voxel to an independent nibabel implementation on the t-map grid (checked
+during development for Schaefer-400; all 400 labels survive).
+
+The two templates are both "MNI" but not identical (2009c symmetric vs FSL 6th
+generation). No transform between them was applied; the residual misregistration is a
+few millimetres, which matters little at parcel level but adds to boundary blurring.
+
+## Label order
+
+```{r labels}
+label_checks <- do.call(rbind, lapply(resolutions, function(k) {
+  info <- read_schaefer_labels(k) # stops with an error if any check fails
+  cen <- read.csv(sprintf("data/sphere_centroids_schaefer%d.csv", k))
+  data.frame(parcels = k, CBIG_LUT_ids_1toN = TRUE, CBIG_eq_ENIGMA_SC = TRUE,
+             CBIG_eq_ENIGMA_FC = TRUE, CBIG_eq_CBIG_centroids = TRUE,
+             fsa5_annot_eq_ENIGMA = identical(cen$label, info$label))
+}))
+label_checks
+```
+
+The CBIG label table, the ENIGMA SC and FC label files, the CBIG centroid table and the
+ENIGMA fsaverage5 annotation all list the same labels in the same order at 100, 200 and
+400 parcels.
+
+## Connectome matrices
+
+```{r matrices}
+read_mat <- function(type, k) {
+  X <- as.matrix(read.csv(file.path(paths$enigma_mat, sprintf("%sMatrix_ctx_schaefer_%d.csv", type, k)), header = FALSE))
+  dimnames(X) <- NULL; X
+}
+mat_tab <- do.call(rbind, lapply(resolutions, function(k) do.call(rbind, lapply(c("struc", "func"), function(ty) {
+  X <- read_mat(ty, k); u <- X[upper.tri(X)]
+  data.frame(matrix = ifelse(ty == "struc", "SC", "FC"), parcels = k, symmetric = isSymmetric(X),
+             diag_zero = all(diag(X) == 0), negative_edges = sum(u < 0), zero_edges = sum(u == 0),
+             positive_edges = sum(u > 0), density = round(mean(u != 0), 3),
+             min = signif(min(u), 3), max = signif(max(u), 3))
+}))))
+mat_tab
+```
+
+The SC matrices contain `r paste(mat_tab$negative_edges[mat_tab$matrix == "SC"], collapse = ", ")`
+negative edges (unique, upper triangle; twice as many entries in the full matrix) at
+100, 200 and 400 parcels. In Step 2 they will be set to 0 with
+`connectomeR::handle_negative()`. The FC matrices have no negative values; their minimum
+is 0, so they appear to have been thresholded upstream.
+
+## Sphere centroids for the spin test
+
+Parcel centroids on the fsaverage5 sphere were computed from the ENIGMA files
+(`surfaces/fsa5_sphere_{lh,rh}.gii`, `permutation_testing/annot/fsa5_{lh,rh}_schaefer_*.annot`;
+note the annot files are under `enigmatoolbox/permutation_testing/`, not
+`datasets/permutation_testing/`). Because `connectomeR/inst/validation/annot_centroids.py`
+was not available, `scripts/annot_centroids.py` reimplements the usual method (Vasa et
+al. 2018): the mean of each parcel's sphere vertices, snapped to the nearest vertex. The
+snapped vertex was the nearest vertex overall for 400/400 parcels. **Compare this file
+with the package script before Step 2.**
+
+# Parcellation and coverage
+
+Parcel value = mean t over the parcel's voxels on the t-map grid that have a finite,
+non-zero t (the maps are 0 outside their brain mask). Coverage = that voxel count divided
+by the parcel's voxel count on the t-map grid. Atrophy is defined as −t.
+
+```{r coverage, fig.height = 3.2}
+cov400 <- s1[["400"]]$coverage
+cov_summary <- do.call(rbind, lapply(names(s1), function(k) {
+  cv <- s1[[k]]$coverage
+  data.frame(parcels = as.integer(k), min_coverage = round(min(cv$coverage_min), 3),
+             median_coverage = round(median(cv$coverage_min), 3),
+             parcels_below_50pct = sum(!cv$included),
+             coverage_identical_across_maps = all(apply(cv[, grep("^coverage_[A-Za-z]", names(cv))], 1, function(r) diff(range(r)) == 0)))
+}))
+cov_summary
+ggplot(cov400, aes(coverage_min)) +
+  geom_histogram(binwidth = 0.01, fill = col_main, colour = "#fcfcfb", linewidth = 0.3) +
+  geom_vline(xintercept = 0.5, linetype = 2, colour = "#52514e") +
+  annotate("text", x = 0.51, y = Inf, label = "exclusion threshold (50%)", hjust = 0, vjust = 1.5, size = 3, colour = "#52514e") +
+  scale_x_continuous(limits = c(0.45, 1.005), labels = scales::percent) +
+  labs(x = "Voxel coverage (Schaefer-400)", y = "Parcels")
+cov400 %>% arrange(coverage_min) %>% head(8) %>%
+  transmute(label, n_vox_native, n_vox_grid, coverage = round(coverage_min, 3))
+```
+
+No parcel falls below 50% coverage at any resolution, so **no parcels were excluded**.
+The least-covered parcels lie at the edge of the t-map brain mask (occipital pole,
+LH_Vis_15, 77%; then parcels at the dorsal vertex, 89–93%).
+
+Outputs: `data/parcellated_atrophy_schaefer{100,200,400}.csv`, one row per parcel, with
+label, hemisphere, network, CBIG MNI centroid, coverage, an `included` flag and one
+atrophy column (−mean t) per syndrome.
+
+# Sanity checks
+
+```{r sanity-tables}
+a400 <- s1[["400"]]$atrophy
+syn <- names(syndromes)
+top_tab <- function(s, n = 10) a400 %>% arrange(desc(.data[[s]])) %>% head(n) %>%
+  transmute(rank = row_number(), label = sub("7Networks_", "", label), x = mni_x, y = mni_y, z = mni_z, atrophy = round(.data[[s]], 2))
+```
+
+**AD, top 10 parcels (Schaefer-400):**
+
+```{r top-ad}
+top_tab("AD")
+```
+
+**bvFTD, top 10 parcels:**
+
+```{r top-bvftd}
+top_tab("bvFTD")
+```
+
+**svPPA and nfvPPA, top 10 parcels:**
+
+```{r top-ppa}
+cbind(top_tab("svPPA")[, c("rank", "label", "atrophy")], top_tab("nfvPPA")[, c("label", "atrophy")]) |>
+  setNames(c("rank", "svPPA parcel", "svPPA atrophy", "nfvPPA parcel", "nfvPPA atrophy"))
+```
+
+The AD map peaks in medial temporal cortex (Limbic_TempPole parcels at y ≈ −20,
+z ≈ −27, parahippocampal), lateral and anterior temporal cortex, and the
+precuneus/posterior cingulate (Default_pCunPCC). The bvFTD map peaks in the left anterior
+insula/frontal operculum (Cont_PFCv_1 at −34, 16, −8; SalVentAttn_FrOperIns), dorsomedial
+prefrontal/anterior cingulate (Default_PFCdPFCm) and orbitofrontal cortex (Limbic_OFC).
+Both match the expected patterns. Neither map is sign-flipped or empty.
+
+```{r network-profile, fig.height = 6.5, fig.cap = "Mean atrophy (−t) by Schaefer network and hemisphere, Schaefer-400. Each panel has its own x-scale because the FTD-variant maps are on a much smaller scale (see Status)."}
+net_order <- c("Vis", "SomMot", "DorsAttn", "SalVentAttn", "Limbic", "Cont", "Default")
+prof <- a400 %>% select(hemi, network, all_of(syn)) %>%
+  pivot_longer(all_of(syn), names_to = "syndrome", values_to = "atrophy") %>%
+  group_by(syndrome, hemi, network) %>% summarise(atrophy = mean(atrophy, na.rm = TRUE), .groups = "drop") %>%
+  mutate(network = factor(network, rev(net_order)), syndrome = factor(syndrome, syn))
+ggplot(prof, aes(atrophy, network, shape = hemi)) +
+  geom_vline(xintercept = 0, colour = "#a8a79f", linewidth = 0.3) +
+  geom_point(size = 2.4, colour = col_main, fill = "#fcfcfb", stroke = 0.9) +
+  scale_shape_manual(values = c(LH = 16, RH = 21), name = "Hemisphere") +
+  facet_wrap(~syndrome, scales = "free_x", ncol = 4) +
+  labs(x = "Mean atrophy (-t)", y = NULL) + theme(legend.position = "bottom")
+```
+
+The svPPA map is most atrophic in the left, then right, limbic network (temporal
+pole). The nfvPPA map is left-lateralized; at network level it is flat across left limbic,
+default, salience and dorsal-attention parcels, and its peak parcels are left FEF/premotor,
+SMA and anterior insula/IFG (table above). The PD map is weak and diffuse. All
+three fit the clinical syndromes.
+
+## Scale of the FTD-variant maps
+
+```{r scale, fig.height = 3.6}
+rng <- do.call(rbind, lapply(syn, function(s) {
+  img <- as.numeric(RNifti::readNifti(tmap_path(s))); v <- img[img != 0]
+  data.frame(syndrome = s, voxel_t_min = round(min(v), 2), voxel_t_max = round(max(v), 2),
+             parcel_atrophy_max = round(max(a400[[s]], na.rm = TRUE), 2),
+             parcel_atrophy_sd = round(sd(a400[[s]], na.rm = TRUE), 3))
+}))
+rng
+ggplot(a400, aes(FTD, bvFTD)) +
+  geom_point(colour = col_main, alpha = 0.6, size = 1.6) +
+  labs(x = "Pooled FTD atrophy (-t)", y = "bvFTD atrophy (map units)",
+       subtitle = sprintf("Same NIFD cohort; r = %.2f across 400 parcels, scale differs by ~%.0f×",
+                          cor(a400$FTD, a400$bvFTD), sd(a400$FTD) / sd(a400$bvFTD)))
+```
+
+The bvFTD map has the same spatial pattern as the pooled FTD map (r = 0.90), but values
+about 8 times smaller in parcel-level SD (about 10 times in voxel range). One possible reading is that the variant maps are standardized
+effect sizes or t-values divided by a constant, rather than t-statistics; that is a guess
+and should be checked with the authors. It does not affect any planned analysis,
+because all of them use correlations, ranks or weighted averages.
+
+# Similarity between syndromes (descriptive)
+
+```{r similarity, fig.width = 6, fig.height = 5}
+R <- cor(a400[, syn], use = "pairwise.complete.obs")
+Rl <- as.data.frame(as.table(R)) %>% setNames(c("a", "b", "r")) %>%
+  mutate(a = factor(a, syn), b = factor(b, rev(syn)))
+ggplot(Rl, aes(a, b, fill = r)) +
+  geom_tile(colour = "#fcfcfb", linewidth = 1) +
+  geom_text(aes(label = sprintf("%.2f", r)), size = 3.2, colour = "#0b0b0b") +
+  scale_fill_gradient2(low = pal_div[["low"]], mid = pal_div[["mid"]], high = pal_div[["high"]],
+                       midpoint = 0, limits = c(-1, 1), name = "Pearson r") +
+  labs(x = NULL, y = NULL, subtitle = "Schaefer-400. Spin-test p-values pending (need connectomeR::spin_test)") +
+  coord_equal() + theme(panel.grid = element_blank())
+```
+
+These are plain Pearson correlations, without inference. AD resembles MCI (r = 0.80) more
+than any FTD map; the pooled FTD map is closest to bvFTD (0.90) and svPPA (0.77); PD is
+unrelated to the rest. Spin-test p-values (analysis A) need `spin_test()` from
+connectomeR.
+
+# Step 2: not run
+
+Analyses A (spin-test p-values), B (hub susceptibility), C (network-constrained
+atrophy with spin and rewiring nulls), D (epicentres) and E (communication models,
+including the new `R/communication.R` functions, their bctpy validation and the 0.3.0
+version bump) are **not run**. They need the `connectomeR_0.2.0.tar.gz` source package.
+Everything they need is in place:
+
+- parcellated atrophy at three resolutions (`data/`), all parcels included;
+- verified label order across atlas, matrices, centroid table and annotation;
+- fsaverage5 sphere centroids (`data/sphere_centroids_schaefer*.csv`);
+- the SC negative-edge counts to report after `handle_negative()`;
+- CBIG MNI centroids for the Euclidean distances (navigation and distance baseline);
+- bctpy `r sub("bctpy==", "", grep("^bctpy", readLines("output/pip_freeze.txt"), value = TRUE))`
+  installed for the validation.
+
+# Limitations (for the full analysis)
+
+- **Different cohorts and pipelines.** AD/MCI come from ADNI, PD from PPMI, and FTD and
+  its variants from NIFD. Scanner, acquisition, age, disease stage and control group all
+  differ between maps, so cohort effects are mixed with disease effects in any
+  between-syndrome comparison. The FTD-variant maps also come from a later deposit with
+  a different value scale.
+- **Group-level maps.** One map per syndrome means no individual variability and no
+  inference across patients; every test is across parcels.
+- **Young-adult connectome.** The HCP SC and FC come from healthy adults aged roughly
+  22–35, not from older adults or patients.
+- **Cortex only.** The Schaefer parcellation omits the hippocampus, amygdala and
+  subcortex. For AD (hippocampus) and bvFTD and svPPA (amygdala, striatum, thalamus) the
+  likely epicentres sit outside the parcellated cortex; cortical "epicentres" here are at
+  best the cortical entry points.
+- **DBM signal.** DBM measures local volume change of the deformation, not grey matter.
+  Parcel means near CSF can include ventricular or sulcal expansion (positive t). Mean
+  t within a parcel also depends on the smoothing used upstream.
+- **Template mismatch.** Atlas (FSL MNI152) and maps (ICBM 2009c sym) are on slightly
+  different MNI templates; no transform was applied.
+- **Spin test.** The parcel-level spin test can be liberal with smooth maps and
+  reassigns medial-wall parcels unevenly (Markello & Misic 2021, NeuroImage), so
+  degree-preserving rewiring is used as a second null.
+- **No DLB.** No DLB map exists in the two records, so Lewy body disease cannot be
+  compared.
+
+# Reproducibility
+
+```{r versions}
+writeLines(readLines("output/pip_freeze.txt"))
+sessionInfo()
+```

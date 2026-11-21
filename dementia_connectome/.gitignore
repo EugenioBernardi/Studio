@@ -1,0 +1,7 @@
+data-raw/
+output/cache/
+*_cache/
+*_files/
+.Rhistory
+.RData
+venv/
