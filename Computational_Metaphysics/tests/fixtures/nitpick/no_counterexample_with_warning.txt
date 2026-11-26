@@ -1,0 +1,5 @@
+Nitpicking formula...
+Warning: The conjecture either trivially holds for the given scopes or lies
+outside Nitpick's supported fragment; only potentially spurious
+counterexamples may be found
+Nitpick found no counterexample

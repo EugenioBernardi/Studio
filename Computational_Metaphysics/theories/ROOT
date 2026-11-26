@@ -1,0 +1,5 @@
+(* Custom heap: HOL + LogiKEy HOML embedding, so checks start from a warm image. *)
+session HOML_Base = HOL +
+  options [document = false, timeout = 600]
+  theories
+    HOML_Base

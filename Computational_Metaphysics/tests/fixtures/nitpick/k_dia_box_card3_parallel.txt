@@ -1,0 +1,13 @@
+Nitpicking formula...
+Nitpick found a counterexample for card i = 3:
+  Skolem constants:
+    v = i⇩1
+    v = i⇩2
+    w = i⇩2
+  Constants:
+    (r) =
+      (λx. _)
+      (i⇩1 := (λx. _)(i⇩1 := True, i⇩2 := True, i⇩3 := True),
+         i⇩2 := (λx. _)(i⇩1 := True, i⇩2 := True, i⇩3 := True),
+         i⇩3 := (λx. _)(i⇩1 := False, i⇩2 := True, i⇩3 := False))
+    p = (λx. _)(i⇩1 := True, i⇩2 := False, i⇩3 := False)

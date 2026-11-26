@@ -1,0 +1,14 @@
+Nitpicking formula...
+Nitpick found a counterexample for card i = 2 and card e = 2:
+  Skolem constants:
+    v = i⇩1
+    w = i⇩2
+    x = e⇩1
+  Constants:
+    (r) =
+      (λx. _)
+      (i⇩1 := (λx. _)(i⇩1 := True, i⇩2 := True),
+         i⇩2 := (λx. _)(i⇩1 := True, i⇩2 := True))
+    G = (λx. _)
+        (e⇩1 := (λx. _)(i⇩1 := False, i⇩2 := True),
+           e⇩2 := (λx. _)(i⇩1 := False, i⇩2 := False))

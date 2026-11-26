@@ -1,0 +1,6 @@
+Nitpicking formula...
+Nitpick found a potentially spurious counterexample for card i = 1:
+  Skolem constant:
+    w = i⇩1
+  Constant:
+    p = (λx. _)(i⇩1 := False)
