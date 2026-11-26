@@ -1,0 +1,23 @@
+auto-hermeneutics/
+├── CLAUDE.md                        # Hard constraints for Claude Code
+├── PLAN.md                          # This phased build plan
+├── mcp_server/
+│   ├── server.py                    # FastMCP server wrapping `isabelle server`
+│   ├── isabelle_client.py           # Persistent TCP client for Isabelle PIDE/server
+│   └── nitpick_parser.py            # Deterministic Nitpick stdout -> Kripke JSON
+├── theories/
+│   ├── HOML_Base.thy                # LogiKEy Higher-Order Modal Logic prelude
+│   └── ground_truth/                # ISOLATED: never read by the evaluation agent
+│       ├── leibniz_ref.thy
+│       └── spinoza_ref.thy
+├── benchmarks/
+│   ├── leibniz_two_notations.json   # Raw primary text (blinded input)
+│   └── spinoza_ethics_p1_p15.json   # Raw primary text (blinded input)
+├── harness/
+│   ├── run_ablation.py              # Executes A0, A1, A2, A3 across N seeds
+│   ├── evaluator.py                 # Computes vacuity, gap recall, cheating taxonomy
+│   └── prompts/                     # System prompts per ablation tier
+├── export/
+│   ├── to_paper_orchestra.py        # Builds experimental_log.md + TikZ/PNG figures
+│   └── templates/                   # LNCS / CEUR-WS LaTeX templates
+└── outputs/                         # Raw JSONL traces, .thy artifacts, PO bundle
