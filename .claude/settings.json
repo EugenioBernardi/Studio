@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./Computational_Metaphysics/theories/ground_truth/**)",
+      "Edit(./Computational_Metaphysics/theories/ground_truth/**)"
+    ]
+  }
+}

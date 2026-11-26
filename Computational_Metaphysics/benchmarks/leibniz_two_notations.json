@@ -1,0 +1,19 @@
+{
+  "benchmark_id": "leibniz_two_notations",
+  "role": "development_and_ablation",
+  "schema_version": 1,
+  "status": "TEXT_REQUIRED",
+  "blinding": "Primary text only. No formalization, commentary or hidden-premise hints.",
+  "source": {
+    "work": "Two Notations for Discussion with Spinoza (Paris, November 1676), incl. 'That a Most Perfect Being Exists'",
+    "translation": "TO BE FILLED: translator, edition, page range (e.g. Loemker 1969 is in copyright; a public-domain alternative is the Latin of A VI 3 with your own translation)",
+    "retrieved_from": "",
+    "retrieved_on": "",
+    "editorial_changes": ""
+  },
+  "targets": [],
+  "premises": [],
+  "omitted_segments": [],
+  "segments": [],
+  "_instructions": "Fill 'segments' with objects {id, kind, label, text}; kind is one of definition|axiom|proposition|demonstration|explanation|corollary|note. List proposition ids in 'targets' and definition/axiom ids in 'premises', then set status to 'ready'. The harness refuses to run while status != 'ready'. This key is ignored by the prompt builder."
+}

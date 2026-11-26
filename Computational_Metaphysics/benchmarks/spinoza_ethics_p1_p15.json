@@ -1,0 +1,375 @@
+{
+  "benchmark_id": "spinoza_ethics_p1_p15",
+  "role": "held_out_stress_test",
+  "schema_version": 1,
+  "blinding": "Primary text only. No formalization, commentary or hidden-premise hints. Long scholia (notes to P8 [II], P10, P11, P15) are omitted; see omitted_segments.",
+  "source": {
+    "work": "Ethics, Part I",
+    "translation": "R. H. M. Elwes (1883), public domain",
+    "retrieved_from": "https://en.wikisource.org/wiki/Ethics_(Spinoza)/Part_1",
+    "retrieved_on": "2026-11-26",
+    "editorial_changes": "Hyperlinks stripped; cross-references kept as plain text; P13 statement terminal period added."
+  },
+  "targets": [
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6",
+    "P7",
+    "P8",
+    "P9",
+    "P10",
+    "P11",
+    "P12",
+    "P13",
+    "P14",
+    "P15"
+  ],
+  "premises": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D7",
+    "D8",
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7"
+  ],
+  "omitted_segments": [
+    "P8.note2",
+    "P10.note",
+    "P11.dem2",
+    "P11.dem3",
+    "P11.note",
+    "P15.note"
+  ],
+  "segments": [
+    {
+      "id": "D1",
+      "kind": "definition",
+      "label": "D1",
+      "text": "By that which is self-caused, I mean that of which the essence involves existence, or that of which the nature is only conceivable as existent."
+    },
+    {
+      "id": "D2",
+      "kind": "definition",
+      "label": "D2",
+      "text": "A thing is called finite after its kind, when it can be limited by another thing of the same nature; for instance, a body is called finite because we always conceive another greater body. So, also, a thought is limited by another thought, but a body is not limited by thought, nor a thought by body."
+    },
+    {
+      "id": "D3",
+      "kind": "definition",
+      "label": "D3",
+      "text": "By substance, I mean that which is in itself, and is conceived through itself: in other words, that of which a conception can be formed independently of any other conception."
+    },
+    {
+      "id": "D4",
+      "kind": "definition",
+      "label": "D4",
+      "text": "By attribute, I mean that which the intellect perceives as constituting the essence of substance."
+    },
+    {
+      "id": "D5",
+      "kind": "definition",
+      "label": "D5",
+      "text": "By mode, I mean the modifications of substance, or that which exists in, and is conceived through, something other than itself."
+    },
+    {
+      "id": "D6",
+      "kind": "definition",
+      "label": "D6",
+      "text": "By God, I mean a being absolutely infinite—that is, a substance consisting in infinite attributes, of which each expresses eternal and infinite essentiality."
+    },
+    {
+      "id": "D6.expl",
+      "kind": "explanation",
+      "label": "D6.expl",
+      "text": "I say absolutely infinite, not infinite after its kind: for, of a thing infinite only after its kind, infinite attributes may be denied; but that which is absolutely infinite, contains in its essence whatever expresses reality, and involves no negation."
+    },
+    {
+      "id": "D7",
+      "kind": "definition",
+      "label": "D7",
+      "text": "That thing is called free, which exists solely by the necessity of its own nature, and of which the action is determined by itself alone. On the other hand, that thing is necessary, or rather constrained, which is determined by something external to itself to a fixed and definite method of existence or action."
+    },
+    {
+      "id": "D8",
+      "kind": "definition",
+      "label": "D8",
+      "text": "By eternity, I mean existence itself, in so far as it is conceived necessarily to follow solely from the definition of that which is eternal."
+    },
+    {
+      "id": "D8.expl",
+      "kind": "explanation",
+      "label": "D8.expl",
+      "text": "Existence of this kind is conceived as an eternal truth, like the essence of a thing, and, therefore, cannot be explained by means of continuance or time, though continuance may be conceived without a beginning or end."
+    },
+    {
+      "id": "A1",
+      "kind": "axiom",
+      "label": "A1",
+      "text": "Everything which exists, exists either in itself or in something else."
+    },
+    {
+      "id": "A2",
+      "kind": "axiom",
+      "label": "A2",
+      "text": "That which cannot be conceived through anything else must be conceived through itself."
+    },
+    {
+      "id": "A3",
+      "kind": "axiom",
+      "label": "A3",
+      "text": "From a given definite cause an effect necessarily follows; and, on the other hand, if no definite cause be granted, it is impossible that an effect can follow."
+    },
+    {
+      "id": "A4",
+      "kind": "axiom",
+      "label": "A4",
+      "text": "The knowledge of an effect depends on and involves the knowledge of a cause."
+    },
+    {
+      "id": "A5",
+      "kind": "axiom",
+      "label": "A5",
+      "text": "Things which have nothing in common cannot be understood, the one by means of the other; the conception of one does not involve the conception of the other."
+    },
+    {
+      "id": "A6",
+      "kind": "axiom",
+      "label": "A6",
+      "text": "A true idea must correspond with its ideate or object."
+    },
+    {
+      "id": "A7",
+      "kind": "axiom",
+      "label": "A7",
+      "text": "If a thing can be conceived as non-existing, its essence does not involve existence."
+    },
+    {
+      "id": "P1",
+      "kind": "proposition",
+      "label": "P1",
+      "text": "Substance is by nature prior to its modifications."
+    },
+    {
+      "id": "P1.dem",
+      "kind": "demonstration",
+      "label": "P1.dem",
+      "text": "This is clear from Deff. iii. and v."
+    },
+    {
+      "id": "P2",
+      "kind": "proposition",
+      "label": "P2",
+      "text": "Two substances, whose attributes are different, have nothing in common."
+    },
+    {
+      "id": "P2.dem",
+      "kind": "demonstration",
+      "label": "P2.dem",
+      "text": "Also evident from Def. iii. For each must exist in itself, and be conceived through itself; in other words, the conception of one does not imply the conception of the other."
+    },
+    {
+      "id": "P3",
+      "kind": "proposition",
+      "label": "P3",
+      "text": "Things which have nothing in common cannot be one the cause of the other."
+    },
+    {
+      "id": "P3.dem",
+      "kind": "demonstration",
+      "label": "P3.dem",
+      "text": "If they have nothing in common, it follows that one cannot be apprehended by means of the other (Ax. v.), and, therefore, one cannot be the cause of the other (Ax. iv.). Q.E.D."
+    },
+    {
+      "id": "P4",
+      "kind": "proposition",
+      "label": "P4",
+      "text": "Two or more distinct things are distinguished one from the other, either by the difference of the attributes of the substances, or by the difference of their modifications."
+    },
+    {
+      "id": "P4.dem",
+      "kind": "demonstration",
+      "label": "P4.dem",
+      "text": "Everything which exists, exists either in itself or in something else (Ax. i.),—that is (by Deff. iii. and v.), nothing is granted in addition to the understanding, except substance and its modifications. Nothing is, therefore, given besides the understanding, by which several things may be distinguished one from the other, except the substances, or, in other words (see Ax. iv.), their attributes and modifications. Q.E.D."
+    },
+    {
+      "id": "P5",
+      "kind": "proposition",
+      "label": "P5",
+      "text": "There cannot exist in the universe two or more substances having the same nature or attribute."
+    },
+    {
+      "id": "P5.dem",
+      "kind": "demonstration",
+      "label": "P5.dem",
+      "text": "If several distinct substances be granted, they must be distinguished one from the other, either by the difference of their attributes, or by the difference of their modifications (Prop. iv.). If only by the difference of their attributes, it will be granted that there cannot be more than one with an identical attribute. If by the difference of their modifications—as substance is naturally prior to its modifications (Prop. i.),—it follows that setting the modifications aside, and considering substance in itself, that is truly, (Deff. iii. and vi.), there cannot be conceived one substance different from another,—that is (by Prop. iv.), there cannot be granted several substances, but one substance only. Q.E.D."
+    },
+    {
+      "id": "P6",
+      "kind": "proposition",
+      "label": "P6",
+      "text": "One substance cannot be produced by another substance."
+    },
+    {
+      "id": "P6.dem",
+      "kind": "demonstration",
+      "label": "P6.dem",
+      "text": "It is impossible that there should be in the universe two substances with an identical attribute, i.e. which have anything common to them both (Prop. ii.), and, therefore (Prop. iii.), one cannot be the cause of the other, neither can one be produced by the other. Q.E.D."
+    },
+    {
+      "id": "P6.coro1",
+      "kind": "corollary",
+      "label": "P6.coro1",
+      "text": "Hence it follows that a substance cannot be produced by anything external to itself. For in the universe nothing is granted, save substances and their modifications (as appears from Ax. i. and Deff. iii. and v.). Now (by the last Prop.) substance cannot be produced by another substance, therefore it cannot be produced by anything external to itself. Q.E.D. This is shown still more readily by the absurdity of the contradictory. For, if substance be produced by an external cause, the knowledge of it would depend on the knowledge of its cause (Ax. iv.), and (by Def. iii.) it would itself not be substance."
+    },
+    {
+      "id": "P7",
+      "kind": "proposition",
+      "label": "P7",
+      "text": "Existence belongs to the nature of substances."
+    },
+    {
+      "id": "P7.dem",
+      "kind": "demonstration",
+      "label": "P7.dem",
+      "text": "Substance cannot be produced by anything external (Corollary, Prop vi.), it must, therefore, be its own cause—that is, its essence necessarily involves existence, or existence belongs to its nature."
+    },
+    {
+      "id": "P8",
+      "kind": "proposition",
+      "label": "P8",
+      "text": "Every substance is necessarily infinite."
+    },
+    {
+      "id": "P8.dem",
+      "kind": "demonstration",
+      "label": "P8.dem",
+      "text": "There can only be one substance with an identical attribute, and existence follows from its nature (Prop. vii.); its nature, therefore, involves existence, either as finite or infinite. It does not exist as finite, for (by Def. ii.) it would then be limited by something else of the same kind, which would also necessarily exist (Prop. vii.); and there would be two substances with an identical attribute, which is absurd (Prop. v.). It therefore exists as infinite. Q.E.D."
+    },
+    {
+      "id": "P8.note1",
+      "kind": "note",
+      "label": "P8.note1",
+      "text": "As finite existence involves a partial negation, and infinite existence is the absolute affirmation of the given nature, it follows (solely from Prop. vii.) that every substance is necessarily infinite."
+    },
+    {
+      "id": "P9",
+      "kind": "proposition",
+      "label": "P9",
+      "text": "The more reality or being a thing has, the greater the number of its attributes."
+    },
+    {
+      "id": "P9.dem",
+      "kind": "demonstration",
+      "label": "P9.dem",
+      "text": "(Def. iv.)"
+    },
+    {
+      "id": "P10",
+      "kind": "proposition",
+      "label": "P10",
+      "text": "Each particular attribute of the one substance must be conceived through itself."
+    },
+    {
+      "id": "P10.dem",
+      "kind": "demonstration",
+      "label": "P10.dem",
+      "text": "An attribute is that which the intellect perceives of substance, as constituting its essence (Def. iv.), and, therefore, must be conceived through itself (Def. iii.). Q.E.D."
+    },
+    {
+      "id": "P11",
+      "kind": "proposition",
+      "label": "P11",
+      "text": "God, or substance, consisting of infinite attributes, of which each expresses eternal and infinite essentiality, necessarily exists."
+    },
+    {
+      "id": "P11.dem",
+      "kind": "demonstration",
+      "label": "P11.dem",
+      "text": "If this be denied, conceive, if possible, that God does not exist: then his essence does not involve existence. But this (Prop. vii.) is absurd. Therefore God necessarily exists."
+    },
+    {
+      "id": "P12",
+      "kind": "proposition",
+      "label": "P12",
+      "text": "No attribute of substance can be conceived from which it would follow that substance can be divided."
+    },
+    {
+      "id": "P12.dem",
+      "kind": "demonstration",
+      "label": "P12.dem",
+      "text": "The parts into which substance as thus conceived would be divided either will retain the nature of substance, or they will not. If the former, then (by Prop. viii.) each part will necessarily be infinite, and (by Prop. vi.) self-caused, and (by Prop. v.) will perforce consist of a different attribute, so that, in that case, several substances could be formed out of one substance, which (by Prop. vi.) is absurd. Moreover, the parts (by Prop. ii.) would have nothing in common with their whole, and the whole (by Def. iv. and Prop. x.) could both exist and be conceived without its parts, which everyone will admit to be absurd. If we adopt the second alternative—namely, that the parts will not retain the nature of substance—then, if the whole substance were divided into equal parts, it would lose the nature of substance, and would cease to exist, which (by Prop. vii.) is absurd."
+    },
+    {
+      "id": "P13",
+      "kind": "proposition",
+      "label": "P13",
+      "text": "Substance absolutely infinite is indivisible."
+    },
+    {
+      "id": "P13.dem",
+      "kind": "demonstration",
+      "label": "P13.dem",
+      "text": "If it could be divided, the parts into which it was divided would either retain the nature of absolutely infinite substance, or they would not. If the former, we should have several substances of the same nature, which (by Prop. v.) is absurd. If the latter, then (by Prop. vii.) substance absolutely infinite could cease to exist, which (by Prop. xi.) is also absurd."
+    },
+    {
+      "id": "P13.coro1",
+      "kind": "corollary",
+      "label": "P13.coro1",
+      "text": "It follows, that no substance, and consequently no extended substance, in so far as it is substance, is divisible."
+    },
+    {
+      "id": "P13.note2",
+      "kind": "note",
+      "label": "P13.note2",
+      "text": "The indivisibility of substance may be more easily understood as follows. The nature of substance can only be conceived as infinite, and by a part of substance, nothing else can be understood than finite substance, which (by Prop. viii) involves a manifest contradiction."
+    },
+    {
+      "id": "P14",
+      "kind": "proposition",
+      "label": "P14",
+      "text": "Besides God no substance can be granted or conceived."
+    },
+    {
+      "id": "P14.dem",
+      "kind": "demonstration",
+      "label": "P14.dem",
+      "text": "As God is a being absolutely infinite, of whom no attribute that expresses the essence of substance can be denied (by Def. vi.), and he necessarily exists (by Prop. xi.); if any substance besides God were granted, it would have to be explained by some attribute of God, and thus two substances with the same attribute would exist, which (by Prop. v.) is absurd; therefore, besides God no substance can be granted, or, consequently, be conceived. If it could be conceived, it would necessarily have to be conceived as existent; but this (by the first part of this proof) is absurd. Therefore, besides God no substance can be granted or conceived. Q.E.D."
+    },
+    {
+      "id": "P14.coro1",
+      "kind": "corollary",
+      "label": "P14.coro1",
+      "text": "Clearly, therefore: 1. God is one, that is (by Def. vi.) only one substance can be granted in the universe, and that substance is absolutely infinite, as we have already indicated (in the note to Prop. x.)."
+    },
+    {
+      "id": "P14.coro2",
+      "kind": "corollary",
+      "label": "P14.coro2",
+      "text": "It follows: 2. That extension and thought are either attributes of God or (by Ax. i.) accidents (affectiones) of the attributes of God."
+    },
+    {
+      "id": "P15",
+      "kind": "proposition",
+      "label": "P15",
+      "text": "Whatsoever is, is in God, and without God nothing can be, or be conceived."
+    },
+    {
+      "id": "P15.dem",
+      "kind": "demonstration",
+      "label": "P15.dem",
+      "text": "Besides God, no substance is granted or can be conceived (by Prop. xiv.), that is (by Def. iii.) nothing which is in itself and is conceived through itself. But modes (by Def. v.) can neither be, nor be conceived without substance; wherefore they can only be in the divine nature, and can only through it be conceived. But substances and modes form the sum total of existence (by Ax. i.), therefore, without God nothing can be, or be conceived. Q.E.D."
+    }
+  ]
+}

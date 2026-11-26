@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./theories/ground_truth/**)",
+      "Edit(./theories/ground_truth/**)",
+      "Bash(cat theories/ground_truth:*)",
+      "Bash(grep:*ground_truth*)"
+    ]
+  }
+}
